@@ -7,7 +7,8 @@
     "dev": "nodemon -w src --exec \"babel-node src --presets env,stage-0\"",
     "build": "babel src -s -D -d dist --presets env,stage-0",
     "start": "node dist",
-    "prestart": "npm run build"
+    "prestart": "npm run build",
+    "lint": "eslint ."
   },
   "author": "",
   "license": "MIT",
@@ -29,6 +30,13 @@
     "babel-preset-env": "^1.6.1",
     "babel-preset-es2016": "^6.24.1",
     "babel-preset-stage-0": "^6.24.1",
-    "nodemon": "^1.14.8"
-  }
+    "eslint": "^4.16.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "nodemon": "^1.14.8",
+    "pre-commit": "^1.2.2"
+  },
+  "pre-commit": [
+    "lint"
+  ]
 }

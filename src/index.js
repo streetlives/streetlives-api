@@ -15,7 +15,8 @@ app.get('/', (req, res) => {
 });
 
 app.server.listen(process.env.PORT, () => {
-	console.log(`Started listening on port ${app.server.address().port}`);
+  // eslint-disable-next-line no-console
+  console.log(`Started listening on port ${app.server.address().port}`);
 });
 
 export default app;
