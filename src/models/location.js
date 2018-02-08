@@ -11,9 +11,17 @@ module.exports = (sequelize, DataTypes) => {
     latitude: DataTypes.FLOAT,
     longitude: DataTypes.FLOAT,
   }, {
-    classMethods: {
-      associate(models) {},
-    },
+    underscored: true,
+    underscoredAll: true,
   });
+
+  Location.associate = (models) => {
+    Location.belongsTo(models.Organization);
+    Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
+    Location.hasMany(models.PhysicalAddress);
+    Location.hasMany(models.Phone);
+    Location.hasMany(models.Comment);
+  };
+
   return Location;
 };
