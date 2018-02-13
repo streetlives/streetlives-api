@@ -20,6 +20,7 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: { allowNull: false },
     });
     Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
+    Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
     Service.hasMany(models.Phone);
   };
 
