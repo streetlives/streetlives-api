@@ -6,13 +6,16 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: DataTypes.UUIDV4,
     },
     name: DataTypes.STRING,
-    latitude: DataTypes.FLOAT,
-    longitude: DataTypes.FLOAT,
+    position: DataTypes.GEOMETRY,
     taxonomy_ids: DataTypes.STRING,
   }, {
     underscored: true,
     underscoredAll: true,
   });
+
+  LocationSuggestion.associate = (models) => {
+    LocationSuggestion.hasMany(models.PhysicalAddress);
+  };
 
   return LocationSuggestion;
 };

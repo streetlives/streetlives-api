@@ -18,6 +18,7 @@ module.exports = (sequelize, DataTypes) => {
 
   PhysicalAddress.associate = (models) => {
     PhysicalAddress.belongsTo(models.Location);
+    PhysicalAddress.belongsTo(models.LocationSuggestion);
   };
 
   return PhysicalAddress;
