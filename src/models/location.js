@@ -5,9 +5,9 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    name: DataTypes.STRING,
-    description: DataTypes.STRING,
-    transportation: DataTypes.STRING,
+    name: DataTypes.TEXT,
+    description: DataTypes.TEXT,
+    transportation: DataTypes.TEXT,
     position: DataTypes.GEOMETRY,
   }, {
     underscored: true,

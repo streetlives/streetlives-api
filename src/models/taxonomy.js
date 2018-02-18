@@ -6,10 +6,10 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: DataTypes.UUIDV4,
     },
     name: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
     },
-    parent_name: DataTypes.STRING,
+    parent_name: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,

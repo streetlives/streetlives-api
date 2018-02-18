@@ -5,8 +5,8 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    content: DataTypes.STRING,
-    posted_by: DataTypes.STRING,
+    content: DataTypes.TEXT,
+    posted_by: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
