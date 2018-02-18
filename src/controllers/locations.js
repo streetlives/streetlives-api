@@ -6,7 +6,7 @@ export default {
     res.sendStatus(200);
   },
 
-  suggestNew: (req, res) => {
+  suggestNew: (req, res, next) => {
     const {
       name,
       latitude,
@@ -19,9 +19,10 @@ export default {
       position: geometry.createPoint(longitude, latitude),
       taxonomy_ids: taxonomyIds,
     })
-      .then((locations) => {
+      .then(() => {
         res.sendStatus(201);
-      });
+      })
+      .catch(next);
   },
 
   getInfo: (req, res) => {

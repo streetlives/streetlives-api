@@ -1,4 +1,5 @@
 import locations from './controllers/locations';
+import { BadRequestError, NotFoundError } from './utils/errors';
 
 export default (app) => {
   app.get('/locations', locations.find);
@@ -8,15 +9,27 @@ export default (app) => {
   app.post('/locations/:id/rating', locations.rate);
   app.post('/locations/:id/comment', locations.addComment);
 
-  app.use((err, req, res, next) => {
-    res.status(500).send({ error: err.stack });
-  });
+  app.use((req, res) => res.status(404).send({
+    url: req.originalUrl,
+    error: 'Not found',
+  }));
 
-  app.use((req, res) => {
-    const payload = {
-      url: req.originalUrl,
-      error: 'Not found',
-    };
-    return res.status(404).json(payload);
+  app.use((err, req, res, next) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    if (err instanceof BadRequestError) {
+      return res.status(400).send({ error: err.stack });
+    }
+
+    if (err instanceof NotFoundError) {
+      return res.status(404).send({
+        url: req.originalUrl,
+        error: err.message,
+      });
+    }
+
+    return res.status(500).send({ error: err.stack });
   });
 };
