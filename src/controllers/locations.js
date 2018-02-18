@@ -1,5 +1,6 @@
 import models from '../models';
 import geometry from '../utils/geometry';
+import { NotFoundError } from '../utils/errors';
 
 export default {
   find: (req, res) => {
@@ -25,15 +26,39 @@ export default {
       .catch(next);
   },
 
-  getInfo: (req, res) => {
-    res.sendStatus(200);
+  getInfo: (req, res, next) => {
+    models.Location.findById(
+      req.params.locationId,
+      { include: [models.Service, models.Comment] },
+    )
+      .then((location) => {
+        res.send(location);
+      })
+      .catch(next);
   },
 
   rate: (req, res) => {
     res.sendStatus(201);
   },
 
-  addComment: (req, res) => {
-    res.sendStatus(201);
+  addComment: (req, res, next) => {
+    const { locationId } = req.params;
+    const { content, postedBy } = req.body;
+
+    models.Location.findById(locationId)
+      .then((location) => {
+        if (!location) {
+          throw new NotFoundError('Location not found');
+        }
+
+        return location.createComment({
+          content,
+          posted_by: postedBy,
+        });
+      })
+      .then(() => {
+        res.sendStatus(201);
+      })
+      .catch(next);
   },
 };
