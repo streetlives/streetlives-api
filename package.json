@@ -4,8 +4,8 @@
   "description": "The Streetlives backend providing the API",
   "main": "dist",
   "scripts": {
-    "dev": "nodemon -w src --exec \"babel-node src --presets env,stage-0\"",
-    "build": "babel src -s -D -d dist --presets env,stage-0",
+    "dev": "nodemon -w src --exec \"babel-node src\"",
+    "build": "babel src -s -D -d dist",
     "start": "node dist",
     "prestart": "npm run build",
     "lint": "eslint ."
@@ -31,7 +31,6 @@
     "babel-cli": "^6.26.0",
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
-    "babel-preset-es2016": "^6.24.1",
     "babel-preset-stage-0": "^6.24.1",
     "eslint": "^4.16.0",
     "eslint-config-airbnb-base": "^12.1.0",
