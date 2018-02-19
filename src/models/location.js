@@ -22,5 +22,43 @@ module.exports = (sequelize, DataTypes) => {
     Location.hasMany(models.Comment);
   };
 
+  Location.findAllInArea = (position, radius, filterParameters) => {
+    const { searchString, taxonomyId } = filterParameters;
+
+    const distance = sequelize.fn(
+      'ST_Distance_Sphere',
+      sequelize.literal('position'),
+      sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
+    );
+
+    const conditions = [];
+    conditions.push(sequelize.where(distance, { $lte: radius }));
+
+    if (searchString) {
+      const fuzzySearchString = `%${searchString}%`;
+      conditions.push(sequelize.or(
+        { name: { [sequelize.Op.iLike]: fuzzySearchString } },
+        { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+        { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+        { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      ));
+    }
+
+    if (taxonomyId) {
+      conditions.push({ '$Services.Taxonomies.id$': taxonomyId });
+    }
+
+    return Location.findAll({
+      where: sequelize.and(...conditions),
+      include: [
+        sequelize.models.Organization,
+        {
+          model: sequelize.models.Service,
+          include: sequelize.models.Taxonomy,
+        },
+      ],
+    });
+  };
+
   return Location;
 };

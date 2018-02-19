@@ -3,8 +3,30 @@ import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
 export default {
-  find: (req, res) => {
-    res.sendStatus(200);
+  find: (req, res, next) => {
+    const {
+      latitude,
+      longitude,
+      radius,
+      searchString,
+      taxonomyId,
+    } = req.query;
+
+    const position = geometry.createPoint(longitude, latitude);
+
+    const filterParameters = {};
+    if (searchString) {
+      filterParameters.searchString = searchString.trim();
+    }
+    if (taxonomyId) {
+      filterParameters.taxonomyId = taxonomyId.trim();
+    }
+
+    models.Location.findAllInArea(position, radius, filterParameters)
+      .then((locations) => {
+        res.send(locations);
+      })
+      .catch(next);
   },
 
   suggestNew: (req, res, next) => {
