@@ -12,6 +12,9 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   ServiceAtLocation.associate = (models) => {
+    ServiceAtLocation.hasMany(models.Phone);
+    ServiceAtLocation.hasMany(models.RegularSchedule);
+    ServiceAtLocation.hasMany(models.HolidaySchedule);
     ServiceAtLocation.hasMany(models.Comment);
   };
 

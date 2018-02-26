@@ -19,6 +19,10 @@ module.exports = (sequelize, DataTypes) => {
     Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
     Location.hasMany(models.PhysicalAddress);
     Location.hasMany(models.Phone);
+    Location.hasMany(models.Language);
+    Location.hasMany(models.RegularSchedule);
+    Location.hasMany(models.HolidaySchedule);
+    Location.hasMany(models.AccessibilityForDisabilities);
     Location.hasMany(models.Comment);
   };
 
