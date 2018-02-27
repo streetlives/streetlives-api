@@ -1,5 +1,5 @@
 import locations from './controllers/locations';
-import { BadRequestError, NotFoundError } from './utils/errors';
+import { NotFoundError } from './utils/errors';
 
 export default (app) => {
   app.get('/locations', locations.find);
@@ -19,7 +19,7 @@ export default (app) => {
       return next(err);
     }
 
-    if (err instanceof BadRequestError) {
+    if (err.name === 'ValidationError') {
       return res.status(400).send({ error: err.stack });
     }
 

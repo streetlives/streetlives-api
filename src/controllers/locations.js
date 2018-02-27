@@ -1,28 +1,33 @@
+import Joi from 'joi';
+import validation from './validation';
 import models from '../models';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
 export default {
   find: (req, res, next) => {
-    const {
-      latitude,
-      longitude,
-      radius,
-      searchString,
-      taxonomyId,
-    } = req.query;
+    Joi.validate(req, validation.locations.find, { allowUnknown: true })
+      .then(() => {
+        const {
+          latitude,
+          longitude,
+          radius,
+          searchString,
+          taxonomyId,
+        } = req.query;
 
-    const position = geometry.createPoint(longitude, latitude);
+        const position = geometry.createPoint(longitude, latitude);
 
-    const filterParameters = {};
-    if (searchString) {
-      filterParameters.searchString = searchString.trim();
-    }
-    if (taxonomyId) {
-      filterParameters.taxonomyId = taxonomyId.trim();
-    }
+        const filterParameters = {};
+        if (searchString) {
+          filterParameters.searchString = searchString.trim();
+        }
+        if (taxonomyId) {
+          filterParameters.taxonomyId = taxonomyId.trim();
+        }
 
-    models.Location.findAllInArea(position, radius, filterParameters)
+        return models.Location.findAllInArea(position, radius, filterParameters);
+      })
       .then((locations) => {
         res.send(locations);
       })
@@ -30,18 +35,21 @@ export default {
   },
 
   suggestNew: (req, res, next) => {
-    const {
-      name,
-      latitude,
-      longitude,
-      taxonomyIds,
-    } = req.body;
+    Joi.validate(req, validation.locations.suggestNew, { allowUnknown: true })
+      .then(() => {
+        const {
+          name,
+          latitude,
+          longitude,
+          taxonomyIds,
+        } = req.body;
 
-    models.LocationSuggestion.create({
-      name,
-      position: geometry.createPoint(longitude, latitude),
-      taxonomy_ids: taxonomyIds,
-    })
+        return models.LocationSuggestion.create({
+          name,
+          position: geometry.createPoint(longitude, latitude),
+          taxonomy_ids: taxonomyIds,
+        });
+      })
       .then(() => {
         res.sendStatus(201);
       })
@@ -49,10 +57,11 @@ export default {
   },
 
   getInfo: (req, res, next) => {
-    models.Location.findById(
-      req.params.locationId,
-      { include: [models.Service, models.Comment] },
-    )
+    Joi.validate(req, validation.locations.getInfo, { allowUnknown: true })
+      .then(() => models.Location.findById(
+        req.params.locationId,
+        { include: [models.Service, models.Comment] },
+      ))
       .then((location) => {
         res.send(location);
       })
@@ -64,14 +73,14 @@ export default {
   },
 
   addComment: (req, res, next) => {
-    const { locationId } = req.params;
-    const { content, postedBy } = req.body;
-
-    models.Location.findById(locationId)
+    Joi.validate(req, validation.locations.addComment, { allowUnknown: true })
+      .then(() => models.Location.findById(req.params.locationId))
       .then((location) => {
         if (!location) {
           throw new NotFoundError('Location not found');
         }
+
+        const { content, postedBy } = req.body;
 
         return location.createComment({
           content,

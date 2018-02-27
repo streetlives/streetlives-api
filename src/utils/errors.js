@@ -1,10 +1,3 @@
-export class BadRequestError extends Error {
-  constructor(...args) {
-    super(...args);
-    Error.captureStackTrace(this, BadRequestError);
-  }
-}
-
 export class NotFoundError extends Error {
   constructor(...args) {
     super(...args);
@@ -13,6 +6,5 @@ export class NotFoundError extends Error {
 }
 
 export default {
-  BadRequestError,
   NotFoundError,
 };
