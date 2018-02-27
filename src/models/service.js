@@ -5,7 +5,10 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    name: DataTypes.TEXT,
+    name: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
     description: DataTypes.TEXT,
     url: DataTypes.TEXT,
     email: DataTypes.TEXT,

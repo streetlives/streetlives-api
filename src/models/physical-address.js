@@ -5,12 +5,27 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    address_1: DataTypes.TEXT,
-    city: DataTypes.TEXT,
+    address_1: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    city: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
     region: DataTypes.TEXT,
-    state_province: DataTypes.TEXT,
-    postal_code: DataTypes.TEXT,
-    country: DataTypes.TEXT,
+    state_province: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    postal_code: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    country: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
   }, {
     underscored: true,
     underscoredAll: true,

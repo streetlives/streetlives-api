@@ -5,7 +5,10 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    number: DataTypes.TEXT,
+    number: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
     extension: DataTypes.INTEGER,
     type: DataTypes.TEXT,
     language: DataTypes.TEXT,
