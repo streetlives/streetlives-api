@@ -5,7 +5,9 @@ export default {
     query: Joi.object().keys({
       latitude: Joi.number().required(),
       longitude: Joi.number().required(),
-      radius: Joi.number().max(50000).required(),
+      radius: Joi.number()
+        .integer().positive().max(50000)
+        .required(),
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string().guid(),
     }).required(),
