@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import validation from './validation';
+import locationSchemas from './validation/locations';
 import models from '../models';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
@@ -7,7 +7,7 @@ import { NotFoundError } from '../utils/errors';
 export default {
   find: async (req, res, next) => {
     try {
-      await Joi.validate(req, validation.locations.find, { allowUnknown: true });
+      await Joi.validate(req, locationSchemas.find, { allowUnknown: true });
 
       const {
         latitude,
@@ -36,7 +36,7 @@ export default {
 
   suggestNew: async (req, res, next) => {
     try {
-      await Joi.validate(req, validation.locations.suggestNew, { allowUnknown: true });
+      await Joi.validate(req, locationSchemas.suggestNew, { allowUnknown: true });
 
       const {
         name,
@@ -58,7 +58,7 @@ export default {
 
   getInfo: async (req, res, next) => {
     try {
-      await Joi.validate(req, validation.locations.getInfo, { allowUnknown: true });
+      await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
 
       const location = await models.Location.findById(
         req.params.locationId,
@@ -79,7 +79,7 @@ export default {
       const { locationId } = req.params;
       const { content, postedBy } = req.body;
 
-      await Joi.validate(req, validation.locations.addComment, { allowUnknown: true });
+      await Joi.validate(req, locationSchemas.addComment, { allowUnknown: true });
 
       const location = await models.Location.findById(locationId);
       if (!location) {
