@@ -5,91 +5,94 @@ import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
 export default {
-  find: (req, res, next) => {
-    Joi.validate(req, validation.locations.find, { allowUnknown: true })
-      .then(() => {
-        const {
-          latitude,
-          longitude,
-          radius,
-          searchString,
-          taxonomyId,
-        } = req.query;
+  find: async (req, res, next) => {
+    try {
+      await Joi.validate(req, validation.locations.find, { allowUnknown: true });
 
-        const position = geometry.createPoint(longitude, latitude);
+      const {
+        latitude,
+        longitude,
+        radius,
+        searchString,
+        taxonomyId,
+      } = req.query;
 
-        const filterParameters = {};
-        if (searchString) {
-          filterParameters.searchString = searchString.trim();
-        }
-        if (taxonomyId) {
-          filterParameters.taxonomyId = taxonomyId.trim();
-        }
+      const position = geometry.createPoint(longitude, latitude);
 
-        return models.Location.findAllInArea(position, radius, filterParameters);
-      })
-      .then((locations) => {
-        res.send(locations);
-      })
-      .catch(next);
+      const filterParameters = {};
+      if (searchString) {
+        filterParameters.searchString = searchString.trim();
+      }
+      if (taxonomyId) {
+        filterParameters.taxonomyId = taxonomyId.trim();
+      }
+
+      const locations = await models.Location.findAllInArea(position, radius, filterParameters);
+      res.send(locations);
+    } catch (err) {
+      next(err);
+    }
   },
 
-  suggestNew: (req, res, next) => {
-    Joi.validate(req, validation.locations.suggestNew, { allowUnknown: true })
-      .then(() => {
-        const {
-          name,
-          latitude,
-          longitude,
-          taxonomyIds,
-        } = req.body;
+  suggestNew: async (req, res, next) => {
+    try {
+      await Joi.validate(req, validation.locations.suggestNew, { allowUnknown: true });
 
-        return models.LocationSuggestion.create({
-          name,
-          position: geometry.createPoint(longitude, latitude),
-          taxonomy_ids: taxonomyIds,
-        });
-      })
-      .then(() => {
-        res.sendStatus(201);
-      })
-      .catch(next);
+      const {
+        name,
+        latitude,
+        longitude,
+        taxonomyIds,
+      } = req.body;
+
+      await models.LocationSuggestion.create({
+        name,
+        position: geometry.createPoint(longitude, latitude),
+        taxonomy_ids: taxonomyIds,
+      });
+      res.sendStatus(201);
+    } catch (err) {
+      next(err);
+    }
   },
 
-  getInfo: (req, res, next) => {
-    Joi.validate(req, validation.locations.getInfo, { allowUnknown: true })
-      .then(() => models.Location.findById(
+  getInfo: async (req, res, next) => {
+    try {
+      await Joi.validate(req, validation.locations.getInfo, { allowUnknown: true });
+
+      const location = await models.Location.findById(
         req.params.locationId,
         { include: [models.Service, models.Comment] },
-      ))
-      .then((location) => {
-        res.send(location);
-      })
-      .catch(next);
+      );
+      res.send(location);
+    } catch (err) {
+      next(err);
+    }
   },
 
   rate: (req, res) => {
     res.sendStatus(201);
   },
 
-  addComment: (req, res, next) => {
-    Joi.validate(req, validation.locations.addComment, { allowUnknown: true })
-      .then(() => models.Location.findById(req.params.locationId))
-      .then((location) => {
-        if (!location) {
-          throw new NotFoundError('Location not found');
-        }
+  addComment: async (req, res, next) => {
+    try {
+      const { locationId } = req.params;
+      const { content, postedBy } = req.body;
 
-        const { content, postedBy } = req.body;
+      await Joi.validate(req, validation.locations.addComment, { allowUnknown: true });
 
-        return location.createComment({
-          content,
-          posted_by: postedBy,
-        });
-      })
-      .then(() => {
-        res.sendStatus(201);
-      })
-      .catch(next);
+      const location = await models.Location.findById(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      await location.createComment({
+        content,
+        posted_by: postedBy,
+      });
+      res.sendStatus(201);
+    } catch (err) {
+      next(err);
+    }
   },
 };
