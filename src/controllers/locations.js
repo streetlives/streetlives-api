@@ -64,6 +64,10 @@ export default {
         req.params.locationId,
         { include: [models.Service, models.Comment] },
       );
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
       res.send(location);
     } catch (err) {
       next(err);
