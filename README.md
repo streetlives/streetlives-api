@@ -67,6 +67,17 @@ For example, on Linux/Mac:
 DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm run dev
 ```
 
+## Running the tests
+
+Currently, this codebase has only integration tests, testing end-to-end from HTTP request to database.
+
+For them to work, make sure you've configured a DB as specified in the [Configuration](#configuration) section, but note that the database name used by tests will always be "test" (to separate it from any DB containing real data, as the tests wipe the data every time they run).
+
+```
+npm run test
+npm run test:watch
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
