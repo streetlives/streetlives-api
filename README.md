@@ -67,6 +67,10 @@ For example, on Linux/Mac:
 DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm run dev
 ```
 
+## API
+
+See [Postman documentation](https://documenter.getpostman.com/collection/view/3922811-92992c08-2c00-c122-d75e-3f2065ca4d4f).
+
 ## Running the tests
 
 Currently, this codebase has only integration tests, testing end-to-end from HTTP request to database.
