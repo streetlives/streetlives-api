@@ -9,7 +9,7 @@
     "start": "node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand --coverage",
     "test:watch": "jest --watch --runInBand"
   },
   "author": "",
