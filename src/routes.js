@@ -3,10 +3,9 @@ import { NotFoundError } from './utils/errors';
 
 export default (app) => {
   app.get('/locations', locations.find);
-  app.post('/locations', locations.suggestNew);
+  app.post('/locations/suggestions', locations.suggestNew);
 
   app.get('/locations/:locationId', locations.getInfo);
-  app.post('/locations/:locationId/rating', locations.rate);
   app.post('/locations/:locationId/comments', locations.addComment);
 
   app.use((req, res) => res.status(404).send({

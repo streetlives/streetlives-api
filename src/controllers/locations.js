@@ -74,10 +74,6 @@ export default {
     }
   },
 
-  rate: (req, res) => {
-    res.sendStatus(201);
-  },
-
   addComment: async (req, res, next) => {
     try {
       const { locationId } = req.params;
