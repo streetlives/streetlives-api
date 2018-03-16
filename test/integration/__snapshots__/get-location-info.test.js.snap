@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`get location info should get all relevant fields for a given location 1`] = `
+Object {
+  "Comments": Object {
+    "0": Object {
+      "content": "Test comment",
+      "posted_by": "Test poster",
+    },
+  },
+  "Services": Object {
+    "0": Object {
+      "ServiceAtLocation": Object {
+        "description": null,
+      },
+      "description": null,
+      "email": null,
+      "fees": null,
+      "interpretation_services": null,
+      "name": "A specific offering",
+      "url": null,
+    },
+  },
+  "description": null,
+  "name": "Some kind of center",
+  "position": null,
+  "transportation": null,
+}
+`;
