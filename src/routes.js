@@ -8,6 +8,8 @@ export default (app) => {
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations/:locationId/comments', locations.addComment);
 
+  app.get('/load', locations.loadData);
+
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
     error: 'Not found',
