@@ -69,7 +69,7 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 
 ## API
 
-See [Postman documentation](https://documenter.getpostman.com/collection/view/3922811-92992c08-2c00-c122-d75e-3f2065ca4d4f).
+See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
 ## Running the tests
 
