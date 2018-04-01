@@ -56,6 +56,8 @@ module.exports = (sequelize, DataTypes) => {
       where: sequelize.and(...conditions),
       include: [
         sequelize.models.Organization,
+        sequelize.models.Phone,
+        sequelize.models.PhysicalAddress,
         {
           model: sequelize.models.Service,
           include: sequelize.models.Taxonomy,
