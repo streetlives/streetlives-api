@@ -49,3 +49,7 @@ jspm_packages/
 .next
 
 /dist
+
+# AWS Serverless
+lambda-invoke-response.json
+packaged-sam.yaml
