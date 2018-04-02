@@ -7,7 +7,7 @@
     "s3BucketName": "streetlives",
     "region": "us-east-1",
     "cloudFormationStackName": "StreetlivesApiServerlessStack",
-    "functionName": "StreetlivesApiTestFunction",
+    "functionName": "StreetlivesApiServerlessS-StreetlivesApiTestFuncti-19TCRUPMR00MW",
     "accountId": "710263499164"
   },
   "scripts": {
