@@ -30,10 +30,10 @@ export default {
         name,
         description,
         url,
-        // TODO: Fix.
-        // Taxonomies: [taxonomy],
         organization_id: location.organization_id,
       });
+
+      await createdService.setTaxonomies([taxonomy]);
 
       res.status(201).send(createdService);
     } catch (err) {
@@ -52,9 +52,20 @@ export default {
         throw new NotFoundError('Service not found');
       }
 
-      const editableFields = ['name', 'description', 'url', 'taxonomyId'];
+      const { taxonomyId } = req.body;
+      if (taxonomyId) {
+        const taxonomy = await models.Taxonomy.findById(taxonomyId);
+        if (!taxonomy) {
+          throw new NotFoundError('Taxonomy not found');
+        }
+
+        await service.setTaxonomies([taxonomy]);
+      }
+
+      const editableFields = ['name', 'description', 'url'];
 
       await service.update(req.body, { fields: editableFields });
+
       res.sendStatus(204);
     } catch (err) {
       next(err);
