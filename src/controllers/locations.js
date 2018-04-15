@@ -34,28 +34,6 @@ export default {
     }
   },
 
-  suggestNew: async (req, res, next) => {
-    try {
-      await Joi.validate(req, locationSchemas.suggestNew, { allowUnknown: true });
-
-      const {
-        name,
-        latitude,
-        longitude,
-        taxonomyIds,
-      } = req.body;
-
-      await models.LocationSuggestion.create({
-        name,
-        position: geometry.createPoint(longitude, latitude),
-        taxonomy_ids: taxonomyIds,
-      });
-      res.sendStatus(201);
-    } catch (err) {
-      next(err);
-    }
-  },
-
   getInfo: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
@@ -69,6 +47,56 @@ export default {
       }
 
       res.send(location);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  create: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.create, { allowUnknown: true });
+
+      // TODO: Implement.
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  update: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
+
+      // TODO: Implement.
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  addPhone: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.addPhone, { allowUnknown: true });
+
+      // TODO: Implement.
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  updatePhone: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.updatePhone, { allowUnknown: true });
+
+      // TODO: Implement.
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deletePhone: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.deletePhone, { allowUnknown: true });
+
+      // TODO: Implement.
     } catch (err) {
       next(err);
     }
@@ -89,6 +117,28 @@ export default {
       await location.createComment({
         content,
         posted_by: postedBy,
+      });
+      res.sendStatus(201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  suggestNew: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.suggestNew, { allowUnknown: true });
+
+      const {
+        name,
+        latitude,
+        longitude,
+        taxonomyIds,
+      } = req.body;
+
+      await models.LocationSuggestion.create({
+        name,
+        position: geometry.createPoint(longitude, latitude),
+        taxonomy_ids: taxonomyIds,
       });
       res.sendStatus(201);
     } catch (err) {

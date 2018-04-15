@@ -13,18 +13,50 @@ export default {
     }).required(),
   },
 
-  suggestNew: {
-    body: Joi.object().keys({
-      name: Joi.string().required(),
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
-      taxonomyIds: Joi.string().allow(''),
-    }).required(),
-  },
-
   getInfo: {
     params: Joi.object().keys({
       locationId: Joi.string().guid().required(),
+    }).required(),
+  },
+
+  create: {
+    body: Joi.object().keys({
+      // TODO: Add.
+    }).required(),
+  },
+
+  update: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      // TODO: Add.
+    }).required(),
+  },
+
+  addPhone: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      // TODO: Add.
+    }).required(),
+  },
+
+  updatePhone: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+      phoneId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      // TODO: Add.
+    }),
+  },
+
+  deletePhone: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+      phoneId: Joi.string().guid().required(),
     }).required(),
   },
 
@@ -35,6 +67,15 @@ export default {
     body: Joi.object().keys({
       content: Joi.string().required(),
       postedBy: Joi.string().required(),
+    }).required(),
+  },
+
+  suggestNew: {
+    body: Joi.object().keys({
+      name: Joi.string().required(),
+      latitude: Joi.number().required(),
+      longitude: Joi.number().required(),
+      taxonomyIds: Joi.string().allow(''),
     }).required(),
   },
 };
