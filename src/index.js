@@ -2,12 +2,15 @@ import http from 'http';
 import express from 'express';
 import bodyParser from 'body-parser';
 import morgan from 'morgan';
+import cors from 'cors';
 import setupRoutes from './routes';
 import config from './config';
 import models from './models';
 
 const app = express();
 app.server = http.createServer(app);
+
+app.use(cors());
 
 app.use(morgan('dev'));
 
