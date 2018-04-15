@@ -21,7 +21,11 @@ export default {
 
   create: {
     body: Joi.object().keys({
-      // TODO: Add.
+      name: Joi.string(),
+      description: Joi.string(),
+      latitude: Joi.number().required(),
+      longitude: Joi.number().required(),
+      organizationId: Joi.string().guid().required(),
     }).required(),
   },
 
@@ -30,7 +34,11 @@ export default {
       locationId: Joi.string().guid().required(),
     }).required(),
     body: Joi.object().keys({
-      // TODO: Add.
+      name: Joi.string(),
+      description: Joi.string(),
+      latitude: Joi.number(),
+      longitude: Joi.number(),
+      organizationId: Joi.string().guid(),
     }).required(),
   },
 
@@ -39,7 +47,11 @@ export default {
       locationId: Joi.string().guid().required(),
     }).required(),
     body: Joi.object().keys({
-      // TODO: Add.
+      number: Joi.string().required(),
+      extension: Joi.number(),
+      type: Joi.string(),
+      language: Joi.string(),
+      description: Joi.string(),
     }).required(),
   },
 
@@ -49,7 +61,11 @@ export default {
       phoneId: Joi.string().guid().required(),
     }).required(),
     body: Joi.object().keys({
-      // TODO: Add.
+      number: Joi.string(),
+      extension: Joi.number(),
+      type: Joi.string(),
+      language: Joi.string(),
+      description: Joi.string(),
     }),
   },
 

@@ -4,6 +4,8 @@ import models from '../models';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
+// TODO: Add support for PhysicalAdddress.
+// TODO: Should position and address changes be allowed separately? Should geocoding even be on FE?
 export default {
   find: async (req, res, next) => {
     try {
@@ -56,7 +58,27 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.create, { allowUnknown: true });
 
-      // TODO: Implement.
+      const {
+        name,
+        description,
+        latitude,
+        longitude,
+        organizationId,
+      } = req.body;
+      const position = geometry.createPoint(longitude, latitude);
+
+      const organization = await models.Organization.findById(organizationId);
+      if (!organization) {
+        throw new NotFoundError('Organization not found');
+      }
+
+      const createdLocation = await organization.createLocation({
+        name,
+        description,
+        position,
+      });
+
+      res.status(201).send(createdLocation);
     } catch (err) {
       next(err);
     }
@@ -66,7 +88,22 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
-      // TODO: Implement.
+      const { locationId } = req.params;
+
+      const location = await models.Location.findById(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      const editableFields = ['name', 'description', 'latitude', 'longitude', 'organization_id'];
+      const update = {
+        ...req.body,
+        organization_id: req.body.organizationId,
+      };
+
+      await location.update(update, { fields: editableFields });
+
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
@@ -76,7 +113,30 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.addPhone, { allowUnknown: true });
 
-      // TODO: Implement.
+      const { locationId } = req.params;
+
+      const location = await models.Location.findById(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      const {
+        number,
+        extension,
+        type,
+        language,
+        description,
+      } = req.body;
+
+      const createdPhone = await location.createPhone({
+        number,
+        extension,
+        type,
+        language,
+        description,
+      });
+
+      res.status(201).send(createdPhone);
     } catch (err) {
       next(err);
     }
