@@ -30,6 +30,7 @@ export default {
         name,
         description,
         url,
+        // TODO: Fix.
         // Taxonomies: [taxonomy],
         organization_id: location.organization_id,
       });
@@ -51,7 +52,6 @@ export default {
         throw new NotFoundError('Service not found');
       }
 
-      // TODO: Will passing more fields than given lead to updating them, or is it the intersection?
       const editableFields = ['name', 'description', 'url', 'taxonomyId'];
 
       await service.update(req.body, { fields: editableFields });
