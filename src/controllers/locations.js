@@ -146,7 +146,17 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.updatePhone, { allowUnknown: true });
 
-      // TODO: Implement.
+      const { phoneId } = req.params;
+
+      const phone = await models.Phone.findById(phoneId);
+      if (!phone) {
+        throw new NotFoundError('Phone not found');
+      }
+
+      const editableFields = ['number', 'extension', 'type', 'language', 'description'];
+      await phone.update(req.body, { fields: editableFields });
+
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
@@ -156,7 +166,15 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.deletePhone, { allowUnknown: true });
 
-      // TODO: Implement.
+      const { phoneId } = req.params;
+
+      const phone = await models.Phone.findById(phoneId);
+      if (!phone) {
+        throw new NotFoundError('Phone not found');
+      }
+
+      await phone.destroy();
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }

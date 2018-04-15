@@ -8,16 +8,16 @@ import { NotFoundError } from './utils/errors';
 export default (app) => {
   app.get('/locations', locations.find);
 
+  app.post('/locations/suggestions', locations.suggestNew);
+  app.post('/locations/:locationId/comments', locations.addComment);
+
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations', locations.create);
   app.patch('/locations/:locationId', locations.update);
 
   app.post('/locations/:locationId/phones', locations.addPhone);
-  app.patch('/locations/:locationId/phones/:phoneId', locations.updatePhone);
-  app.delete('/locations/:locationId/phones/:phoneId', locations.deletePhone);
-
-  app.post('/locations/suggestions', locations.suggestNew);
-  app.post('/locations/:locationId/comments', locations.addComment);
+  app.patch('/phones/:phoneId', locations.updatePhone);
+  app.delete('/phones/:phoneId', locations.deletePhone);
 
   app.post('/services', services.create);
   app.patch('/services/:serviceId', services.update);

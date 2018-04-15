@@ -57,7 +57,6 @@ export default {
 
   updatePhone: {
     params: Joi.object().keys({
-      locationId: Joi.string().guid().required(),
       phoneId: Joi.string().guid().required(),
     }).required(),
     body: Joi.object().keys({
@@ -71,7 +70,6 @@ export default {
 
   deletePhone: {
     params: Joi.object().keys({
-      locationId: Joi.string().guid().required(),
       phoneId: Joi.string().guid().required(),
     }).required(),
   },
