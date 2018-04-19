@@ -4,8 +4,6 @@ import models from '../models';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
-// TODO: Add support for PhysicalAdddress.
-// TODO: Should position and address changes be allowed separately? Should geocoding even be on FE?
 export default {
   find: async (req, res, next) => {
     try {
@@ -64,6 +62,7 @@ export default {
         latitude,
         longitude,
         organizationId,
+        address,
       } = req.body;
       const position = geometry.createPoint(longitude, latitude);
 
@@ -76,7 +75,15 @@ export default {
         name,
         description,
         position,
-      });
+        PhysicalAddresses: [{
+          address_1: address.street,
+          city: address.city,
+          region: address.region,
+          state_province: address.state,
+          postal_code: address.postalCode,
+          country: address.country,
+        }],
+      }, { include: models.PhysicalAddress });
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -85,23 +92,59 @@ export default {
   },
 
   update: async (req, res, next) => {
+    const updateLocation = (location, updateParams) => {
+      const locationUpdate = {};
+      if (updateParams.name) { locationUpdate.name = updateParams.name; }
+      if (updateParams.description) { locationUpdate.description = updateParams.description; }
+      if (updateParams.latitude) { locationUpdate.latitude = updateParams.latitude; }
+      if (updateParams.longitude) { locationUpdate.longitude = updateParams.longitude; }
+      if (updateParams.organizationId) {
+        locationUpdate.organization_id = updateParams.organizationId;
+      }
+
+      return location.update(locationUpdate);
+    };
+
+    const updateAddress = (location, updateParams) => {
+      if (!location.PhysicalAddresses || location.PhysicalAddresses.length !== 1) {
+        throw new Error('Trying to update address for location with no valid existing address');
+      }
+
+      const currentAddress = location.PhysicalAddresses[0];
+
+      const addressUpdate = {};
+      if (updateParams.street) { addressUpdate.address_1 = updateParams.street; }
+      if (updateParams.city) { addressUpdate.city = updateParams.city; }
+      if (updateParams.region) { addressUpdate.region = updateParams.region; }
+      if (updateParams.state) { addressUpdate.state_province = updateParams.state; }
+      if (updateParams.postalCode) { addressUpdate.postal_code = updateParams.postalCode; }
+      if (updateParams.country) { addressUpdate.country = updateParams.country; }
+
+      return currentAddress.update(addressUpdate);
+    };
+
     try {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
       const { locationId } = req.params;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findById(locationId, {
+        include: models.PhysicalAddress,
+      });
+
       if (!location) {
         throw new NotFoundError('Location not found');
       }
 
-      const editableFields = ['name', 'description', 'latitude', 'longitude', 'organization_id'];
-      const update = {
-        ...req.body,
-        organization_id: req.body.organizationId,
-      };
+      const updatePromises = [];
 
-      await location.update(update, { fields: editableFields });
+      if (req.body.address) {
+        updatePromises.push(updateAddress(location, req.body.address));
+      }
+
+      updatePromises.push(updateLocation(location, req.body));
+
+      await Promise.all(updatePromises);
 
       res.sendStatus(204);
     } catch (err) {

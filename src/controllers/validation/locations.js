@@ -26,6 +26,14 @@ export default {
       latitude: Joi.number().required(),
       longitude: Joi.number().required(),
       organizationId: Joi.string().guid().required(),
+      address: Joi.object().keys({
+        street: Joi.string().required(),
+        city: Joi.string().required(),
+        region: Joi.string(),
+        state: Joi.string().required(),
+        postalCode: Joi.string().required(),
+        country: Joi.string().required(),
+      }).required(),
     }).required(),
   },
 
@@ -39,6 +47,14 @@ export default {
       latitude: Joi.number(),
       longitude: Joi.number(),
       organizationId: Joi.string().guid(),
+      address: Joi.object().keys({
+        street: Joi.string(),
+        city: Joi.string(),
+        region: Joi.string(),
+        state: Joi.string(),
+        postalCode: Joi.string(),
+        country: Joi.string(),
+      }),
     }).required(),
   },
 
