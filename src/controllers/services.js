@@ -3,7 +3,6 @@ import serviceSchemas from './validation/services';
 import models from '../models';
 import { NotFoundError } from '../utils/errors';
 
-// TODO: Add support for Language, Schedule.
 export default {
   create: async (req, res, next) => {
     try {

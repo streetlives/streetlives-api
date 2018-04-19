@@ -3,8 +3,6 @@ import services from './controllers/services';
 import organizations from './controllers/organizations';
 import { NotFoundError } from './utils/errors';
 
-// TODO: Update everything in the API documentation.
-// TODO: Add tests.
 export default (app) => {
   app.get('/locations', locations.find);
 
@@ -21,7 +19,6 @@ export default (app) => {
 
   app.post('/services', services.create);
   app.patch('/services/:serviceId', services.update);
-  // TODO: Possibly a route for getting the taxonomy.
 
   app.get('/organizations', organizations.find);
   app.post('/organizations', organizations.create);
