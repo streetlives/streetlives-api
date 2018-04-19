@@ -8,6 +8,31 @@ Object {
       "posted_by": "Test poster",
     },
   },
+  "Organization": Object {
+    "description": "An organization meant for testing purposes.",
+    "email": null,
+    "name": "The Test Org",
+    "url": "www.streetlives.com",
+  },
+  "Phones": Object {
+    "0": Object {
+      "description": null,
+      "extension": null,
+      "language": null,
+      "number": "212.121.0123",
+      "type": null,
+    },
+  },
+  "PhysicalAddresses": Object {
+    "0": Object {
+      "address_1": "123 West 30th Street",
+      "city": "New York",
+      "country": "United States",
+      "postal_code": "10001",
+      "region": null,
+      "state_province": "NY",
+    },
+  },
   "Services": Object {
     "0": Object {
       "ServiceAtLocation": Object {

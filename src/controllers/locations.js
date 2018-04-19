@@ -40,8 +40,17 @@ export default {
 
       const location = await models.Location.findById(
         req.params.locationId,
-        { include: [models.Service, models.Comment, models.Organization, models.Phone, models.PhysicalAddress] },
+        {
+          include: [
+            models.Service,
+            models.Comment,
+            models.Organization,
+            models.Phone,
+            models.PhysicalAddress,
+          ],
+        },
       );
+
       if (!location) {
         throw new NotFoundError('Location not found');
       }
