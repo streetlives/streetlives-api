@@ -55,7 +55,30 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      res.send(location);
+      const {
+        PhysicalAddresses: addresses,
+        ...unchangedProps
+      } = location.get({ plain: true });
+
+      if (!addresses || addresses.length !== 1) {
+        throw new Error('Location does not have a valid address');
+      }
+
+      const address = addresses[0];
+
+      const responseData = {
+        ...unchangedProps,
+        address: {
+          street: address.address_1,
+          city: address.city,
+          region: address.region,
+          state: address.state_province,
+          postalCode: address.postal_code,
+          country: address.country,
+        },
+      };
+
+      res.send(responseData);
     } catch (err) {
       next(err);
     }
