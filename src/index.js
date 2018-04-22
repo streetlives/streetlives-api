@@ -1,4 +1,4 @@
-//node server entry point when not running in lambda.
+// Node server entry point when not running in lambda.
 import app from './app';
 import config from './config';
 import models from './models';
