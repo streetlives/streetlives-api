@@ -29,5 +29,16 @@ module.exports = (sequelize, DataTypes) => {
     Organization.hasMany(models.Phone);
   };
 
+  Organization.findMatching = (filterParameters, limit = 10) => {
+    const { searchString } = filterParameters;
+
+    const where = {};
+    if (searchString) {
+      where.name = { [sequelize.Op.iLike]: `%${searchString}%` };
+    }
+
+    return Organization.findAll({ limit, where });
+  };
+
   return Organization;
 };
