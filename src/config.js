@@ -6,6 +6,7 @@ export default {
     password: process.env.DATABASE_PASSWORD,
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
+      port: process.env.DATABASE_PORT || 5432,
       dialect: 'postgres',
       pool: {
         max: 100,

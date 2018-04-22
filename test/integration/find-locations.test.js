@@ -61,7 +61,10 @@ describe('find locations', () => {
   };
 
   beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => models.sequelize.close());
+  afterAll(() => {
+    models.sequelize.close();
+    app.server.close();
+  });
 
   it('should return locations within a given radius of a given position', () =>
     request(app)
