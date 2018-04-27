@@ -60,5 +60,14 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
+  Metadata.getLastUpdateDatesForResourceFields = resourceId => Metadata.findAll({
+    attributes: [
+      'field_name',
+      [sequelize.fn('MAX', sequelize.col('last_action_date')), 'last_action_date'],
+    ],
+    where: { resource_id: resourceId },
+    group: 'field_name',
+  });
+
   return Metadata;
 };
