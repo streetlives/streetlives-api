@@ -5,6 +5,31 @@ import { updateInstance, createInstance, destroyInstance } from '../services/dat
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
+const getMetadataForLocation = async (location, address) => {
+  const [
+    locationMetadata,
+    organizationMetadata,
+    addressMetadata,
+    phonesLatestUpdate,
+  ] = await Promise.all([
+    models.Metadata.getLastUpdateDatesForResourceFields(location.id),
+    models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
+    models.Metadata.getLastUpdateDatesForResourceFields(address.id),
+    models.Metadata.getLatestUpdateDateForResources(location.Phones.map(phone => phone.id)),
+  ]);
+
+  const locationWithPhonesMetadata = phonesLatestUpdate ? [
+    ...locationMetadata,
+    { field_name: 'phones', last_action_date: phonesLatestUpdate },
+  ] : locationMetadata;
+
+  return {
+    location: locationWithPhonesMetadata,
+    organization: organizationMetadata,
+    address: addressMetadata,
+  };
+};
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -67,6 +92,8 @@ export default {
 
       const address = addresses[0];
 
+      const metadata = await getMetadataForLocation(location, address);
+
       const responseData = {
         ...unchangedProps,
         address: {
@@ -77,6 +104,7 @@ export default {
           postalCode: address.postal_code,
           country: address.country,
         },
+        metadata,
       };
 
       res.send(responseData);
