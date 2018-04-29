@@ -133,14 +133,14 @@ export default {
       }
 
       const LocationCreateFunction = organization.createLocation.bind(organization);
-      const createdLocation = await createInstance(req, LocationCreateFunction, {
+      const createdLocation = await createInstance(req.user, LocationCreateFunction, {
         name,
         description,
         position,
       });
 
       const addressCreateFunction = createdLocation.createPhysicalAddress.bind(createdLocation);
-      await createInstance(req, addressCreateFunction, {
+      await createInstance(req.user, addressCreateFunction, {
         address_1: address.street,
         city: address.city,
         region: address.region,
@@ -168,7 +168,7 @@ export default {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
-      return updateInstance(req, location, locationUpdate);
+      return updateInstance(req.user, location, locationUpdate);
     };
 
     const updateAddress = (location, updateParams) => {
@@ -186,7 +186,7 @@ export default {
       if (updateParams.postalCode) { addressUpdate.postal_code = updateParams.postalCode; }
       if (updateParams.country) { addressUpdate.country = updateParams.country; }
 
-      return updateInstance(req, currentAddress, addressUpdate);
+      return updateInstance(req.user, currentAddress, addressUpdate);
     };
 
     try {
@@ -237,7 +237,7 @@ export default {
         description,
       } = req.body;
 
-      const createdPhone = await createInstance(req, location.createPhone.bind(location), {
+      const createdPhone = await createInstance(req.user, location.createPhone.bind(location), {
         number,
         extension,
         type,
@@ -263,7 +263,7 @@ export default {
       }
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
-      await updateInstance(req, phone, req.body, { fields: editableFields });
+      await updateInstance(req.user, phone, req.body, { fields: editableFields });
 
       res.sendStatus(204);
     } catch (err) {
@@ -282,7 +282,7 @@ export default {
         throw new NotFoundError('Phone not found');
       }
 
-      await destroyInstance(req, phone);
+      await destroyInstance(req.user, phone);
       res.sendStatus(204);
     } catch (err) {
       next(err);
@@ -301,7 +301,7 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      await createInstance(req, location.createComment.bind(location), {
+      await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
       });
@@ -323,7 +323,7 @@ export default {
       } = req.body;
 
       const modelCreateFunction = models.LocationSuggestion.create.bind(models.LocationSuggestion);
-      await createInstance(req, modelCreateFunction, {
+      await createInstance(req.user, modelCreateFunction, {
         name,
         position: geometry.createPoint(longitude, latitude),
         taxonomy_ids: taxonomyIds,

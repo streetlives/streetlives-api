@@ -27,14 +27,15 @@ export default {
         throw new NotFoundError('Taxonomy not found');
       }
 
-      const createdService = await createInstance(req, location.createService.bind(location), {
+      const modelCreateFunction = location.createService.bind(location);
+      const createdService = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
         url,
         organization_id: location.organization_id,
       });
 
-      await createInstance(req, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
+      await createInstance(req.user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
         service_id: createdService.id,
         taxonomy_id: taxonomy.id,
       });
@@ -68,7 +69,7 @@ export default {
 
       const editableFields = ['name', 'description', 'url'];
 
-      await updateInstance(req, service, req.body, { fields: editableFields });
+      await updateInstance(req.user, service, req.body, { fields: editableFields });
 
       res.sendStatus(204);
     } catch (err) {

@@ -1,28 +1,29 @@
 import locations from './controllers/locations';
 import services from './controllers/services';
 import organizations from './controllers/organizations';
+import getUser from './middleware/get-user';
 import { NotFoundError } from './utils/errors';
 
 export default (app) => {
   app.get('/locations', locations.find);
 
-  app.post('/locations/suggestions', locations.suggestNew);
-  app.post('/locations/:locationId/comments', locations.addComment);
+  app.post('/locations/suggestions', getUser, locations.suggestNew);
+  app.post('/locations/:locationId/comments', getUser, locations.addComment);
 
   app.get('/locations/:locationId', locations.getInfo);
-  app.post('/locations', locations.create);
-  app.patch('/locations/:locationId', locations.update);
+  app.post('/locations', getUser, locations.create);
+  app.patch('/locations/:locationId', getUser, locations.update);
 
-  app.post('/locations/:locationId/phones', locations.addPhone);
-  app.patch('/phones/:phoneId', locations.updatePhone);
-  app.delete('/phones/:phoneId', locations.deletePhone);
+  app.post('/locations/:locationId/phones', getUser, locations.addPhone);
+  app.patch('/phones/:phoneId', getUser, locations.updatePhone);
+  app.delete('/phones/:phoneId', getUser, locations.deletePhone);
 
-  app.post('/services', services.create);
-  app.patch('/services/:serviceId', services.update);
+  app.post('/services', getUser, services.create);
+  app.patch('/services/:serviceId', getUser, services.update);
 
   app.get('/organizations', organizations.find);
-  app.post('/organizations', organizations.create);
-  app.patch('/organizations/:organizationId', organizations.update);
+  app.post('/organizations', getUser, organizations.create);
+  app.patch('/organizations/:organizationId', getUser, organizations.update);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,

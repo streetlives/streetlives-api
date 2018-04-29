@@ -26,7 +26,7 @@ export default {
       const { name, description, url } = req.body;
 
       const modelCreateFunction = models.Organization.create.bind(models.Organization);
-      const createdOrganization = await createInstance(req, modelCreateFunction, {
+      const createdOrganization = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
         url,
@@ -51,7 +51,7 @@ export default {
 
       const editableFields = ['name', 'description', 'url'];
 
-      await updateInstance(req, organization, req.body, { fields: editableFields });
+      await updateInstance(req.user, organization, req.body, { fields: editableFields });
       res.sendStatus(204);
     } catch (err) {
       next(err);
