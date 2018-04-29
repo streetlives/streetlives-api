@@ -29,23 +29,18 @@ module.exports = (sequelize, DataTypes) => {
       [taxonomyObject.id]: taxonomyObject.get({ plain: true }),
     }), {});
 
-    const topLevelTaxonomyObjects = [];
+    const taxonomyRoot = {};
 
     Object.keys(taxonomyIdsToObjects).forEach((taxonomyId) => {
       const taxonomyObject = taxonomyIdsToObjects[taxonomyId];
       const parentId = taxonomyObject.parent_id;
 
-      if (parentId) {
-        if (!taxonomyIdsToObjects[parentId].children) {
-          taxonomyIdsToObjects[parentId].children = [];
-        }
-        taxonomyIdsToObjects[parentId].children.push(taxonomyObject);
-      } else {
-        topLevelTaxonomyObjects.push(taxonomyObject);
-      }
+      const parent = parentId ? taxonomyIdsToObjects[parentId] : taxonomyRoot;
+      const { children = [] } = parent;
+      parent.children = [...children, taxonomyObject];
     });
 
-    return topLevelTaxonomyObjects;
+    return taxonomyRoot.children;
   };
 
   return Taxonomy;
