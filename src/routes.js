@@ -6,6 +6,11 @@ import getUser from './middleware/get-user';
 import { NotFoundError } from './utils/errors';
 
 export default (app) => {
+  app.get('/organizations', organizations.find);
+  app.post('/organizations', getUser, organizations.create);
+  app.patch('/organizations/:organizationId', getUser, organizations.update);
+  app.get('/organizations/:organizationId/locations', organizations.getLocations);
+
   app.get('/locations', locations.find);
 
   app.post('/locations/suggestions', getUser, locations.suggestNew);
@@ -23,10 +28,6 @@ export default (app) => {
   app.patch('/services/:serviceId', getUser, services.update);
 
   app.get('/taxonomy', taxonomy.getAll);
-
-  app.get('/organizations', organizations.find);
-  app.post('/organizations', getUser, organizations.create);
-  app.patch('/organizations/:organizationId', getUser, organizations.update);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
