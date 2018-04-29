@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import locationSchemas from './validation/locations';
 import models from '../models';
+import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
@@ -103,19 +104,22 @@ export default {
         throw new NotFoundError('Organization not found');
       }
 
-      const createdLocation = await organization.createLocation({
+      const LocationCreateFunction = organization.createLocation.bind(organization);
+      const createdLocation = await createInstance(req, LocationCreateFunction, {
         name,
         description,
         position,
-        PhysicalAddresses: [{
-          address_1: address.street,
-          city: address.city,
-          region: address.region,
-          state_province: address.state,
-          postal_code: address.postalCode,
-          country: address.country,
-        }],
-      }, { include: models.PhysicalAddress });
+      });
+
+      const addressCreateFunction = createdLocation.createPhysicalAddress.bind(createdLocation);
+      await createInstance(req, addressCreateFunction, {
+        address_1: address.street,
+        city: address.city,
+        region: address.region,
+        state_province: address.state,
+        postal_code: address.postalCode,
+        country: address.country,
+      });
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -128,13 +132,15 @@ export default {
       const locationUpdate = {};
       if (updateParams.name) { locationUpdate.name = updateParams.name; }
       if (updateParams.description) { locationUpdate.description = updateParams.description; }
-      if (updateParams.latitude) { locationUpdate.latitude = updateParams.latitude; }
-      if (updateParams.longitude) { locationUpdate.longitude = updateParams.longitude; }
+      if (updateParams.latitude && updateParams.longitude) {
+        const { longitude, latitude } = updateParams;
+        locationUpdate.position = geometry.createPoint(longitude, latitude);
+      }
       if (updateParams.organizationId) {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
-      return location.update(locationUpdate);
+      return updateInstance(req, location, locationUpdate);
     };
 
     const updateAddress = (location, updateParams) => {
@@ -152,7 +158,7 @@ export default {
       if (updateParams.postalCode) { addressUpdate.postal_code = updateParams.postalCode; }
       if (updateParams.country) { addressUpdate.country = updateParams.country; }
 
-      return currentAddress.update(addressUpdate);
+      return updateInstance(req, currentAddress, addressUpdate);
     };
 
     try {
@@ -203,7 +209,7 @@ export default {
         description,
       } = req.body;
 
-      const createdPhone = await location.createPhone({
+      const createdPhone = await createInstance(req, location.createPhone.bind(location), {
         number,
         extension,
         type,
@@ -229,7 +235,7 @@ export default {
       }
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
-      await phone.update(req.body, { fields: editableFields });
+      await updateInstance(req, phone, req.body, { fields: editableFields });
 
       res.sendStatus(204);
     } catch (err) {
@@ -248,7 +254,7 @@ export default {
         throw new NotFoundError('Phone not found');
       }
 
-      await phone.destroy();
+      await destroyInstance(req, phone);
       res.sendStatus(204);
     } catch (err) {
       next(err);
@@ -267,7 +273,7 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      await location.createComment({
+      await createInstance(req, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
       });
@@ -288,7 +294,8 @@ export default {
         taxonomyIds,
       } = req.body;
 
-      await models.LocationSuggestion.create({
+      const modelCreateFunction = models.LocationSuggestion.create.bind(models.LocationSuggestion);
+      await createInstance(req, modelCreateFunction, {
         name,
         position: geometry.createPoint(longitude, latitude),
         taxonomy_ids: taxonomyIds,

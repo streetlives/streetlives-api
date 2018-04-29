@@ -1,4 +1,10 @@
 module.exports = (sequelize, DataTypes) => {
+  const actionTypes = {
+    create: 'create',
+    update: 'update',
+    delete: 'delete',
+  };
+
   const Metadata = sequelize.define('Metadata', {
     id: {
       type: DataTypes.UUID,
@@ -18,21 +24,13 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     last_action_type: {
-      type: DataTypes.TEXT,
+      type: DataTypes.ENUM,
+      values: Object.values(actionTypes),
       allowNull: false,
     },
-    field_name: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    previous_value: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    replacement_value: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
+    field_name: DataTypes.TEXT,
+    previous_value: DataTypes.TEXT,
+    replacement_value: DataTypes.TEXT,
     updated_by: {
       type: DataTypes.TEXT,
       allowNull: false,
@@ -42,6 +40,8 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
     underscoredAll: true,
   });
+
+  Metadata.actionTypes = actionTypes;
 
   Metadata.associate = (models) => {
     Object.keys(models).forEach((modelKey) => {
