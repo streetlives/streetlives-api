@@ -4,52 +4,6 @@ import app from '../../src';
 import models from '../../src/models';
 
 describe('get taxonomy', () => {
-  const taxonomy1 = {
-    id: uuid(),
-    name: 'taxonomy 1',
-    parent_id: null,
-    parent_name: null,
-  };
-  const taxonomy2 = {
-    id: uuid(),
-    name: 'taxonomy 2',
-    parent_id: null,
-    parent_name: null,
-  };
-  const taxonomy3 = {
-    id: uuid(),
-    name: 'taxonomy 3',
-    parent_id: taxonomy1.id,
-    parent_name: taxonomy1.name,
-  };
-  const taxonomy4 = {
-    id: uuid(),
-    name: 'taxonomy 4',
-    parent_id: taxonomy1.id,
-    parent_name: taxonomy1.name,
-  };
-  const taxonomy5 = {
-    id: uuid(),
-    name: 'taxonomy 5',
-    parent_id: taxonomy2.id,
-    parent_name: taxonomy2.name,
-  };
-  const taxonomy6 = {
-    id: uuid(),
-    name: 'taxonomy 6',
-    parent_id: taxonomy5.id,
-    parent_name: taxonomy5.name,
-  };
-
-  const setupData = () => models.Taxonomy.bulkCreate([
-    taxonomy1,
-    taxonomy2,
-    taxonomy3,
-    taxonomy4,
-    taxonomy5,
-    taxonomy6,
-  ]);
-
   const stripTimestamps = (obj) => {
     if (!obj || typeof obj !== 'object') {
       return obj;
@@ -69,6 +23,29 @@ describe('get taxonomy', () => {
       return { ...currStrippedObj, [key]: stripTimestamps(value) };
     }, {});
   };
+
+  const generateTestTaxonomy = ({ number, parent }) => ({
+    id: uuid(),
+    name: `taxonomy ${number}`,
+    parent_id: parent ? parent.id : null,
+    parent_name: parent ? parent.name : null,
+  });
+
+  const taxonomy1 = generateTestTaxonomy({ number: 1 });
+  const taxonomy2 = generateTestTaxonomy({ number: 2 });
+  const taxonomy3 = generateTestTaxonomy({ number: 3, parent: taxonomy1 });
+  const taxonomy4 = generateTestTaxonomy({ number: 4, parent: taxonomy1 });
+  const taxonomy5 = generateTestTaxonomy({ number: 5, parent: taxonomy2 });
+  const taxonomy6 = generateTestTaxonomy({ number: 6, parent: taxonomy5 });
+
+  const setupData = () => models.Taxonomy.bulkCreate([
+    taxonomy1,
+    taxonomy2,
+    taxonomy3,
+    taxonomy4,
+    taxonomy5,
+    taxonomy6,
+  ]);
 
   beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
   afterAll(() => {
