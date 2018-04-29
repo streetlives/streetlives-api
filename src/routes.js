@@ -1,6 +1,7 @@
 import locations from './controllers/locations';
 import services from './controllers/services';
 import organizations from './controllers/organizations';
+import taxonomy from './controllers/taxonomy';
 import getUser from './middleware/get-user';
 import { NotFoundError } from './utils/errors';
 
@@ -20,6 +21,8 @@ export default (app) => {
 
   app.post('/services', getUser, services.create);
   app.patch('/services/:serviceId', getUser, services.update);
+
+  app.get('/taxonomy', taxonomy.getAll);
 
   app.get('/organizations', organizations.find);
   app.post('/organizations', getUser, organizations.create);
