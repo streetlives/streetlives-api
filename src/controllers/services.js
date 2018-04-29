@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import serviceSchemas from './validation/services';
 import models from '../models';
+import { updateInstance, createInstance } from '../services/data-changes';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -26,14 +27,18 @@ export default {
         throw new NotFoundError('Taxonomy not found');
       }
 
-      const createdService = await location.createService({
+      const modelCreateFunction = location.createService.bind(location);
+      const createdService = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
         url,
         organization_id: location.organization_id,
       });
 
-      await createdService.setTaxonomies([taxonomy]);
+      await createInstance(req.user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
+        service_id: createdService.id,
+        taxonomy_id: taxonomy.id,
+      });
 
       res.status(201).send(createdService);
     } catch (err) {
@@ -64,7 +69,7 @@ export default {
 
       const editableFields = ['name', 'description', 'url'];
 
-      await service.update(req.body, { fields: editableFields });
+      await updateInstance(req.user, service, req.body, { fields: editableFields });
 
       res.sendStatus(204);
     } catch (err) {

@@ -11,14 +11,13 @@
     "accountId": "710263499164"
   },
   "scripts": {
-    "dev": "nodemon -w src --exec \"babel-node src\"",
+    "dev": "NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
     "build": "babel src -s -D -d dist",
-    "start": "node dist",
+    "start": "NODE_ENV=production node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
-    "test": "jest --runInBand --coverage",
-    "test:watch": "jest --watch --runInBand",
-    "start-serverless": "node app.local.js",
+    "test": "NODE_ENV=test jest --runInBand --coverage",
+    "test:watch": "NODE_ENV=test jest --watch --runInBand",
     "config": "node ./scripts/configure.js",
     "deconfig": "node ./scripts/deconfigure.js",
     "local": "node scripts/local",
