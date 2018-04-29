@@ -25,4 +25,10 @@ export default {
       url: Joi.string(),
     }).required(),
   },
+
+  getLocations: {
+    params: Joi.object().keys({
+      organizationId: Joi.string().guid().required(),
+    }).required(),
+  },
 };

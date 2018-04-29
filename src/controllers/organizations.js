@@ -57,4 +57,30 @@ export default {
       next(err);
     }
   },
+
+  getLocations: async (req, res, next) => {
+    try {
+      await Joi.validate(req, organizationSchemas.getLocations, { allowUnknown: true });
+
+      const { organizationId } = req.params;
+
+      const organization = await models.Organization.findById(organizationId, {
+        include: [{
+          model: models.Location,
+          include: [
+            models.Phone,
+            models.PhysicalAddress,
+          ],
+        }],
+      });
+
+      if (!organization) {
+        throw new NotFoundError('Organization not found');
+      }
+
+      res.send(organization.Locations);
+    } catch (err) {
+      next(err);
+    }
+  },
 };
