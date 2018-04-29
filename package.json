@@ -64,7 +64,8 @@
     "jest": "^22.4.2",
     "nodemon": "^1.14.8",
     "pre-commit": "^1.2.2",
-    "supertest": "^3.0.0"
+    "supertest": "^3.0.0",
+    "uuid": "^3.2.1"
   },
   "pre-commit": [
     "lint",
