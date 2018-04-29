@@ -45,6 +45,11 @@ Object {
     "street": "123 West 30th Street",
   },
   "description": null,
+  "metadata": Object {
+    "address": Object {},
+    "location": Object {},
+    "organization": Object {},
+  },
   "name": "Some kind of center",
   "position": null,
   "transportation": null,
