@@ -68,7 +68,10 @@ export default {
         req.params.locationId,
         {
           include: [
-            models.Service,
+            {
+              model: models.Service,
+              include: [models.Taxonomy, models.RegularSchedule],
+            },
             models.Comment,
             models.Organization,
             models.Phone,

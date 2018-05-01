@@ -6,6 +6,14 @@ const { actionTypes } = models.Metadata;
 const stringifyFieldValue = fieldValue =>
   (typeof fieldValue === 'object' ? JSON.stringify(fieldValue) : fieldValue);
 
+const startTransactionOrUseExisting = (callback, options) => {
+  if (options && options.transaction) {
+    return callback(options.transaction);
+  }
+
+  return sequelize.transaction(callback);
+};
+
 const createMetadataForFields = async (user, actionType, values, previousValues, newInstance, t) =>
   Promise.all(Object.keys(values).map(async (fieldName) => {
     if (!(fieldName in newInstance)) {
@@ -27,7 +35,7 @@ const createMetadataForFields = async (user, actionType, values, previousValues,
   }));
 
 export const createInstance = async (user, modelCreateFunction, values, options) =>
-  sequelize.transaction(async (t) => {
+  startTransactionOrUseExisting(async (t) => {
     const newInstance = await modelCreateFunction(values, {
       ...options,
       transaction: t,
@@ -36,10 +44,10 @@ export const createInstance = async (user, modelCreateFunction, values, options)
     await createMetadataForFields(user, actionTypes.create, values, null, newInstance, t);
 
     return newInstance;
-  });
+  }, options);
 
 export const updateInstance = async (user, instance, values, options) =>
-  sequelize.transaction(async (t) => {
+  startTransactionOrUseExisting(async (t) => {
     const previousValues = { ...instance.get({ plain: true }) };
 
     const newInstance = await instance.update(values, {
@@ -50,9 +58,9 @@ export const updateInstance = async (user, instance, values, options) =>
     await createMetadataForFields(user, actionTypes.update, values, previousValues, newInstance, t);
 
     return newInstance;
-  });
+  }, options);
 
-export const destroyInstance = (user, instance) => sequelize.transaction(async (t) => {
+export const destroyInstance = (user, instance) => startTransactionOrUseExisting(async (t) => {
   await instance.destroy({ transaction: t });
 
   await instance.createMetadatum({
