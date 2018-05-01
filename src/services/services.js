@@ -1,7 +1,6 @@
 import { getDayOfWeekInteger } from '../utils/times';
 import models from '../models';
 import { updateInstance, createInstance } from './data-changes';
-import { NotFoundError } from '../utils/errors';
 
 const { sequelize } = models;
 
@@ -17,15 +16,10 @@ const updateHours = async (service, hours, t) => {
 };
 
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
+  const { taxonomy, hours, ...otherUpdateProps } = update;
   const updatePromises = [];
 
-  const { taxonomyId, hours, ...otherUpdateProps } = update;
-  if (taxonomyId) {
-    const taxonomy = await models.Taxonomy.findById(taxonomyId);
-    if (!taxonomy) {
-      throw new NotFoundError('Taxonomy not found');
-    }
-
+  if (taxonomy) {
     updatePromises.push(service.setTaxonomies([taxonomy], { transaction: t }));
   }
 
@@ -46,11 +40,15 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
 export const createService = async (
   location,
-  taxonomy,
   serviceData,
   user,
 ) => sequelize.transaction(async (t) => {
-  const { name, description, url } = serviceData;
+  const {
+    name,
+    description,
+    url,
+    taxonomy,
+  } = serviceData;
 
   const modelCreateFunction = location.createService.bind(location);
   const createdService = await createInstance(user, modelCreateFunction, {
