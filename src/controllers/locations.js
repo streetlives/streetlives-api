@@ -70,7 +70,7 @@ export default {
           include: [
             {
               model: models.Service,
-              include: [models.Taxonomy, models.RegularSchedule],
+              include: [models.Taxonomy, models.RegularSchedule, models.Language],
             },
             models.Comment,
             models.Organization,

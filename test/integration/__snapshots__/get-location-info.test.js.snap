@@ -25,6 +25,7 @@ Object {
   },
   "Services": Object {
     "0": Object {
+      "Languages": Object {},
       "RegularSchedules": Object {},
       "ServiceAtLocation": Object {
         "description": null,

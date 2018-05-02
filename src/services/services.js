@@ -15,8 +15,16 @@ const updateHours = async (service, hours, t) => {
   }, { transaction: t })));
 };
 
+const updateLanguages = (service, languageIds, t) =>
+  service.setLanguages(languageIds, { transaction: t });
+
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
-  const { taxonomy, hours, ...otherUpdateProps } = update;
+  const {
+    taxonomy,
+    hours,
+    languageIds,
+    ...otherUpdateProps
+  } = update;
   const updatePromises = [];
 
   if (taxonomy) {
@@ -25,6 +33,10 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (hours) {
     updatePromises.push(updateHours(service, hours, t));
+  }
+
+  if (languageIds) {
+    updatePromises.push(updateLanguages(service, languageIds, t));
   }
 
   const editableFields = ['name', 'description', 'url'];
