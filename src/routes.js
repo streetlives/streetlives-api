@@ -2,6 +2,7 @@ import locations from './controllers/locations';
 import services from './controllers/services';
 import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
+import languages from './controllers/languages';
 import getUser from './middleware/get-user';
 import { NotFoundError } from './utils/errors';
 
@@ -28,6 +29,7 @@ export default (app) => {
   app.patch('/services/:serviceId', getUser, services.update);
 
   app.get('/taxonomy', taxonomy.getAll);
+  app.get('/languages', languages.getAll);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
