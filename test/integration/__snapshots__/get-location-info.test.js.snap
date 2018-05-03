@@ -25,8 +25,17 @@ Object {
   },
   "Services": Object {
     "0": Object {
+      "Languages": Object {},
+      "RegularSchedules": Object {},
       "ServiceAtLocation": Object {
         "description": null,
+      },
+      "Taxonomies": Object {
+        "0": Object {
+          "ServiceTaxonomy": Object {},
+          "name": "Shelter",
+          "parent_name": null,
+        },
       },
       "description": null,
       "email": null,

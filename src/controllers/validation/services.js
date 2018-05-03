@@ -20,6 +20,20 @@ export default {
       description: Joi.string(),
       url: Joi.string(),
       taxonomyId: Joi.string().guid(),
+      hours: Joi.array().items(Joi.object().keys({
+        weekday: Joi.string().valid([
+          'Sunday',
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+        ]).required(),
+        opensAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }),
+        closesAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }),
+      })),
+      languageIds: Joi.array().items(Joi.string().guid().required()),
     }).required(),
   },
 };

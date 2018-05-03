@@ -6,14 +6,15 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: DataTypes.UUIDV4,
     },
     language: DataTypes.TEXT,
+    name: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
   });
 
   Language.associate = (models) => {
-    Language.belongsTo(models.Location);
-    Language.belongsTo(models.Service);
+    Language.belongsToMany(models.Location, { through: 'location_languages' });
+    Language.belongsToMany(models.Service, { through: 'service_languages' });
   };
 
   return Language;
