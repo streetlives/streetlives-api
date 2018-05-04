@@ -26,7 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     });
     Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
     Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
-    Service.belongsToMany(models.Language, { through: 'service_languages' });
+    Service.belongsToMany(models.Language, { through: models.ServiceLanguages });
     Service.hasMany(models.Phone);
     Service.hasMany(models.PaymentAccepted);
     Service.hasMany(models.RegularSchedule);

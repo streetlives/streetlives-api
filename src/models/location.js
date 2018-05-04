@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
   Location.associate = (models) => {
     Location.belongsTo(models.Organization);
     Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
-    Location.belongsToMany(models.Language, { through: 'location_languages' });
+    Location.belongsToMany(models.Language, { through: models.LocationLanguages });
     Location.hasMany(models.PhysicalAddress);
     Location.hasMany(models.Phone);
     Location.hasMany(models.RegularSchedule);

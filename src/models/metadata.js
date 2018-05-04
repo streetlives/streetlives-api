@@ -69,15 +69,15 @@ module.exports = (sequelize, DataTypes) => {
     group: 'field_name',
   });
 
-  Metadata.getLatestUpdateDateForResource = resourceId => Metadata.max(
-    'last_action_date',
-    { where: { resource_id: resourceId } },
-  );
+  Metadata.getLatestUpdateDateForQuery = where => Metadata.max('last_action_date', { where });
 
-  Metadata.getLatestUpdateDateForResources = resourceIds => Metadata.max(
-    'last_action_date',
-    { where: { resource_id: { [sequelize.Op.in]: resourceIds } } },
-  );
+  Metadata.getLatestUpdateDateForResource = resourceId => Metadata.getLatestUpdateDateForQuery({
+    resource_id: resourceId,
+  });
+
+  Metadata.getLatestUpdateDateForResources = resourceIds => Metadata.getLatestUpdateDateForQuery({
+    resource_id: { [sequelize.Op.in]: resourceIds },
+  });
 
   return Metadata;
 };
