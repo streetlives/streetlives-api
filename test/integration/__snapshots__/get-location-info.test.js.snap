@@ -45,6 +45,7 @@ Object {
       "url": null,
     },
   },
+  "additionalInfo": null,
   "address": Object {
     "city": "New York",
     "country": "United States",
