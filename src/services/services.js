@@ -28,11 +28,39 @@ const updateLanguages = async (service, languageIds, t, user) => {
   }, { transaction: t })));
 };
 
+const updateDocuments = async (user, service, documents, t) => {
+  const {
+    proofs,
+    recertificationTime,
+    gracePeriod,
+    additionalInfo,
+  } = documents;
+
+  if (proofs != null) {
+    await models.RequiredDocument.destroy({ where: { service_id: service.id }, transaction: t });
+    await Promise.all(proofs.map(proof =>
+      createInstance(user, models.RequiredDocument.create.bind(models.RequiredDocument), {
+        service_id: service.id,
+        document: proof,
+      }, { transaction: t })));
+  }
+
+  const documentsInfoUpdates = {};
+  if (recertificationTime != null) {
+    documentsInfoUpdates.recertification_time = recertificationTime;
+  }
+  if (gracePeriod != null) { documentsInfoUpdates.grace_period = gracePeriod; }
+  if (additionalInfo != null) { documentsInfoUpdates.additional_info = additionalInfo; }
+
+  await updateInstance(user, service.DocumentsInfo, documentsInfoUpdates, { transaction: t });
+};
+
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
   const {
     taxonomy,
     hours,
     languageIds,
+    documents,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -47,6 +75,10 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (languageIds) {
     updatePromises.push(updateLanguages(service, languageIds, t, user));
+  }
+
+  if (documents) {
+    updatePromises.push(updateDocuments(user, service, documents, t));
   }
 
   const editableFields = ['name', 'description', 'url'];
@@ -84,6 +116,13 @@ export const createService = async (
     service_id: createdService.id,
     taxonomy_id: taxonomy.id,
   }, { transaction: t });
+
+  await createInstance(
+    user,
+    models.DocumentsInfo.create.bind(models.DocumentsInfo),
+    { service_id: createdService.id },
+    { transaction: t },
+  );
 
   return createdService;
 });

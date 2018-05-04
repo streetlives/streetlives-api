@@ -34,6 +34,12 @@ export default {
         closesAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }),
       })),
       languageIds: Joi.array().items(Joi.string().guid().required()),
+      documents: Joi.object().keys({
+        proofs: Joi.array().items(Joi.string()),
+        recertificationTime: Joi.string(),
+        gracePeriod: Joi.string(),
+        additionalInfo: Joi.string(),
+      }),
     }).required(),
   },
 };
