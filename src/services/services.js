@@ -24,6 +24,8 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     hours,
     languageIds,
     additionalInfo,
+    agesServed,
+    whoDoesItServe,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -40,11 +42,23 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     updatePromises.push(updateLanguages(service, languageIds, t));
   }
 
-  const editableFields = ['name', 'description', 'url', 'additional_info'];
+  const editableFields = [
+    'name',
+    'description',
+    'url',
+    'additional_info',
+    'ages_served',
+    'who_does_it_serve',
+  ];
   updatePromises.push(updateInstance(
     user,
     service,
-    { ...otherUpdateProps, additional_info: additionalInfo },
+    {
+      ...otherUpdateProps,
+      additional_info: additionalInfo,
+      ages_served: agesServed,
+      who_does_it_serve: whoDoesItServe,
+    },
     { fields: editableFields, transaction: t },
   ));
 
