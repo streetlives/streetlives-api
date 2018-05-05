@@ -6,6 +6,7 @@ export default {
       name: Joi.string().required(),
       description: Joi.string(),
       url: Joi.string(),
+      additionalInfo: Joi.string(),
       taxonomyId: Joi.string().guid().required(),
       locationId: Joi.string().guid().required(),
     }).required(),
@@ -19,6 +20,7 @@ export default {
       name: Joi.string(),
       description: Joi.string(),
       url: Joi.string(),
+      additionalInfo: Joi.string(),
       taxonomyId: Joi.string().guid(),
       hours: Joi.array().items(Joi.object().keys({
         weekday: Joi.string().valid([

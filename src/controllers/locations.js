@@ -86,6 +86,7 @@ export default {
 
       const {
         PhysicalAddresses: addresses,
+        additional_info: additionalInfo,
         ...unchangedProps
       } = location.get({ plain: true });
 
@@ -99,6 +100,7 @@ export default {
 
       const responseData = {
         ...unchangedProps,
+        additionalInfo,
         address: {
           street: address.address_1,
           city: address.city,
@@ -127,6 +129,7 @@ export default {
         longitude,
         organizationId,
         address,
+        additionalInfo,
       } = req.body;
       const position = geometry.createPoint(longitude, latitude);
 
@@ -140,6 +143,7 @@ export default {
         name,
         description,
         position,
+        additional_info: additionalInfo,
       });
 
       const addressCreateFunction = createdLocation.createPhysicalAddress.bind(createdLocation);
@@ -161,13 +165,18 @@ export default {
   update: async (req, res, next) => {
     const updateLocation = (location, updateParams) => {
       const locationUpdate = {};
-      if (updateParams.name) { locationUpdate.name = updateParams.name; }
-      if (updateParams.description) { locationUpdate.description = updateParams.description; }
-      if (updateParams.latitude && updateParams.longitude) {
+      if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
+      if (updateParams.description != null) {
+        locationUpdate.description = updateParams.description;
+      }
+      if (updateParams.additionalInfo != null) {
+        locationUpdate.additional_info = updateParams.additionalInfo;
+      }
+      if (updateParams.latitude != null && updateParams.longitude != null) {
         const { longitude, latitude } = updateParams;
         locationUpdate.position = geometry.createPoint(longitude, latitude);
       }
-      if (updateParams.organizationId) {
+      if (updateParams.organizationId != null) {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
@@ -182,12 +191,12 @@ export default {
       const currentAddress = location.PhysicalAddresses[0];
 
       const addressUpdate = {};
-      if (updateParams.street) { addressUpdate.address_1 = updateParams.street; }
-      if (updateParams.city) { addressUpdate.city = updateParams.city; }
-      if (updateParams.region) { addressUpdate.region = updateParams.region; }
-      if (updateParams.state) { addressUpdate.state_province = updateParams.state; }
-      if (updateParams.postalCode) { addressUpdate.postal_code = updateParams.postalCode; }
-      if (updateParams.country) { addressUpdate.country = updateParams.country; }
+      if (updateParams.street != null) { addressUpdate.address_1 = updateParams.street; }
+      if (updateParams.city != null) { addressUpdate.city = updateParams.city; }
+      if (updateParams.region != null) { addressUpdate.region = updateParams.region; }
+      if (updateParams.state != null) { addressUpdate.state_province = updateParams.state; }
+      if (updateParams.postalCode != null) { addressUpdate.postal_code = updateParams.postalCode; }
+      if (updateParams.country != null) { addressUpdate.country = updateParams.country; }
 
       return updateInstance(req.user, currentAddress, addressUpdate);
     };
