@@ -64,7 +64,7 @@ export default {
     }).required(),
     body: Joi.object().keys({
       number: Joi.string().required(),
-      extension: Joi.number(),
+      extension: Joi.number().allow(null),
       type: Joi.string(),
       language: Joi.string(),
       description: Joi.string(),
@@ -77,7 +77,7 @@ export default {
     }).required(),
     body: Joi.object().keys({
       number: Joi.string(),
-      extension: Joi.number(),
+      extension: Joi.number().allow(null),
       type: Joi.string(),
       language: Joi.string(),
       description: Joi.string(),
