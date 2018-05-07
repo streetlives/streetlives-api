@@ -13,6 +13,8 @@ describe('get location info', () => {
     .then(organization => models.Location.create({
       organization_id: organization.id,
       name: 'Some kind of center',
+      description: 'This is how one would describe this shelter.',
+      additional_info: 'And some other, perhaps less standardized, information.',
       PhysicalAddresses: [{
         address_1: '123 West 30th Street',
         city: 'New York',
@@ -26,6 +28,7 @@ describe('get location info', () => {
       Services: [{
         organization_id: organization.id,
         name: 'A specific offering',
+        additional_info: 'A service might have some other info as well.',
         Taxonomies: [{
           name: 'Shelter',
         }],

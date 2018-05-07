@@ -26,6 +26,7 @@ export default {
       latitude: Joi.number().required(),
       longitude: Joi.number().required(),
       organizationId: Joi.string().guid().required(),
+      additionalInfo: Joi.string(),
       address: Joi.object().keys({
         street: Joi.string().required(),
         city: Joi.string().required(),
@@ -47,6 +48,7 @@ export default {
       latitude: Joi.number(),
       longitude: Joi.number(),
       organizationId: Joi.string().guid(),
+      additionalInfo: Joi.string(),
       address: Joi.object().keys({
         street: Joi.string(),
         city: Joi.string(),
