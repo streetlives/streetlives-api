@@ -41,6 +41,9 @@ Object {
       "email": null,
       "fees": null,
       "interpretation_services": null,
+      "metadata": Object {
+        "service": Object {},
+      },
       "name": "A specific offering",
       "url": null,
     },

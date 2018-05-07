@@ -2,33 +2,9 @@ import Joi from 'joi';
 import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
+import { getMetadataForLocation, getMetadataForService } from '../services/last-updates';
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
-
-const getMetadataForLocation = async (location, address) => {
-  const [
-    locationMetadata,
-    organizationMetadata,
-    addressMetadata,
-    phonesLatestUpdate,
-  ] = await Promise.all([
-    models.Metadata.getLastUpdateDatesForResourceFields(location.id),
-    models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
-    models.Metadata.getLastUpdateDatesForResourceFields(address.id),
-    models.Metadata.getLatestUpdateDateForResources(location.Phones.map(phone => phone.id)),
-  ]);
-
-  const locationWithPhonesMetadata = phonesLatestUpdate ? [
-    ...locationMetadata,
-    { field_name: 'phones', last_action_date: phonesLatestUpdate },
-  ] : locationMetadata;
-
-  return {
-    location: locationWithPhonesMetadata,
-    organization: organizationMetadata,
-    address: addressMetadata,
-  };
-};
 
 export default {
   find: async (req, res, next) => {
@@ -86,6 +62,7 @@ export default {
 
       const {
         PhysicalAddresses: addresses,
+        Services: services,
         ...unchangedProps
       } = location.get({ plain: true });
 
@@ -95,10 +72,15 @@ export default {
 
       const address = addresses[0];
 
-      const metadata = await getMetadataForLocation(location, address);
+      const locationMetadata = await getMetadataForLocation(location, address);
+      const servicesWithMetadata = await Promise.all(services.map(async service => ({
+        ...service,
+        metadata: await getMetadataForService(service),
+      })));
 
       const responseData = {
         ...unchangedProps,
+        Services: servicesWithMetadata,
         address: {
           street: address.address_1,
           city: address.city,
@@ -107,7 +89,7 @@ export default {
           postalCode: address.postal_code,
           country: address.country,
         },
-        metadata,
+        metadata: locationMetadata,
       };
 
       res.send(responseData);
