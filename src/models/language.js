@@ -13,8 +13,8 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Language.associate = (models) => {
-    Language.belongsToMany(models.Location, { through: 'location_languages' });
-    Language.belongsToMany(models.Service, { through: 'service_languages' });
+    Language.belongsToMany(models.Location, { through: models.LocationLanguages });
+    Language.belongsToMany(models.Service, { through: models.ServiceLanguages });
   };
 
   return Language;
