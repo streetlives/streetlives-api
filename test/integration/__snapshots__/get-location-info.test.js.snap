@@ -37,6 +37,8 @@ Object {
           "parent_name": null,
         },
       },
+      "additional_info": "A service might have some other info as well.",
+      "ages_served": null,
       "description": null,
       "email": null,
       "fees": null,
@@ -46,8 +48,10 @@ Object {
       },
       "name": "A specific offering",
       "url": null,
+      "who_does_it_serve": null,
     },
   },
+  "additionalInfo": "And some other, perhaps less standardized, information.",
   "address": Object {
     "city": "New York",
     "country": "United States",
@@ -56,7 +60,7 @@ Object {
     "state": "NY",
     "street": "123 West 30th Street",
   },
-  "description": null,
+  "description": "This is how one would describe this shelter.",
   "metadata": Object {
     "address": Object {},
     "location": Object {},

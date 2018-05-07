@@ -33,6 +33,9 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     taxonomy,
     hours,
     languageIds,
+    additionalInfo,
+    agesServed,
+    whoDoesItServe,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -49,11 +52,23 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     updatePromises.push(updateLanguages(service, languageIds, t, user));
   }
 
-  const editableFields = ['name', 'description', 'url'];
+  const editableFields = [
+    'name',
+    'description',
+    'url',
+    'additional_info',
+    'ages_served',
+    'who_does_it_serve',
+  ];
   updatePromises.push(updateInstance(
     user,
     service,
-    otherUpdateProps,
+    {
+      ...otherUpdateProps,
+      additional_info: additionalInfo,
+      ages_served: agesServed,
+      who_does_it_serve: whoDoesItServe,
+    },
     { fields: editableFields, transaction: t },
   ));
 
@@ -69,6 +84,7 @@ export const createService = async (
     name,
     description,
     url,
+    additionalInfo,
     taxonomy,
   } = serviceData;
 
@@ -77,6 +93,7 @@ export const createService = async (
     name,
     description,
     url,
+    additional_info: additionalInfo,
     organization_id: location.organization_id,
   }, { transaction: t });
 

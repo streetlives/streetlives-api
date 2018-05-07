@@ -14,6 +14,11 @@ module.exports = (sequelize, DataTypes) => {
     email: DataTypes.TEXT,
     interpretation_services: DataTypes.TEXT,
     fees: DataTypes.TEXT,
+    additional_info: DataTypes.TEXT,
+    // TODO: The following fields are temporary hacks,
+    // and should be replaced with a proper structure for eligibility in general.
+    ages_served: DataTypes.JSON,
+    who_does_it_serve: DataTypes.JSON,
   }, {
     underscored: true,
     underscoredAll: true,
