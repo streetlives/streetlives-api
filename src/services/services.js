@@ -4,10 +4,11 @@ import { updateInstance, createInstance } from './data-changes';
 
 const { sequelize } = models;
 
-const updateHours = async (service, hours, t) => {
+const updateHours = async (service, hours, t, user) => {
   await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
 
-  await Promise.all(hours.map(hoursPart => models.RegularSchedule.create({
+  const modelCreateFunction = models.RegularSchedule.create.bind(models.RegularSchedule);
+  await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
     service_id: service.id,
     weekday: getDayOfWeekInteger(hoursPart.weekday),
     opens_at: hoursPart.opensAt,
@@ -15,8 +16,17 @@ const updateHours = async (service, hours, t) => {
   }, { transaction: t })));
 };
 
-const updateLanguages = (service, languageIds, t) =>
-  service.setLanguages(languageIds, { transaction: t });
+// TODO: This is far less efficient than "service.setLanguages(languageIds, { transaction: t })".
+// Need to track metadata without having to explicitly insert (/delete) every instance.
+const updateLanguages = async (service, languageIds, t, user) => {
+  await models.ServiceLanguages.destroy({ where: { service_id: service.id }, transaction: t });
+
+  const modelCreateFunction = models.ServiceLanguages.create.bind(models.ServiceLanguages);
+  await Promise.all(languageIds.map(languageId => createInstance(user, modelCreateFunction, {
+    service_id: service.id,
+    language_id: languageId,
+  }, { transaction: t })));
+};
 
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
   const {
@@ -32,11 +42,11 @@ export const updateService = (service, update, user) => sequelize.transaction(as
   }
 
   if (hours) {
-    updatePromises.push(updateHours(service, hours, t));
+    updatePromises.push(updateHours(service, hours, t, user));
   }
 
   if (languageIds) {
-    updatePromises.push(updateLanguages(service, languageIds, t));
+    updatePromises.push(updateLanguages(service, languageIds, t, user));
   }
 
   const editableFields = ['name', 'description', 'url'];
