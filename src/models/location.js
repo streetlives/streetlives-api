@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
     description: DataTypes.TEXT,
     transportation: DataTypes.TEXT,
     position: DataTypes.GEOMETRY,
+    additional_info: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,

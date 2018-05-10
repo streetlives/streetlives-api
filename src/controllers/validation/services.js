@@ -6,6 +6,7 @@ export default {
       name: Joi.string().required(),
       description: Joi.string(),
       url: Joi.string(),
+      additionalInfo: Joi.string(),
       taxonomyId: Joi.string().guid().required(),
       locationId: Joi.string().guid().required(),
     }).required(),
@@ -19,6 +20,7 @@ export default {
       name: Joi.string(),
       description: Joi.string(),
       url: Joi.string(),
+      additionalInfo: Joi.string(),
       taxonomyId: Joi.string().guid(),
       hours: Joi.array().items(Joi.object().keys({
         weekday: Joi.string().valid([
@@ -30,8 +32,8 @@ export default {
           'Friday',
           'Saturday',
         ]).required(),
-        opensAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }),
-        closesAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }),
+        opensAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }).allow(null),
+        closesAt: Joi.string().regex(/^\d{2}:\d{2}$/, { name: 'HH:MM' }).allow(null),
       })),
       languageIds: Joi.array().items(Joi.string().guid().required()),
       documents: Joi.object().keys({
@@ -40,6 +42,8 @@ export default {
         gracePeriod: Joi.string(),
         additionalInfo: Joi.string(),
       }),
+      agesServed: Joi.any(),
+      whoDoesItServe: Joi.any(),
     }).required(),
   },
 };

@@ -21,7 +21,7 @@ export default {
         throw new NotFoundError('Taxonomy not found');
       }
 
-      const createdService = await createService({ ...otherProps, location, taxonomy }, req.user);
+      const createdService = await createService(location, { ...otherProps, taxonomy }, req.user);
       res.status(201).send(createdService);
     } catch (err) {
       next(err);
