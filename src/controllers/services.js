@@ -35,9 +35,14 @@ export default {
       const { serviceId } = req.params;
       const { taxonomyId, ...otherProps } = req.body;
 
-      const service = await models.Service.findById(serviceId);
+      const service = await models.Service.findById(serviceId, {
+        include: [models.DocumentsInfo],
+      });
       if (!service) {
         throw new NotFoundError('Service not found');
+      }
+      if (!service.DocumentsInfo) {
+        throw new Error('Service has no valid information about required documents');
       }
 
       let taxonomy = null;
