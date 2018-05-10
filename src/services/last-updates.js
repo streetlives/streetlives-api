@@ -25,6 +25,30 @@ export const getMetadataForLocation = async (location, address) => {
   };
 };
 
+const getMetadataForServiceDocuments = async (service) => {
+  if (!service.DocumentsInfo) {
+    return null;
+  }
+
+  const [
+    proofsLatestUpdate,
+    documentsInfoMetadata,
+  ] = await Promise.all([
+    models.Metadata.getLatestUpdateDateForResources(service.RequiredDocuments.map(doc => doc.id)),
+    models.Metadata.getLastUpdateDatesForResourceFields(service.DocumentsInfo.id),
+  ]);
+
+  const documentsMetadata = [...documentsInfoMetadata];
+  if (proofsLatestUpdate) {
+    documentsMetadata.push({
+      field_name: 'proofs',
+      last_action_date: proofsLatestUpdate,
+    });
+  }
+
+  return documentsMetadata;
+};
+
 export const getMetadataForService = async (service) => {
   const [
     serviceMetadata,
@@ -58,7 +82,12 @@ export const getMetadataForService = async (service) => {
     });
   }
 
-  return { service: serviceWithAdditionalMetadata };
+  const documentsMetadata = await getMetadataForServiceDocuments(service);
+
+  return {
+    service: serviceWithAdditionalMetadata,
+    documents: documentsMetadata,
+  };
 };
 
 export default {

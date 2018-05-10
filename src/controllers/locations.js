@@ -46,7 +46,13 @@ export default {
           include: [
             {
               model: models.Service,
-              include: [models.Taxonomy, models.RegularSchedule, models.Language],
+              include: [
+                models.Taxonomy,
+                models.RegularSchedule,
+                models.Language,
+                models.RequiredDocument,
+                models.DocumentsInfo,
+              ],
             },
             models.Comment,
             models.Organization,

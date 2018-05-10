@@ -37,6 +37,7 @@ module.exports = (sequelize, DataTypes) => {
     Service.hasMany(models.RegularSchedule);
     Service.hasMany(models.HolidaySchedule);
     Service.hasMany(models.RequiredDocument);
+    Service.hasOne(models.DocumentsInfo);
   };
 
   return Service;
