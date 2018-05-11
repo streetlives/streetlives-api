@@ -1,25 +1,32 @@
 /* eslint-disable import/no-extraneous-dependencies */
-import uuid from 'uuid/v4';
+const uuid = require('uuid/v4');
 
 const categoryData = {
-  Food: [
-    'Soup kitchen',
-    'Mobile Soup Kitchen',
-    'Brown Bag',
-    'Food Pantry',
-    'Mobile Pantry',
-    'Mobile Market',
-    'Farmer\'s Markets',
-  ],
   Shelter: [
-    'Assessment',
-    'Crisis',
-    'Single Adult',
-    'LGBTQ Young Adult',
-    'Safe Haven',
-    'Families',
-    'Veterans short term housing',
+    "Intake",
+    "Crisis",
+    "Single Adult",
+    "LGBTQ Young Adult",
+    "Safe Haven",
+    "Families"
   ],
+  Food:[
+    "Soup kitchen",
+    "Mobile Soup Kitchen",
+    "Brown Bag",
+    "Food Pantry",
+    "Mobile Pantry",
+    "Mobile Market",
+    "Farmer's Markets"
+  ],
+  "Other service":[
+    "Benefits",
+    "Advocates / Legal Aid",
+    "Case Workers",
+    "Mail",
+    "Free Wifi",
+    "Taxes"
+  ]
 };
 
 const createTaxonomy = (name, parentObject) => ({
@@ -31,7 +38,7 @@ const createTaxonomy = (name, parentObject) => ({
   updated_at: new Date(),
 });
 
-export default {
+module.exports = {
   up: (queryInterface, Sequelize) =>
     Promise.all(Object.keys(categoryData).map(async (categoryName) => {
       const categoryObject = createTaxonomy(categoryName);
