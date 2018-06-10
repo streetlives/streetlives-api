@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     last_action_type: {
       type: DataTypes.ENUM,
-      values: Object.keys(actionTypes).map( k => actionTypes[k] ),
+      values: Object.values(actionTypes),
       allowNull: false,
     },
     field_name: DataTypes.TEXT,
