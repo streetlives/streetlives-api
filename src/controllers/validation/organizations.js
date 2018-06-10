@@ -10,7 +10,7 @@ export default {
   create: {
     body: Joi.object().keys({
       name: Joi.string().required(),
-      description: Joi.string().required(),
+      description: Joi.string(),
       url: Joi.string(),
     }).required(),
   },
