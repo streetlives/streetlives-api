@@ -20,6 +20,14 @@ const categoryData = {
     'Families',
     'Veterans short term housing',
   ],
+  'Other services': [
+    'Benefits',
+    'Advocates / Legal Aid',
+    'Case Workers',
+    'Mail',
+    'Free Wifi',
+    'Taxes',
+  ],
 };
 
 const createTaxonomy = (name, parentObject) => ({
