@@ -9,10 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    description: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
+    description: DataTypes.TEXT,
     email: DataTypes.TEXT,
     url: DataTypes.TEXT,
   }, {
@@ -27,6 +24,17 @@ module.exports = (sequelize, DataTypes) => {
     });
     Organization.hasMany(models.Location);
     Organization.hasMany(models.Phone);
+  };
+
+  Organization.findMatching = (filterParameters, limit = 10) => {
+    const { searchString } = filterParameters;
+
+    const where = {};
+    if (searchString) {
+      where.name = { [sequelize.Op.iLike]: `%${searchString}%` };
+    }
+
+    return Organization.findAll({ limit, where });
   };
 
   return Organization;

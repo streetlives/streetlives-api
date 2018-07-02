@@ -1,3 +1,6 @@
+const parseBoolean = (value, defaultValue = false) =>
+  (value == null ? defaultValue : value.toLowerCase() === 'true');
+
 export default {
   port: process.env.PORT || 3000,
   db: {
@@ -6,6 +9,8 @@ export default {
     password: process.env.DATABASE_PASSWORD,
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
+      port: process.env.DATABASE_PORT || 5432,
+      logging: parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
       pool: {
         max: 100,

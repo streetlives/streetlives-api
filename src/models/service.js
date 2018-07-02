@@ -14,6 +14,11 @@ module.exports = (sequelize, DataTypes) => {
     email: DataTypes.TEXT,
     interpretation_services: DataTypes.TEXT,
     fees: DataTypes.TEXT,
+    additional_info: DataTypes.TEXT,
+    // TODO: The following fields are temporary hacks,
+    // and should be replaced with a proper structure for eligibility in general.
+    ages_served: DataTypes.JSON,
+    who_does_it_serve: DataTypes.JSON,
   }, {
     underscored: true,
     underscoredAll: true,
@@ -26,12 +31,13 @@ module.exports = (sequelize, DataTypes) => {
     });
     Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
     Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
+    Service.belongsToMany(models.Language, { through: models.ServiceLanguages });
     Service.hasMany(models.Phone);
     Service.hasMany(models.PaymentAccepted);
-    Service.hasMany(models.Language);
     Service.hasMany(models.RegularSchedule);
     Service.hasMany(models.HolidaySchedule);
     Service.hasMany(models.RequiredDocument);
+    Service.hasOne(models.DocumentsInfo);
   };
 
   return Service;
