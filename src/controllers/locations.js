@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import PromisePool from 'es6-promise-pool';
 import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
@@ -6,6 +7,7 @@ import { getMetadataForLocation, getMetadataForService } from '../services/last-
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 import dataJson from '../../parsed_data.json';
+import dhsJson from '../../parsed_facilities.json';
 
 export default {
   find: async (req, res, next) => {
@@ -420,6 +422,184 @@ export default {
           handleOrganization(organization, categoryObject)));
       }
       /* eslint-enable no-await-in-loop */
+    } catch (err) {
+      next(err);
+    }
+
+    res.status(200).end();
+  },
+
+  loadDhsData: async (req, res, next) => {
+    // return res.json(dhsJson);
+
+    const country = 'US';
+    const state = 'NY';
+
+    const nearbyRadius = 30;
+    const newLocationNearExisting = [
+      'Murray Hill Neighborhood Assocation',
+      'Department of Probation Bronx Office',
+      'Harlem Dowling West Side Center !st Floor',
+      'Word of Life Christian Fellowship International FP',
+      'Department of Probation Manhattan Office',
+      'Christ Temple of the Apostolic Faith',
+      'Shiloh Church of Christ',
+      'Come World Ministries, Inc.',
+      'Spanish SDA Church',
+      'In The Beginning Outreach, Inc.',
+      'Gospel Assembly Food Pantry',
+      'Caribbean American Steelpan Assciation',
+      'Maranatha SDA Church',
+      'Vets Inc Locust Manor Senior Residence',
+      'Calvary Baptist Church',
+      'Iglesia Pentecostal El Maestro Inc.',
+      'Scan-LA Guardia Memorial',
+    ];
+
+    const deg2rad = deg => deg * (Math.PI / 180);
+    const getDistance = (position1, position2) => {
+      const [lng1, lat1] = position1.coordinates;
+      const [lng2, lat2] = position2.coordinates;
+      const R = 6371; // Radius of the earth in km
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lng2 - lng1);
+      const a =
+        (Math.sin(dLat / 2) * Math.sin(dLat / 2)) +
+        (Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        (Math.sin(dLon / 2) * Math.sin(dLon / 2)));
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const d = R * c; // Distance in km
+      return Math.round(d * 1000);
+    };
+
+    const createOrganization = organizationName => models.Organization.create({
+      name: organizationName,
+    });
+
+    const createLocation = async (organizationObject, locationInfo) => {
+      const {
+        locationName,
+        street,
+        city,
+        zipcode,
+        position,
+      } = locationInfo;
+
+      const locationObject = await models.Location.create({
+        name: locationName !== organizationObject.name ? locationName : null,
+        organization_id: organizationObject.id,
+        position,
+      });
+
+      await models.PhysicalAddress.create({
+        address_1: street,
+        city,
+        state_province: state,
+        postal_code: zipcode,
+        country,
+        location_id: locationObject.id,
+      });
+
+      return locationObject;
+    };
+
+    const createService = async (organizationObject, locationObject, taxonomyObject) => {
+      const serviceObject = await models.Service.create({
+        name: taxonomyObject.name,
+        organization_id: organizationObject.id,
+      });
+
+      await Promise.all([
+        locationObject.addService(serviceObject),
+        serviceObject.addTaxonomy(taxonomyObject),
+      ]);
+
+      return serviceObject;
+    };
+
+    const getDuplicateLocations = async (position, locationName, organizationName) => {
+      // There's a potential race condition here, if 2 duplicate locations are added in parallel,
+      // but hopefully that's unlikely enough not to be a real problem.
+      const potentialDuplicates = await models.Location.findAllInArea(position, nearbyRadius, {});
+      const duplicatesWithSameOrgName = potentialDuplicates.filter(potentialDuplicate =>
+        potentialDuplicate.Organization.name === organizationName);
+
+      if (newLocationNearExisting.indexOf(locationName) !== -1
+        && !duplicatesWithSameOrgName.length) {
+        return [];
+      }
+
+      return potentialDuplicates;
+    };
+
+    const findTaxonomy = async name => models.Taxonomy.findOne({ where: { name } });
+    const taxonomyMapping = {
+      'Food Pantry': await findTaxonomy('Food Pantry'),
+      'Soup Kitchen': await findTaxonomy('Soup kitchen'),
+    };
+
+    const handleLocation = async (location) => {
+      const {
+        subcategory,
+        'location name': locationName,
+        'street address': rawStreet,
+        city,
+        zipcode,
+        latitude,
+        longitude,
+        'organization name': organizationName,
+      } = location;
+      const position = geometry.createPoint(longitude, latitude);
+
+      const taxonomyObject = taxonomyMapping[subcategory];
+      if (!taxonomyObject) {
+        // For now, let's ignore the facilities with unsupported categories.
+        return;
+      }
+
+      const nearbyLocations = await getDuplicateLocations(position, locationName, organizationName);
+      const locationsStr = nearbyLocations
+        .map(nearbyLocation =>
+          `${nearbyLocation.Organization.name} ${getDistance(position, nearbyLocation.position)}m`)
+        .join(', ');
+      if (nearbyLocations.length) {
+        // eslint-disable-next-line no-console
+        console.log(`Duplicate locations found for ${locationName}: ${locationsStr}`);
+        return;
+      }
+
+      let street = rawStreet;
+      if (street.indexOf('\n') !== -1) { [street] = street.split('\n'); }
+      if (street.indexOf('  ') !== -1) { street = street.replace(/  +/g, ' '); }
+
+      const organizationObject = await createOrganization(organizationName);
+      const locationObject = await createLocation(organizationObject, {
+        locationName,
+        street,
+        city,
+        zipcode,
+        position,
+      });
+
+      await createService(organizationObject, locationObject, taxonomyObject);
+    };
+
+    let i = 0;
+
+    const promiseProducer = () => {
+      if (i < dhsJson.length) {
+        const location = dhsJson[i];
+        i += 1;
+        return handleLocation(location);
+      }
+      return null;
+    };
+
+    const concurrentLocationsHandled = 20;
+    const promisePool = new PromisePool(promiseProducer, concurrentLocationsHandled);
+
+    try {
+      await promisePool.start();
     } catch (err) {
       next(err);
     }

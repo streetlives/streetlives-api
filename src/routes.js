@@ -31,7 +31,7 @@ export default (app) => {
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
 
-  app.get('/load', locations.loadData);
+  app.get('/load', locations.loadDhsData);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
