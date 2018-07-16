@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
+import { updateInstance, createInstance } from '../services/data-changes';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -24,7 +25,8 @@ export default {
 
       const { name, description, url } = req.body;
 
-      const createdOrganization = await models.Organization.create({
+      const modelCreateFunction = models.Organization.create.bind(models.Organization);
+      const createdOrganization = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
         url,
@@ -49,8 +51,34 @@ export default {
 
       const editableFields = ['name', 'description', 'url'];
 
-      await organization.update(req.body, { fields: editableFields });
+      await updateInstance(req.user, organization, req.body, { fields: editableFields });
       res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getLocations: async (req, res, next) => {
+    try {
+      await Joi.validate(req, organizationSchemas.getLocations, { allowUnknown: true });
+
+      const { organizationId } = req.params;
+
+      const organization = await models.Organization.findById(organizationId, {
+        include: [{
+          model: models.Location,
+          include: [
+            models.Phone,
+            models.PhysicalAddress,
+          ],
+        }],
+      });
+
+      if (!organization) {
+        throw new NotFoundError('Organization not found');
+      }
+
+      res.send(organization.Locations);
     } catch (err) {
       next(err);
     }

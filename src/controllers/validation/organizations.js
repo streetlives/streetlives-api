@@ -10,7 +10,7 @@ export default {
   create: {
     body: Joi.object().keys({
       name: Joi.string().required(),
-      description: Joi.string().required(),
+      description: Joi.string(),
       url: Joi.string(),
     }).required(),
   },
@@ -23,6 +23,12 @@ export default {
       name: Joi.string(),
       description: Joi.string(),
       url: Joi.string(),
+    }).required(),
+  },
+
+  getLocations: {
+    params: Joi.object().keys({
+      organizationId: Joi.string().guid().required(),
     }).required(),
   },
 };

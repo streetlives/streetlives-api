@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import serviceSchemas from './validation/services';
 import models from '../models';
+import { createService, updateService } from '../services/services';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -8,13 +9,7 @@ export default {
     try {
       await Joi.validate(req, serviceSchemas.create, { allowUnknown: true });
 
-      const {
-        name,
-        description,
-        url,
-        taxonomyId,
-        locationId,
-      } = req.body;
+      const { taxonomyId, locationId, ...otherProps } = req.body;
 
       const location = await models.Location.findById(locationId);
       if (!location) {
@@ -26,15 +21,7 @@ export default {
         throw new NotFoundError('Taxonomy not found');
       }
 
-      const createdService = await location.createService({
-        name,
-        description,
-        url,
-        organization_id: location.organization_id,
-      });
-
-      await createdService.setTaxonomies([taxonomy]);
-
+      const createdService = await createService(location, { ...otherProps, taxonomy }, req.user);
       res.status(201).send(createdService);
     } catch (err) {
       next(err);
@@ -46,26 +33,27 @@ export default {
       await Joi.validate(req, serviceSchemas.update, { allowUnknown: true });
 
       const { serviceId } = req.params;
+      const { taxonomyId, ...otherProps } = req.body;
 
-      const service = await models.Service.findById(serviceId);
+      const service = await models.Service.findById(serviceId, {
+        include: [models.DocumentsInfo],
+      });
       if (!service) {
         throw new NotFoundError('Service not found');
       }
+      if (!service.DocumentsInfo) {
+        throw new Error('Service has no valid information about required documents');
+      }
 
-      const { taxonomyId } = req.body;
+      let taxonomy = null;
       if (taxonomyId) {
-        const taxonomy = await models.Taxonomy.findById(taxonomyId);
+        taxonomy = await models.Taxonomy.findById(taxonomyId);
         if (!taxonomy) {
           throw new NotFoundError('Taxonomy not found');
         }
-
-        await service.setTaxonomies([taxonomy]);
       }
 
-      const editableFields = ['name', 'description', 'url'];
-
-      await service.update(req.body, { fields: editableFields });
-
+      await updateService(service, { ...otherProps, taxonomy }, req.user);
       res.sendStatus(204);
     } catch (err) {
       next(err);
