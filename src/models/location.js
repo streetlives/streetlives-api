@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
     description: DataTypes.TEXT,
     transportation: DataTypes.TEXT,
     position: DataTypes.GEOMETRY,
+    additional_info: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
@@ -17,9 +18,9 @@ module.exports = (sequelize, DataTypes) => {
   Location.associate = (models) => {
     Location.belongsTo(models.Organization);
     Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
+    Location.belongsToMany(models.Language, { through: models.LocationLanguages });
     Location.hasMany(models.PhysicalAddress);
     Location.hasMany(models.Phone);
-    Location.hasMany(models.Language);
     Location.hasMany(models.RegularSchedule);
     Location.hasMany(models.HolidaySchedule);
     Location.hasMany(models.AccessibilityForDisabilities);
