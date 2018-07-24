@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "test": "NODE_ENV=test jest --runInBand --coverage",
     "test:watch": "NODE_ENV=test jest --watch --runInBand",
+    "build-zip": "npm run build && (cd dist; zip -r ../`date +%Y-%m-%d`-streetlives-api-`git rev-parse --short HEAD`.zip *)",
     "config": "node ./scripts/configure.js",
     "deconfig": "node ./scripts/deconfigure.js",
     "local": "node scripts/local",
