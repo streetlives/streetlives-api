@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     content: DataTypes.TEXT,
     posted_by: DataTypes.TEXT,
+    contact_info: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,

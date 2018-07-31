@@ -4,6 +4,7 @@ exports[`get location info should get all relevant fields for a given location 1
 Object {
   "Comments": Object {
     "0": Object {
+      "contact_info": null,
       "content": "Test comment",
       "posted_by": "Test poster",
     },
