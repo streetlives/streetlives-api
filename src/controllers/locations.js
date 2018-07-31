@@ -289,28 +289,6 @@ export default {
     }
   },
 
-  addComment: async (req, res, next) => {
-    try {
-      const { locationId } = req.params;
-      const { content, postedBy } = req.body;
-
-      await Joi.validate(req, locationSchemas.addComment, { allowUnknown: true });
-
-      const location = await models.Location.findById(locationId);
-      if (!location) {
-        throw new NotFoundError('Location not found');
-      }
-
-      await createInstance(req.user, location.createComment.bind(location), {
-        content,
-        posted_by: postedBy,
-      });
-      res.sendStatus(201);
-    } catch (err) {
-      next(err);
-    }
-  },
-
   suggestNew: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.suggestNew, { allowUnknown: true });
