@@ -13,7 +13,7 @@ export default {
 
       const comments = await models.Comment.findAll({
         where: { location_id: locationId },
-        attributes: ['content', 'created_at'],
+        attributes: ['id', 'content', 'created_at'],
         order: [['created_at', 'DESC']],
       });
       res.send(comments);
