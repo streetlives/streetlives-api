@@ -11,14 +11,12 @@ export default {
 
       const { locationId } = req.query;
 
-      const location = await models.Location.findById(locationId, {
-        include: models.Comment,
+      const comments = await models.Comment.findAll({
+        where: { location_id: locationId },
+        attributes: ['content', 'created_at'],
+        order: [['created_at', 'DESC']],
       });
-      if (!location) {
-        throw new NotFoundError('Location not found');
-      }
-
-      res.send(location.Comments);
+      res.send(comments);
     } catch (err) {
       next(err);
     }
