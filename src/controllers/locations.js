@@ -54,7 +54,6 @@ export default {
                 models.DocumentsInfo,
               ],
             },
-            models.Comment,
             models.Organization,
             models.Phone,
             models.PhysicalAddress,
