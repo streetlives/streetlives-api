@@ -5,6 +5,14 @@ export class NotFoundError extends Error {
   }
 }
 
+export class AuthError extends Error {
+  constructor(...args) {
+    super(...args);
+    Error.captureStackTrace(this, AuthError);
+  }
+}
+
 export default {
   NotFoundError,
+  AuthError,
 };

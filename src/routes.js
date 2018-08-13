@@ -3,8 +3,9 @@ import services from './controllers/services';
 import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
+import comments from './controllers/comments';
 import getUser from './middleware/get-user';
-import { NotFoundError } from './utils/errors';
+import { NotFoundError, AuthError } from './utils/errors';
 
 export default (app) => {
   app.get('/organizations', organizations.find);
@@ -14,8 +15,7 @@ export default (app) => {
 
   app.get('/locations', locations.find);
 
-  app.post('/locations/suggestions', getUser, locations.suggestNew);
-  app.post('/locations/:locationId/comments', getUser, locations.addComment);
+  app.post('/locations/suggestions', locations.suggestNew);
 
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations', getUser, locations.create);
@@ -30,6 +30,9 @@ export default (app) => {
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
+
+  app.get('/comments', comments.get);
+  app.post('/comments', comments.create);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
@@ -50,6 +53,10 @@ export default (app) => {
         url: req.originalUrl,
         error: err.message,
       });
+    }
+
+    if (err instanceof AuthError) {
+      return res.sendStatus(401);
     }
 
     return res.status(500).send({ error: err.stack });

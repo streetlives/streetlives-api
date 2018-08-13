@@ -54,7 +54,6 @@ export default {
                 models.DocumentsInfo,
               ],
             },
-            models.Comment,
             models.Organization,
             models.Phone,
             models.PhysicalAddress,
@@ -284,28 +283,6 @@ export default {
 
       await destroyInstance(req.user, phone);
       res.sendStatus(204);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  addComment: async (req, res, next) => {
-    try {
-      const { locationId } = req.params;
-      const { content, postedBy } = req.body;
-
-      await Joi.validate(req, locationSchemas.addComment, { allowUnknown: true });
-
-      const location = await models.Location.findById(locationId);
-      if (!location) {
-        throw new NotFoundError('Location not found');
-      }
-
-      await createInstance(req.user, location.createComment.bind(location), {
-        content,
-        posted_by: postedBy,
-      });
-      res.sendStatus(201);
     } catch (err) {
       next(err);
     }

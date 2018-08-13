@@ -1,3 +1,5 @@
+import { AuthError } from '../utils/errors';
+
 export default function getUser(req, res, next) {
   const user = req.apiGateway &&
     req.apiGateway.event &&
@@ -16,6 +18,6 @@ export default function getUser(req, res, next) {
     req.user = '<Anonymous>';
     next();
   } else {
-    next(new Error('No authenticated user found'));
+    next(new AuthError());
   }
 }

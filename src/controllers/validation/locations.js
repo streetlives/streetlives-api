@@ -92,16 +92,6 @@ export default {
     }).required(),
   },
 
-  addComment: {
-    params: Joi.object().keys({
-      locationId: Joi.string().guid().required(),
-    }).required(),
-    body: Joi.object().keys({
-      content: Joi.string().required(),
-      postedBy: Joi.string().required(),
-    }).required(),
-  },
-
   suggestNew: {
     body: Joi.object().keys({
       name: Joi.string().required(),
