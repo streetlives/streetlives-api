@@ -45,14 +45,19 @@ export default {
         contact_info: contactInfo,
       });
 
-      res.sendStatus(201);
+      try {
+        await slackNotifier.notifyNewComment({
+          location,
+          content,
+          postedBy,
+          contactInfo,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Error notifying Slack of new comment', err);
+      }
 
-      await slackNotifier.notifyNewComment({
-        location,
-        content,
-        postedBy,
-        contactInfo,
-      });
+      res.sendStatus(201);
     } catch (err) {
       next(err);
     }
