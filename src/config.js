@@ -7,6 +7,7 @@ const parseNumber = (value, defaultValue) => {
 
 export default {
   port: process.env.PORT || 3000,
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
   db: {
     database: process.env.DATABASE_NAME || 'streetlives',
     username: process.env.DATABASE_USER,
