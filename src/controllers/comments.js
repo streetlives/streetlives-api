@@ -2,6 +2,7 @@ import Joi from 'joi';
 import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance } from '../services/data-changes';
+import slackNotifier from '../services/slack-notifier';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -33,7 +34,7 @@ export default {
         contactInfo,
       } = req.body;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findById(locationId, { include: models.Organization });
       if (!location) {
         throw new NotFoundError('Location not found');
       }
@@ -43,7 +44,15 @@ export default {
         posted_by: postedBy,
         contact_info: contactInfo,
       });
+
       res.sendStatus(201);
+
+      await slackNotifier.notifyNewComment({
+        location,
+        content,
+        postedBy,
+        contactInfo,
+      });
     } catch (err) {
       next(err);
     }
