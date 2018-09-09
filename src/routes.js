@@ -33,7 +33,7 @@ export default (app) => {
 
   app.get('/comments', comments.get);
   app.post('/comments', comments.create);
-  app.post('/comments/:commentId/reply', comments.reply);
+  app.post('/comments/:commentId/reply', getUser, comments.reply);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,

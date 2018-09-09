@@ -3,7 +3,7 @@ import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, AuthError } from '../utils/errors';
 
 export default {
   get: async (req, res, next) => {
@@ -82,6 +82,11 @@ export default {
       });
       if (!originalComment) {
         throw new NotFoundError('Original comment not found');
+      }
+
+      const organizationId = originalComment.Location.organization_id;
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new AuthError();
       }
 
       await createInstance(req.user, originalComment.createReply.bind(originalComment), {
