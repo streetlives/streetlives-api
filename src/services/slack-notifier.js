@@ -35,5 +35,5 @@ export default {
   notifyReplyToComment: async ({
     originalComment,
     ...commentParams
-  }) => notifyComment(`New reply to comment "${originalComment.content}`, commentParams),
+  }) => notifyComment(`New reply to comment "${originalComment.content}"`, commentParams),
 };
