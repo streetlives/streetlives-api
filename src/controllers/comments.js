@@ -3,7 +3,7 @@ import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
-import { NotFoundError, AuthError } from '../utils/errors';
+import { NotFoundError, ForbiddenError } from '../utils/errors';
 
 export default {
   get: async (req, res, next) => {
@@ -86,7 +86,7 @@ export default {
 
       const organizationId = originalComment.Location.organization_id;
       if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new AuthError();
+        throw new ForbiddenError();
       }
 
       await createInstance(req.user, originalComment.createReply.bind(originalComment), {

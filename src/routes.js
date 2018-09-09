@@ -5,7 +5,7 @@ import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import comments from './controllers/comments';
 import getUser from './middleware/get-user';
-import { NotFoundError, AuthError } from './utils/errors';
+import { NotFoundError, AuthError, ForbiddenError } from './utils/errors';
 
 export default (app) => {
   app.get('/organizations', organizations.find);
@@ -58,6 +58,10 @@ export default (app) => {
 
     if (err instanceof AuthError) {
       return res.sendStatus(401);
+    }
+
+    if (err instanceof ForbiddenError) {
+      return res.sendStatus(403);
     }
 
     return res.status(500).send({ error: err.stack });
