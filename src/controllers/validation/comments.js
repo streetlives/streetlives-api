@@ -26,4 +26,10 @@ export default {
       contactInfo: Joi.string(),
     }).required(),
   },
+
+  delete: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+  },
 };

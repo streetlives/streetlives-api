@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import commentSchemas from './validation/comments';
 import models from '../models';
-import { createInstance } from '../services/data-changes';
+import { createInstance, destroyInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
 import { NotFoundError, ForbiddenError } from '../utils/errors';
 
@@ -15,7 +15,7 @@ export default {
       const publicAttributes = ['id', 'content', 'created_at'];
 
       const comments = await models.Comment.findAll({
-        where: { location_id: locationId },
+        where: { location_id: locationId, reply_to_id: null },
         attributes: publicAttributes,
         order: [['created_at', 'DESC']],
         include: [{ model: models.Comment, as: 'Replies', attributes: publicAttributes }],
@@ -86,13 +86,14 @@ export default {
 
       const organizationId = originalComment.Location.organization_id;
       if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError();
+        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
       }
 
       await createInstance(req.user, originalComment.createReply.bind(originalComment), {
         content,
         posted_by: postedBy,
         contact_info: contactInfo,
+        location_id: originalComment.location_id,
       });
 
       try {
@@ -109,6 +110,33 @@ export default {
       }
 
       res.sendStatus(201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  delete: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.delete, { allowUnknown: true });
+
+      const { commentId } = req.params;
+
+      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      const organizationId = comment.Location.organization_id;
+
+      if (!comment.reply_to_id) {
+        throw new ForbiddenError('Only allowed to delete replies');
+      }
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new ForbiddenError('Not authorized to delete replies for this organization');
+      }
+
+      await destroyInstance(req.user, comment);
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
