@@ -42,7 +42,7 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      await createInstance(req.user, location.createComment.bind(location), {
+      const postedComment = await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
         contact_info: contactInfo,
@@ -60,7 +60,7 @@ export default {
         console.error('Error notifying Slack of new comment', err);
       }
 
-      res.sendStatus(201);
+      res.status(201).send(postedComment);
     } catch (err) {
       next(err);
     }
@@ -89,12 +89,16 @@ export default {
         throw new ForbiddenError('Not authorized to reply on behalf of this organization');
       }
 
-      await createInstance(req.user, originalComment.createReply.bind(originalComment), {
-        content,
-        posted_by: postedBy,
-        contact_info: contactInfo,
-        location_id: originalComment.location_id,
-      });
+      const postedReply = await createInstance(
+        req.user,
+        originalComment.createReply.bind(originalComment),
+        {
+          content,
+          posted_by: postedBy,
+          contact_info: contactInfo,
+          location_id: originalComment.location_id,
+        },
+      );
 
       try {
         await slackNotifier.notifyReplyToComment({
@@ -109,7 +113,7 @@ export default {
         console.error('Error notifying Slack of reply to comment', err);
       }
 
-      res.sendStatus(201);
+      res.status(201).send(postedReply);
     } catch (err) {
       next(err);
     }
