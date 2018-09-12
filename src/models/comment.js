@@ -16,6 +16,8 @@ module.exports = (sequelize, DataTypes) => {
   Comment.associate = (models) => {
     Comment.belongsTo(models.Location);
     Comment.belongsTo(models.ServiceAtLocation);
+    Comment.belongsTo(models.Comment, { as: 'ReplyTo', foreignKey: 'reply_to_id' });
+    Comment.hasMany(models.Comment, { as: 'Replies', foreignKey: 'reply_to_id' });
   };
 
   return Comment;
