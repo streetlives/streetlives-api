@@ -8,6 +8,7 @@ module.exports = (sequelize, DataTypes) => {
     content: DataTypes.TEXT,
     posted_by: DataTypes.TEXT,
     contact_info: DataTypes.TEXT,
+    hidden: DataTypes.BOOLEAN,
   }, {
     underscored: true,
     underscoredAll: true,
@@ -19,6 +20,17 @@ module.exports = (sequelize, DataTypes) => {
     Comment.belongsTo(models.Comment, { as: 'ReplyTo', foreignKey: 'reply_to_id' });
     Comment.hasMany(models.Comment, { as: 'Replies', foreignKey: 'reply_to_id' });
   };
+
+  Comment.findAllForLocation = (locationId, { attributes, order }) => Comment.findAll({
+    where: {
+      location_id: locationId,
+      reply_to_id: null,
+      hidden: { $or: [false, null] },
+    },
+    attributes,
+    order,
+    include: [{ model: Comment, as: 'Replies', attributes }],
+  });
 
   return Comment;
 };

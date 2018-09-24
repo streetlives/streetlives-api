@@ -14,11 +14,9 @@ export default {
 
       const publicAttributes = ['id', 'content', 'created_at'];
 
-      const comments = await models.Comment.findAll({
-        where: { location_id: locationId, reply_to_id: null },
+      const comments = await models.Comment.findAllForLocation(locationId, {
         attributes: publicAttributes,
         order: [['created_at', 'DESC']],
-        include: [{ model: models.Comment, as: 'Replies', attributes: publicAttributes }],
       });
       res.send(comments);
     } catch (err) {
