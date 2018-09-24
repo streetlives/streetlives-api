@@ -1,4 +1,5 @@
 import { AuthError } from '../utils/errors';
+import config from '../config';
 
 export default function getUser(req, res, next) {
   const claims = req.apiGateway &&
@@ -13,6 +14,11 @@ export default function getUser(req, res, next) {
     const organizationClaims = claims['custom:organizations'];
     if (organizationClaims && organizationClaims.length) {
       req.userOrganizationIds = organizationClaims.split(',');
+    }
+
+    const groups = claims['cognito:groups'];
+    if (groups && groups.indexOf(config.adminGroupName)) {
+      req.userIsAdmin = true;
     }
 
     next();

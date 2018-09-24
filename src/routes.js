@@ -35,6 +35,7 @@ export default (app) => {
   app.post('/comments', comments.create);
   app.post('/comments/:commentId/reply', getUser, comments.reply);
   app.delete('/comments/:commentId', getUser, comments.delete);
+  app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
