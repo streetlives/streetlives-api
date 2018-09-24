@@ -1,10 +1,9 @@
 export default {
   up: (queryInterface, Sequelize) => Promise.all([
-    queryInterface.addColumn('service_languages', 'id', Sequelize.UUID),
+    queryInterface.addColumn('comments', 'hidden', Sequelize.BOOLEAN),
   ]),
 
   down: (queryInterface, Sequelize) => Promise.all([
-    queryInterface.removeColumn('service_languages', 'id'),
+    queryInterface.removeColumn('comments', 'hidden'),
   ]),
 };
-
