@@ -17,7 +17,7 @@ export default function getUser(req, res, next) {
     }
 
     const groups = claims['cognito:groups'];
-    if (groups && groups.indexOf(config.adminGroupName)) {
+    if (groups && groups.indexOf(config.adminGroupName) !== -1) {
       req.userIsAdmin = true;
     }
 
