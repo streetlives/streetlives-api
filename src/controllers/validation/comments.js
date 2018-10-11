@@ -32,4 +32,13 @@ export default {
       commentId: Joi.string().guid().required(),
     }).required(),
   },
+
+  setHidden: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      hidden: Joi.boolean().required(),
+    }).required(),
+  },
 };
