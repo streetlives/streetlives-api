@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import commentSchemas from './validation/comments';
 import models from '../models';
-import { createInstance, destroyInstance } from '../services/data-changes';
+import { createInstance, updateInstance, destroyInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
 import { NotFoundError, ForbiddenError } from '../utils/errors';
 
@@ -138,6 +138,29 @@ export default {
       }
 
       await destroyInstance(req.user, comment);
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  setHidden: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.setHidden, { allowUnknown: true });
+
+      const { commentId } = req.params;
+      const { hidden } = req.body;
+
+      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to hide comments');
+      }
+
+      await updateInstance(req.user, comment, { hidden });
       res.sendStatus(204);
     } catch (err) {
       next(err);
