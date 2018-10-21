@@ -12,7 +12,15 @@ export class AuthError extends Error {
   }
 }
 
+export class ForbiddenError extends Error {
+  constructor(...args) {
+    super(...args);
+    Error.captureStackTrace(this, AuthError);
+  }
+}
+
 export default {
   NotFoundError,
   AuthError,
+  ForbiddenError,
 };

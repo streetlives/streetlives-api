@@ -1,9 +1,9 @@
 import Joi from 'joi';
 import commentSchemas from './validation/comments';
 import models from '../models';
-import { createInstance } from '../services/data-changes';
+import { createInstance, updateInstance, destroyInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, ForbiddenError } from '../utils/errors';
 
 export default {
   get: async (req, res, next) => {
@@ -12,9 +12,10 @@ export default {
 
       const { locationId } = req.query;
 
-      const comments = await models.Comment.findAll({
-        where: { location_id: locationId },
-        attributes: ['id', 'content', 'created_at'],
+      const publicAttributes = ['id', 'content', 'created_at'];
+
+      const comments = await models.Comment.findAllForLocation(locationId, {
+        attributes: publicAttributes,
         order: [['created_at', 'DESC']],
       });
       res.send(comments);
@@ -39,7 +40,7 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      await createInstance(req.user, location.createComment.bind(location), {
+      const postedComment = await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
         contact_info: contactInfo,
@@ -57,7 +58,110 @@ export default {
         console.error('Error notifying Slack of new comment', err);
       }
 
-      res.sendStatus(201);
+      res.status(201).send(postedComment);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  reply: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.reply, { allowUnknown: true });
+
+      const { commentId } = req.params;
+      const {
+        content,
+        postedBy,
+        contactInfo,
+      } = req.body;
+
+      const originalComment = await models.Comment.findById(commentId, {
+        include: { model: models.Location, include: models.Organization },
+      });
+      if (!originalComment) {
+        throw new NotFoundError('Original comment not found');
+      }
+
+      const organizationId = originalComment.Location.organization_id;
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
+      }
+
+      const postedReply = await createInstance(
+        req.user,
+        originalComment.createReply.bind(originalComment),
+        {
+          content,
+          posted_by: postedBy,
+          contact_info: contactInfo,
+          location_id: originalComment.location_id,
+        },
+      );
+
+      try {
+        await slackNotifier.notifyReplyToComment({
+          originalComment,
+          location: originalComment.Location,
+          content,
+          postedBy,
+          contactInfo,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Error notifying Slack of reply to comment', err);
+      }
+
+      res.status(201).send(postedReply);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  delete: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.delete, { allowUnknown: true });
+
+      const { commentId } = req.params;
+
+      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      const organizationId = comment.Location.organization_id;
+
+      if (!comment.reply_to_id) {
+        throw new ForbiddenError('Only allowed to delete replies');
+      }
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new ForbiddenError('Not authorized to delete replies for this organization');
+      }
+
+      await destroyInstance(req.user, comment);
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  setHidden: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.setHidden, { allowUnknown: true });
+
+      const { commentId } = req.params;
+      const { hidden } = req.body;
+
+      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to hide comments');
+      }
+
+      await updateInstance(req.user, comment, { hidden });
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
