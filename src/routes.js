@@ -5,7 +5,7 @@ import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import comments from './controllers/comments';
 import getUser from './middleware/get-user';
-import { NotFoundError, AuthError } from './utils/errors';
+import { NotFoundError, AuthError, ForbiddenError } from './utils/errors';
 
 export default (app) => {
   app.get('/organizations', organizations.find);
@@ -33,6 +33,9 @@ export default (app) => {
 
   app.get('/comments', comments.get);
   app.post('/comments', comments.create);
+  app.post('/comments/:commentId/reply', getUser, comments.reply);
+  app.delete('/comments/:commentId', getUser, comments.delete);
+  app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
@@ -57,6 +60,10 @@ export default (app) => {
 
     if (err instanceof AuthError) {
       return res.sendStatus(401);
+    }
+
+    if (err instanceof ForbiddenError) {
+      return res.status(403).send({ error: err.message });
     }
 
     return res.status(500).send({ error: err.stack });
