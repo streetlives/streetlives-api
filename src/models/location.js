@@ -10,9 +10,25 @@ module.exports = (sequelize, DataTypes) => {
     transportation: DataTypes.TEXT,
     position: DataTypes.GEOMETRY,
     additional_info: DataTypes.TEXT,
+    hidden_from_search: DataTypes.BOOLEAN,
   }, {
     underscored: true,
     underscoredAll: true,
+    defaultScope: {
+      attributes: { exclude: ['hidden_from_search'] },
+    },
+    hooks: {
+      beforeFind: (options) => {
+        const isSearchingBySpecificId = options.where.id != null;
+        if (!isSearchingBySpecificId) {
+          // Mutating args is awful, but is how sequelize hooks officially work:
+          // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
+          // eslint-disable-next-line no-param-reassign
+          options.where.hidden_from_search = { $or: [false, null] };
+        }
+        return options;
+      },
+    },
   });
 
   Location.associate = (models) => {

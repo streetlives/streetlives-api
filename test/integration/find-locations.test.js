@@ -11,6 +11,7 @@ describe('find locations', () => {
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
   let nearbyLocation;
+  let hiddenLocation;
 
   const setupData = () => models.Organization.create({
     name: 'The Test Org',
@@ -40,13 +41,23 @@ describe('find locations', () => {
           associationParams,
         ),
         models.Location.create(
+          {
+            ...baseLocationData,
+            name: 'Nearby center (volunteers)',
+            position: pointNearOrigin,
+            hidden_from_search: true,
+          },
+          associationParams,
+        ),
+        models.Location.create(
           { ...baseLocationData, name: 'Far-off center', position: pointFarFromOrigin },
           associationParams,
         ),
       ]);
     })
-    .then(([firstNewLocation]) => {
+    .then(([firstNewLocation, secondNewLocation]) => {
       nearbyLocation = firstNewLocation;
+      hiddenLocation = secondNewLocation;
     });
 
   const expectMatchNearbyLocation = (res) => {
@@ -76,6 +87,19 @@ describe('find locations', () => {
       })
       .expect(200)
       .then(expectMatchNearbyLocation));
+
+  it('should not return locations marked "hidden from search" (meant for comments only)', () =>
+    request(app)
+      .get('/locations')
+      .query({
+        latitude: originLatitude,
+        longitude: originLongitude,
+        radius,
+      })
+      .expect(200)
+      .then((res) => {
+        expect(res.body).not.toContainEqual(expect.objectContaining({ name: hiddenLocation.name }));
+      }));
 
   it('should return an empty array if no matching locations are found', () =>
     request(app)

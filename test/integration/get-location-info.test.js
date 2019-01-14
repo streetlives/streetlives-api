@@ -15,6 +15,7 @@ describe('get location info', () => {
       name: 'Some kind of center',
       description: 'This is how one would describe this shelter.',
       additional_info: 'And some other, perhaps less standardized, information.',
+      hidden_from_search: true,
       PhysicalAddresses: [{
         address_1: '123 West 30th Street',
         city: 'New York',

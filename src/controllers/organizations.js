@@ -78,7 +78,17 @@ export default {
         throw new NotFoundError('Organization not found');
       }
 
-      res.send(organization.Locations);
+      // Using a separate findAll instead of "include" when getting the organization so that the
+      // Location model's hooks will trigger: https://github.com/sequelize/sequelize/issues/4546.
+      const locations = await models.Location.findAll({
+        where: { organization_id: organizationId },
+        include: [
+          models.Phone,
+          models.PhysicalAddress,
+        ],
+      });
+
+      res.send(locations);
     } catch (err) {
       next(err);
     }
