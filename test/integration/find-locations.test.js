@@ -160,17 +160,17 @@ describe('find locations', () => {
           searchString,
         });
 
-    it('should match locations that have the given string in their name', () =>
-      makeRequestWithSearchString('center')
-        .expect(200)
-        .then(expectMatchNearbyLocation));
-
     it('should match locations whose organization has the given string in its name', () =>
       makeRequestWithSearchString('test org')
         .expect(200)
         .then(expectMatchNearbyLocation));
 
-    it('should match locations who belong to a taxonomy containing the given string', () =>
+    it('should match locations whose organization has the given string in its description', () =>
+      makeRequestWithSearchString('testing purpose')
+        .expect(200)
+        .then(expectMatchNearbyLocation));
+
+    it('should match locations which belong to a taxonomy containing the given string', () =>
       makeRequestWithSearchString('shelter')
         .expect(200)
         .then(expectMatchNearbyLocation));
@@ -182,6 +182,11 @@ describe('find locations', () => {
 
     it('should not match if none of the relevant fields include the given string', () =>
       makeRequestWithSearchString('not matching')
+        .expect(200)
+        .then(expectNoMatchingLocations));
+
+    it('should not match locations that have the given string in their name', () =>
+      makeRequestWithSearchString('center')
         .expect(200)
         .then(expectNoMatchingLocations));
   });
