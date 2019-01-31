@@ -14,9 +14,6 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     underscored: true,
     underscoredAll: true,
-    defaultScope: {
-      attributes: { exclude: ['hidden_from_search'] },
-    },
     hooks: {
       beforeFind: (options) => {
         const isSearchingBySpecificId = options.where.id != null;
@@ -41,6 +38,12 @@ module.exports = (sequelize, DataTypes) => {
     Location.hasMany(models.HolidaySchedule);
     Location.hasMany(models.AccessibilityForDisabilities);
     Location.hasMany(models.Comment);
+
+    // Can't just set defaultScope on the initial model definition:
+    // https://github.com/sequelize/sequelize/issues/6245.
+    Location.addScope('defaultScope', {
+      attributes: { exclude: ['hidden_from_search'] },
+    }, { override: true });
   };
 
   Location.findAllInArea = (position, radius, filterParameters) => {
