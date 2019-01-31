@@ -61,8 +61,8 @@ module.exports = (sequelize, DataTypes) => {
     if (searchString) {
       const fuzzySearchString = `%${searchString}%`;
       conditions.push(sequelize.or(
-        { name: { [sequelize.Op.iLike]: fuzzySearchString } },
         { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+        { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
         { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
         { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
       ));
@@ -83,6 +83,7 @@ module.exports = (sequelize, DataTypes) => {
           include: sequelize.models.Taxonomy,
         },
       ],
+      order: [[distance, 'ASC']],
     });
   };
 
