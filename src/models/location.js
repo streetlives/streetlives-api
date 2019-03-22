@@ -47,7 +47,7 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   Location.findAllInArea = (position, radius, filterParameters) => {
-    const { searchString, taxonomyId } = filterParameters;
+    const { searchString, taxonomyIds } = filterParameters;
 
     const distance = sequelize.fn(
       'ST_Distance_Sphere',
@@ -68,8 +68,8 @@ module.exports = (sequelize, DataTypes) => {
       ));
     }
 
-    if (taxonomyId) {
-      conditions.push({ '$Services.Taxonomies.id$': taxonomyId });
+    if (taxonomyIds) {
+      conditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
     }
 
     return Location.findAll({
