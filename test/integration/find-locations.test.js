@@ -10,7 +10,8 @@ describe('find locations', () => {
   const pointNearOrigin = geometry.createPoint(-73.991303, 40.751908);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
-  let nearbyLocation;
+  let primaryLocation;
+  let otherServiceLocation;
   let hiddenLocation;
 
   const setupData = () => models.Organization.create({
@@ -50,20 +51,47 @@ describe('find locations', () => {
           associationParams,
         ),
         models.Location.create(
+          {
+            ...baseLocationData,
+            name: 'Other nearby center',
+            position: pointNearOrigin,
+            Services: [{
+              organization_id: organization.id,
+              name: 'A different kind of service',
+              Taxonomies: [{
+                name: 'Food',
+              }],
+            }],
+          },
+          associationParams,
+        ),
+        models.Location.create(
           { ...baseLocationData, name: 'Far-off center', position: pointFarFromOrigin },
           associationParams,
         ),
       ]);
     })
-    .then(([firstNewLocation, secondNewLocation]) => {
-      nearbyLocation = firstNewLocation;
+    .then(([firstNewLocation, secondNewLocation, thirdNewLocation]) => {
+      primaryLocation = firstNewLocation;
       hiddenLocation = secondNewLocation;
+      otherServiceLocation = thirdNewLocation;
     });
 
-  const expectMatchNearbyLocation = (res) => {
+  const expectMatchNearbyLocations = (res) => {
+    const returnedLocations = res.body;
+    expect(returnedLocations).toHaveLength(2);
+    expect(returnedLocations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: primaryLocation.name }),
+      expect.objectContaining({ name: otherServiceLocation.name }),
+    ]));
+  };
+
+  const expectMatchPrimaryLocation = (res) => {
     const returnedLocations = res.body;
     expect(returnedLocations).toHaveLength(1);
-    expect(returnedLocations[0]).toHaveProperty('name', nearbyLocation.name);
+    expect(returnedLocations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: primaryLocation.name }),
+    ]));
   };
 
   const expectNoMatchingLocations = (res) => {
@@ -86,7 +114,7 @@ describe('find locations', () => {
         radius,
       })
       .expect(200)
-      .then(expectMatchNearbyLocation));
+      .then(expectMatchNearbyLocations));
 
   it('should not return locations marked "hidden from search" (meant for comments only)', () =>
     request(app)
@@ -119,7 +147,7 @@ describe('find locations', () => {
 
   describe('when taxonomy ID is specified', () => {
     it('should return locations that match the taxonomy ID', () => {
-      const matchingId = nearbyLocation.Services[0].Taxonomies[0].id;
+      const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
 
       return request(app)
         .get('/locations')
@@ -130,7 +158,7 @@ describe('find locations', () => {
           taxonomyId: matchingId,
         })
         .expect(200)
-        .then(expectMatchNearbyLocation);
+        .then(expectMatchPrimaryLocation);
     });
 
     it('should not return locations that don\'t match the taxonomy ID', () => {
@@ -146,6 +174,22 @@ describe('find locations', () => {
         })
         .expect(200)
         .then(expectNoMatchingLocations);
+    });
+
+    it('should return locations under multiple taxonomies when multiple IDs are passed', () => {
+      const matchingId1 = primaryLocation.Services[0].Taxonomies[0].id;
+      const matchingId2 = otherServiceLocation.Services[0].Taxonomies[0].id;
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: `${matchingId1},${matchingId2}`,
+        })
+        .expect(200)
+        .then(expectMatchNearbyLocations);
     });
   });
 
@@ -163,22 +207,22 @@ describe('find locations', () => {
     it('should match locations whose organization has the given string in its name', () =>
       makeRequestWithSearchString('test org')
         .expect(200)
-        .then(expectMatchNearbyLocation));
+        .then(expectMatchNearbyLocations));
 
     it('should match locations whose organization has the given string in its description', () =>
       makeRequestWithSearchString('testing purpose')
         .expect(200)
-        .then(expectMatchNearbyLocation));
+        .then(expectMatchNearbyLocations));
 
     it('should match locations which belong to a taxonomy containing the given string', () =>
       makeRequestWithSearchString('shelter')
         .expect(200)
-        .then(expectMatchNearbyLocation));
+        .then(expectMatchPrimaryLocation));
 
     it('should match locations that provide a service with the given string in its name', () =>
       makeRequestWithSearchString('offering')
         .expect(200)
-        .then(expectMatchNearbyLocation));
+        .then(expectMatchPrimaryLocation));
 
     it('should not match if none of the relevant fields include the given string', () =>
       makeRequestWithSearchString('not matching')

@@ -9,7 +9,7 @@ export default {
         .integer().positive().max(50000)
         .required(),
       searchString: Joi.string().allow(''),
-      taxonomyId: Joi.string().guid(),
+      taxonomyId: Joi.string(),
     }).required(),
   },
 

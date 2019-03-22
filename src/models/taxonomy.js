@@ -43,5 +43,23 @@ module.exports = (sequelize, DataTypes) => {
     return taxonomyRoot.children;
   };
 
+  Taxonomy.getAllIdsWithinTaxonomies = async (taxonomyIds) => {
+    const taxonomyHierarchy = await Taxonomy.getHierarchy();
+    const requestedTaxonomies = taxonomyHierarchy.filter(({ id }) => taxonomyIds.includes(id));
+
+    const flattenTaxonomies = (taxonomies) => {
+      if (!taxonomies) {
+        return [];
+      }
+
+      return taxonomies.reduce(
+        (flatIds, { id, children }) => [...flatIds, id, ...flattenTaxonomies(children)],
+        [],
+      );
+    };
+
+    return flattenTaxonomies(requestedTaxonomies);
+  };
+
   return Taxonomy;
 };

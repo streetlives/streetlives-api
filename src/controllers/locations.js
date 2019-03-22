@@ -22,11 +22,14 @@ export default {
       const position = geometry.createPoint(longitude, latitude);
 
       const filterParameters = {};
+
       if (searchString) {
         filterParameters.searchString = searchString.trim();
       }
+
       if (taxonomyId) {
-        filterParameters.taxonomyId = taxonomyId.trim();
+        const taxonomyIds = taxonomyId.split(',');
+        filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
 
       const locations = await models.Location.findAllInArea(position, radius, filterParameters);
