@@ -21,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
     Taxonomy.belongsToMany(models.Service, { through: models.ServiceTaxonomy });
   };
 
-  Taxonomy.getHierarchy = async () => {
+  Taxonomy.getTaxonomiesWithDescendants = async () => {
     const taxonomyObjects = await Taxonomy.findAll();
 
     const taxonomyIdsToObjects = taxonomyObjects.reduce((currObjects, taxonomyObject) => ({
@@ -40,25 +40,44 @@ module.exports = (sequelize, DataTypes) => {
       parent.children = [...children, taxonomyObject];
     });
 
-    return taxonomyRoot.children;
+    return {
+      ...taxonomyIdsToObjects,
+      root: taxonomyRoot,
+    };
+  };
+
+  Taxonomy.getHierarchy = async () => {
+    const taxonomyObjects = await Taxonomy.getTaxonomiesWithDescendants();
+    return taxonomyObjects.root.children;
   };
 
   Taxonomy.getAllIdsWithinTaxonomies = async (taxonomyIds) => {
-    const taxonomyHierarchy = await Taxonomy.getHierarchy();
-    const requestedTaxonomies = taxonomyHierarchy.filter(({ id }) => taxonomyIds.includes(id));
+    const taxonomyIdsToObjects = await Taxonomy.getTaxonomiesWithDescendants();
 
-    const flattenTaxonomies = (taxonomies) => {
+    const requestedTaxonomies = taxonomyIds.map(id => taxonomyIdsToObjects[id]);
+
+    const flattenIds = (taxonomies) => {
       if (!taxonomies) {
-        return [];
+        return {};
       }
 
       return taxonomies.reduce(
-        (flatIds, { id, children }) => [...flatIds, id, ...flattenTaxonomies(children)],
-        [],
+        (flatIds, taxonomy) => {
+          if (!taxonomy || !taxonomyIdsToObjects[taxonomy.id]) {
+            return flatIds;
+          }
+
+          return {
+            ...flatIds,
+            [taxonomy.id]: true,
+            ...flattenIds(taxonomyIdsToObjects[taxonomy.id].children),
+          };
+        },
+        {},
       );
     };
 
-    return flattenTaxonomies(requestedTaxonomies);
+    return Object.keys(flattenIds(requestedTaxonomies));
   };
 
   return Taxonomy;
