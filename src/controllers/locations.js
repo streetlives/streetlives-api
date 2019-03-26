@@ -15,6 +15,7 @@ export default {
         latitude,
         longitude,
         radius,
+        minResults,
         searchString,
         taxonomyId,
       } = req.query;
@@ -32,7 +33,13 @@ export default {
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
 
-      const locations = await models.Location.findAllInArea(position, radius, filterParameters);
+      const locations = await models.Location.findInArea({
+        position,
+        radius,
+        // TODO: Add maxResults too.
+        minResults,
+        filterParameters,
+      });
       res.send(locations);
     } catch (err) {
       next(err);

@@ -8,6 +8,8 @@ export default {
       radius: Joi.number()
         .integer().positive().max(50000)
         .required(),
+      minResults: Joi.number()
+        .integer().positive().max(500),
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string(),
     }).required(),
