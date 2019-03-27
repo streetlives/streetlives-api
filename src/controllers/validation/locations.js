@@ -10,6 +10,10 @@ export default {
         .required(),
       minResults: Joi.number()
         .integer().positive().max(500),
+      maxResults: Joi.number()
+        .integer().positive()
+        .min(Joi.ref('minResults', { default: 0 }))
+        .max(1000),
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string(),
     }).required(),

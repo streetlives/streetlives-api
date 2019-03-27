@@ -8,6 +8,7 @@ describe('find locations', () => {
   const originLatitude = 40.763765;
   const radius = 2000;
   const pointNearOrigin = geometry.createPoint(-73.991303, 40.751908);
+  const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
   let primaryLocation;
@@ -55,7 +56,7 @@ describe('find locations', () => {
           {
             ...baseLocationData,
             name: 'Other nearby center',
-            position: pointNearOrigin,
+            position: pointSlightlyFurtherFromOrigin,
             Services: [{
               organization_id: organization.id,
               name: 'A different kind of service',
@@ -311,5 +312,20 @@ describe('find locations', () => {
           ]));
         });
     });
+  });
+
+  describe('when a maximum number of results is specified', () => {
+    it('should return the nearest results up to that number', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          searchString: 'shelter',
+          maxResults: 1,
+        })
+        .expect(200)
+        .then(expectMatchPrimaryLocation));
   });
 });

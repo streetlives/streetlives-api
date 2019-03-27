@@ -109,6 +109,8 @@ module.exports = (sequelize, DataTypes) => {
 
     let locationIds = await Location.getUniqueLocationIds({
       where: sequelize.and(...filterConditions, distanceCondition),
+      order: [[distance, 'ASC']],
+      limit: maxResults,
     });
 
     // Note: We could avoid having 2 separate queries if we were to first order by distance
