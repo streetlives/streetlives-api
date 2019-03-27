@@ -74,7 +74,6 @@ module.exports = (sequelize, DataTypes) => {
     return locations.map(location => location.id);
   };
 
-  // TODO: Tests for the new functionality.
   Location.findInArea = async ({
     position,
     radius,
@@ -84,7 +83,6 @@ module.exports = (sequelize, DataTypes) => {
   }) => {
     const { searchString, taxonomyIds } = filterParameters;
 
-    // TODO: Is there a way to turn this into a computed column type thing on the model?
     const distance = sequelize.fn(
       'ST_Distance_Sphere',
       sequelize.col('position'),
