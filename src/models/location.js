@@ -46,21 +46,54 @@ module.exports = (sequelize, DataTypes) => {
     }, { override: true });
   };
 
-  Location.findAllInArea = (position, radius, filterParameters) => {
+  Location.getUniqueLocationIds = async (params) => {
+    const locations = Location.findAll({
+      ...params,
+      // Should be DISTINCT, not group, but sequelize is weird with distinct alongside associations.
+      group: ['Location.id'],
+      attributes: ['Location.id'],
+      raw: true,
+      // Not like associations and grouping work perfectly out of the box either though...
+      // https://github.com/sequelize/sequelize/issues/5481
+      includeIgnoreAttributes: false,
+      // Without this, sequelize limits on a subquery that has only the main table, and applies
+      // conditions on it too. Conditions on associated columns will, therefore, fail:
+      // https://github.com/sequelize/sequelize/issues/6073
+      // As noted there, subQuery: false has problems with the limit count too,
+      // but it should be fine as long as we apply it after getting distinct location IDs.
+      subQuery: false,
+      include: [
+        sequelize.models.Organization,
+        {
+          model: sequelize.models.Service,
+          include: sequelize.models.Taxonomy,
+        },
+      ],
+    });
+
+    return locations.map(location => location.id);
+  };
+
+  Location.findInArea = async ({
+    position,
+    radius,
+    minResults,
+    maxResults,
+    filterParameters,
+  }) => {
     const { searchString, taxonomyIds } = filterParameters;
 
     const distance = sequelize.fn(
       'ST_Distance_Sphere',
-      sequelize.literal('position'),
+      sequelize.col('position'),
       sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
     );
 
-    const conditions = [];
-    conditions.push(sequelize.where(distance, { $lte: radius }));
+    const filterConditions = [];
 
     if (searchString) {
       const fuzzySearchString = `%${searchString}%`;
-      conditions.push(sequelize.or(
+      filterConditions.push(sequelize.or(
         { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
         { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
         { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
@@ -69,22 +102,45 @@ module.exports = (sequelize, DataTypes) => {
     }
 
     if (taxonomyIds) {
-      conditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
+      filterConditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
     }
 
-    return Location.findAll({
-      where: sequelize.and(...conditions),
+    const distanceCondition = sequelize.where(distance, { $lte: radius });
+
+    let locationIds = await Location.getUniqueLocationIds({
+      where: sequelize.and(...filterConditions, distanceCondition),
+      order: [[distance, 'ASC']],
+      limit: maxResults,
+    });
+
+    // Note: We could avoid having 2 separate queries if we were to first order by distance
+    // and assign row numbers per this order, and then filter the rows not just by distance but by:
+    // "distance < radius OR row_number <= minResults".
+    // However, filtering by window functions requires nested queries, which
+    // aren't natively supported by sequelize and would require a raw query.
+    // For now, the simplicity and security of sequelize seems worth the slight performance hit.
+    if (minResults && locationIds.length < minResults) {
+      locationIds = await Location.getUniqueLocationIds({
+        where: sequelize.and(...filterConditions),
+        order: [[distance, 'ASC']],
+        limit: minResults,
+      });
+    }
+
+    const locationsWithAssociations = await Location.findAll({
+      where: { id: { [sequelize.Op.in]: locationIds } },
       include: [
         sequelize.models.Organization,
-        sequelize.models.Phone,
-        sequelize.models.PhysicalAddress,
         {
           model: sequelize.models.Service,
           include: sequelize.models.Taxonomy,
         },
+        sequelize.models.Phone,
+        sequelize.models.PhysicalAddress,
       ],
       order: [[distance, 'ASC']],
     });
+    return locationsWithAssociations;
   };
 
   return Location;
