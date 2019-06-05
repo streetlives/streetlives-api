@@ -8,11 +8,13 @@ describe('find locations', () => {
   const originLatitude = 40.763765;
   const radius = 2000;
   const pointNearOrigin = geometry.createPoint(-73.991303, 40.751908);
+  const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
   let primaryLocation;
   let otherServiceLocation;
   let hiddenLocation;
+  let farLocation;
 
   const setupData = () => models.Organization.create({
     name: 'The Test Org',
@@ -54,7 +56,7 @@ describe('find locations', () => {
           {
             ...baseLocationData,
             name: 'Other nearby center',
-            position: pointNearOrigin,
+            position: pointSlightlyFurtherFromOrigin,
             Services: [{
               organization_id: organization.id,
               name: 'A different kind of service',
@@ -71,10 +73,11 @@ describe('find locations', () => {
         ),
       ]);
     })
-    .then(([firstNewLocation, secondNewLocation, thirdNewLocation]) => {
+    .then(([firstNewLocation, secondNewLocation, thirdNewLocation, fourthNewLocation]) => {
       primaryLocation = firstNewLocation;
       hiddenLocation = secondNewLocation;
       otherServiceLocation = thirdNewLocation;
+      farLocation = fourthNewLocation;
     });
 
   const expectMatchNearbyLocations = (res) => {
@@ -233,5 +236,96 @@ describe('find locations', () => {
       makeRequestWithSearchString('center')
         .expect(200)
         .then(expectNoMatchingLocations));
+  });
+
+  describe('when a minimum number of results is requested', () => {
+    it('should return that many results even if some are outside the search radius', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          minResults: 3,
+        })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(3);
+          expect(returnedLocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: primaryLocation.name }),
+            expect.objectContaining({ name: otherServiceLocation.name }),
+            expect.objectContaining({ name: farLocation.name }),
+          ]));
+        }));
+
+    it('should not return results outside the radius if sufficiently many are inside', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          minResults: 2,
+        })
+        .expect(200)
+        .then(expectMatchNearbyLocations));
+
+    it('should never return results that don\'t match the search string', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          searchString: 'shelter',
+          minResults: 3,
+        })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(2);
+          expect(returnedLocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: primaryLocation.name }),
+            expect.objectContaining({ name: farLocation.name }),
+          ]));
+        }));
+
+    it('should never return results that don\'t match the taxonomy', () => {
+      const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: matchingId,
+          minResults: 3,
+        })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(1);
+          expect(returnedLocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: primaryLocation.name }),
+          ]));
+        });
+    });
+  });
+
+  describe('when a maximum number of results is specified', () => {
+    it('should return the nearest results up to that number', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          searchString: 'shelter',
+          maxResults: 1,
+        })
+        .expect(200)
+        .then(expectMatchPrimaryLocation));
   });
 });

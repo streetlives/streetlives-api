@@ -6,6 +6,8 @@ import { getMetadataForLocation, getMetadataForService } from '../services/last-
 import geometry from '../utils/geometry';
 import { NotFoundError } from '../utils/errors';
 
+const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -15,6 +17,8 @@ export default {
         latitude,
         longitude,
         radius,
+        minResults,
+        maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
         searchString,
         taxonomyId,
       } = req.query;
@@ -32,7 +36,13 @@ export default {
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
 
-      const locations = await models.Location.findAllInArea(position, radius, filterParameters);
+      const locations = await models.Location.findInArea({
+        position,
+        radius,
+        minResults,
+        maxResults,
+        filterParameters,
+      });
       res.send(locations);
     } catch (err) {
       next(err);
