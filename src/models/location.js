@@ -46,12 +46,104 @@ module.exports = (sequelize, DataTypes) => {
     }, { override: true });
   };
 
-  Location.getUniqueLocationIds = async (params) => {
-    const locations = Location.findAll({
-      ...params,
-      // Should be DISTINCT, not group, but sequelize is weird with distinct alongside associations.
-      group: ['Location.id'],
-      attributes: ['Location.id'],
+  const getSearchStringCondition = (searchString) => {
+    const fuzzySearchString = `%${searchString}%`;
+    return sequelize.or(
+      { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+    );
+  };
+
+  const getTaxonomyCondition = taxonomyIds => ({
+    '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
+  });
+
+  const getEligibilityCondition = (eligibility) => {
+    const serviceEligibilities = sequelize.cast(
+      sequelize.fn(
+        'json_object_agg',
+        sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
+        sequelize.col('"Services->Eligibilities".eligible_values'),
+      ),
+      'jsonb',
+    );
+
+    const paramIsUnrestrictedOrAllowsValue = eligibilityParam =>
+      sequelize.or(
+        sequelize.where(
+          sequelize.where(serviceEligibilities, '->', eligibilityParam),
+          'is',
+          null,
+        ),
+        sequelize.where(
+          sequelize.where(serviceEligibilities, '->', eligibilityParam),
+          '?',
+          eligibility[eligibilityParam],
+        ),
+      );
+    return sequelize.and(Object.keys(eligibility).map(paramIsUnrestrictedOrAllowsValue));
+  };
+
+  const getRequiredDocumentsCondition = (documents) => {
+    const serviceRequiredDocuments = sequelize.cast(
+      sequelize.fn('json_agg', sequelize.col('"Services->RequiredDocuments".document')),
+      'jsonb',
+    );
+
+    const requiredDocuments =
+      Object.keys(documents).filter(documentName => documents[documentName]);
+    const notRequiredDocuments =
+      Object.keys(documents).filter(documentName => !documents[documentName]);
+
+    const requiredDocumentCondition = sequelize.and(...requiredDocuments.map(doc =>
+      sequelize.where(serviceRequiredDocuments, '?', doc)));
+    const notRequiredDocumentCondition = {
+      [sequelize.Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
+        sequelize.where(serviceRequiredDocuments, '?', doc))),
+    };
+
+    return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
+  };
+
+  Location.findUniqueLocationIds = async (filterParameters, additionalConditions, queryProps) => {
+    const {
+      searchString,
+      taxonomyIds,
+      // TODO: Implement.
+      // openAt,
+      // serviceArea,
+      eligibility,
+      documents,
+    } = filterParameters;
+    const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
+    const areRequiredDocsSpecified = documents && Object.keys(documents).length;
+
+    const whereConditions = [];
+    if (searchString) {
+      whereConditions.push(getSearchStringCondition(searchString));
+    }
+    if (taxonomyIds) {
+      whereConditions.push(getTaxonomyCondition(taxonomyIds));
+    }
+
+    const havingConditions = [];
+    if (isEligibilitySpecified) {
+      havingConditions.push(getEligibilityCondition(eligibility));
+    }
+    if (areRequiredDocsSpecified) {
+      havingConditions.push(getRequiredDocumentsCondition(documents));
+    }
+
+    const locations = await Location.findAll({
+      ...queryProps,
+      where: sequelize.and(...whereConditions, ...additionalConditions),
+      attributes: [
+        sequelize.fn('DISTINCT', sequelize.col('Location.id')),
+        // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
+        ...(queryProps.order || []),
+      ],
       raw: true,
       // Not like associations and grouping work perfectly out of the box either though...
       // https://github.com/sequelize/sequelize/issues/5481
@@ -66,9 +158,23 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.models.Organization,
         {
           model: sequelize.models.Service,
-          include: sequelize.models.Taxonomy,
+          required: isEligibilitySpecified,
+          include: [
+            sequelize.models.Taxonomy,
+            sequelize.models.RequiredDocument,
+            ...(isEligibilitySpecified ? [{
+              model: sequelize.models.Eligibility,
+              include: {
+                model: sequelize.models.EligibilityParameter,
+                required: true,
+              },
+              required: true,
+            }] : []),
+          ],
         },
       ],
+      group: ['Location.id', 'Services.id'],
+      having: havingConditions,
     });
 
     return locations.map(location => location.id);
@@ -81,34 +187,15 @@ module.exports = (sequelize, DataTypes) => {
     maxResults,
     filterParameters,
   }) => {
-    const { searchString, taxonomyIds } = filterParameters;
-
     const distance = sequelize.fn(
       'ST_Distance_Sphere',
       sequelize.col('position'),
       sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
     );
 
-    const filterConditions = [];
-
-    if (searchString) {
-      const fuzzySearchString = `%${searchString}%`;
-      filterConditions.push(sequelize.or(
-        { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      ));
-    }
-
-    if (taxonomyIds) {
-      filterConditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
-    }
-
     const distanceCondition = sequelize.where(distance, { $lte: radius });
 
-    let locationIds = await Location.getUniqueLocationIds({
-      where: sequelize.and(...filterConditions, distanceCondition),
+    let locationIds = await Location.findUniqueLocationIds(filterParameters, [distanceCondition], {
       order: [[distance, 'ASC']],
       limit: maxResults,
     });
@@ -120,8 +207,7 @@ module.exports = (sequelize, DataTypes) => {
     // aren't natively supported by sequelize and would require a raw query.
     // For now, the simplicity and security of sequelize seems worth the slight performance hit.
     if (minResults && locationIds.length < minResults) {
-      locationIds = await Location.getUniqueLocationIds({
-        where: sequelize.and(...filterConditions),
+      locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         order: [[distance, 'ASC']],
         limit: minResults,
       });
@@ -133,7 +219,10 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.models.Organization,
         {
           model: sequelize.models.Service,
-          include: sequelize.models.Taxonomy,
+          include: [
+            sequelize.models.Taxonomy,
+            sequelize.models.RequiredDocument,
+          ],
         },
         sequelize.models.Phone,
         sequelize.models.PhysicalAddress,

@@ -3,7 +3,9 @@ import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import { getMetadataForLocation, getMetadataForService } from '../services/last-updates';
+import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
+import { parseBoolean } from '../utils/strings';
 import { NotFoundError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
@@ -21,11 +23,38 @@ export default {
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
         searchString,
         taxonomyId,
+        openAt,
+        referralRequired,
+        photoIdRequired,
+        membership,
+        gender,
+        servesZipcode,
       } = req.query;
 
       const position = geometry.createPoint(longitude, latitude);
 
-      const filterParameters = {};
+      const eligibility = {};
+      if (membership != null) {
+        eligibility[eligibilityParams.membership] = membership;
+      }
+      if (gender != null) {
+        eligibility[eligibilityParams.gender] = gender;
+      }
+
+      const documents = {};
+      if (referralRequired != null) {
+        documents[documentTypes.referralLetter] = parseBoolean(referralRequired);
+      }
+      if (photoIdRequired != null) {
+        documents[documentTypes.photoId] = parseBoolean(photoIdRequired);
+      }
+
+      const filterParameters = {
+        openAt,
+        documents,
+        eligibility,
+        serviceArea: servesZipcode,
+      };
 
       if (searchString) {
         filterParameters.searchString = searchString.trim();

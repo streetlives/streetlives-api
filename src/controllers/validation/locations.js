@@ -16,6 +16,12 @@ export default {
         .max(1000),
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string(),
+      openAt: Joi.date().iso(),
+      referralRequired: Joi.boolean(),
+      photoIdRequired: Joi.boolean(),
+      membershipRequired: Joi.boolean(),
+      gender: Joi.string(),
+      servesZipcode: Joi.number().positive(),
     }).required(),
   },
 

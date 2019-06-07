@@ -2,6 +2,7 @@ import request from 'supertest';
 import app from '../../src';
 import models from '../../src/models';
 import geometry from '../../src/utils/geometry';
+import { documentTypes, eligibilityParams } from '../../src/services/services';
 
 describe('find locations', () => {
   const originLongitude = -73.981452;
@@ -312,6 +313,41 @@ describe('find locations', () => {
           ]));
         });
     });
+
+    it('should return no fewer locations even when some match on multiple services', async () => {
+      const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
+
+      const otherMatchingService = await primaryLocation.createService({
+        organization_id: primaryLocation.organization_id,
+        name: 'Other matching service',
+      });
+      await models.ServiceTaxonomy.create({
+        service_id: otherMatchingService.id,
+        taxonomy_id: matchingId,
+      });
+
+      try {
+        const res = await request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            minResults: 3,
+          })
+          .expect(200);
+
+        const returnedLocations = res.body;
+        expect(returnedLocations).toHaveLength(3);
+        expect(returnedLocations).toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: primaryLocation.name }),
+          expect.objectContaining({ name: otherServiceLocation.name }),
+          expect.objectContaining({ name: farLocation.name }),
+        ]));
+      } finally {
+        await otherMatchingService.destroy();
+      }
+    });
   });
 
   describe('when a maximum number of results is specified', () => {
@@ -327,5 +363,154 @@ describe('find locations', () => {
         })
         .expect(200)
         .then(expectMatchPrimaryLocation));
+  });
+
+  describe('when eligibility is specified', () => {
+    let genderParam;
+    let memberParam;
+    let generalParam;
+
+    let service1;
+    let service2;
+
+    beforeAll(async () => {
+      await models.EligibilityParameter.destroy({ where: {} });
+      genderParam = await models.EligibilityParameter.create({ name: eligibilityParams.gender });
+      memberParam =
+        await models.EligibilityParameter.create({ name: eligibilityParams.membership });
+      generalParam = await models.EligibilityParameter.create({ name: 'general' });
+
+      [service1] = primaryLocation.Services;
+      service2 = await primaryLocation.createService({
+        organization_id: primaryLocation.organization_id,
+        name: 'Second service',
+      });
+      await service2.createTaxonomy({
+        name: 'Other category',
+      });
+    });
+
+    beforeEach(() => models.Eligibility.destroy({ where: {} }));
+    afterAll(() => models.Eligibility.destroy({ where: {} }));
+
+    it('should filter out services with no eligibility (assumed to be unknown)', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          gender: 'female',
+        })
+        .then(expectNoMatchingLocations));
+
+    it('should include services with no restriction on the given eligibility params', async () => {
+      await service1.createEligibility({
+        parameter_id: generalParam.id,
+        eligible_values: ['everyone'],
+      });
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          gender: 'female',
+        })
+        .then(expectMatchPrimaryLocation);
+    });
+
+    it('should filter out locations where no one service matches all conditions', async () => {
+      await Promise.all([
+        service1.createEligibility({ parameter_id: genderParam.id, eligible_values: ['male'] }),
+        service1.createEligibility({ parameter_id: memberParam.id, eligible_values: ['true'] }),
+        service2.createEligibility({ parameter_id: genderParam.id, eligible_values: ['female'] }),
+      ]);
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          membership: false,
+          gender: 'male',
+        })
+        .then(expectNoMatchingLocations);
+    });
+
+    it('should include locations with a service matching all the conditions', async () => {
+      await Promise.all([
+        service1.createEligibility({ parameter_id: genderParam.id, eligible_values: ['male'] }),
+        service1.createEligibility({ parameter_id: memberParam.id, eligible_values: ['true'] }),
+        service2.createEligibility({ parameter_id: genderParam.id, eligible_values: ['female'] }),
+      ]);
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          membership: false,
+          gender: 'female',
+        })
+        .then(expectMatchPrimaryLocation);
+    });
+  });
+
+  describe('when required documents are specified', () => {
+    beforeEach(() => models.RequiredDocument.destroy({ where: {} }));
+    afterAll(() => models.RequiredDocument.destroy({ where: {} }));
+
+    it('should filter out services requiring documents not supposed to be required', async () => {
+      await models.RequiredDocument.create({
+        document: documentTypes.referralLetter,
+        service_id: primaryLocation.Services[0].id,
+      });
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+          referralRequired: false,
+        })
+        .then(expectNoMatchingLocations);
+    });
+
+    it('should filter out services not requiring documents supposed to be required', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+          referralRequired: true,
+        })
+        .then(expectNoMatchingLocations));
+
+    it('should include services with the right required and not required documents', async () => {
+      await models.RequiredDocument.create({
+        document: documentTypes.photoId,
+        service_id: primaryLocation.Services[0].id,
+      });
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+          referralRequired: false,
+          photoIdRequired: true,
+        })
+        .then(expectMatchPrimaryLocation);
+    });
   });
 });
