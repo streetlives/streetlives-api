@@ -13,6 +13,7 @@ export default {
       port: parseNumber(process.env.DATABASE_PORT, 5432),
       logging: parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
+      operatorsAliases: false,
       pool: {
         max: parseNumber(process.env.DATABASE_POOL_MAX, 100),
         min: parseNumber(process.env.DATABASE_POOL_MIN, 0),

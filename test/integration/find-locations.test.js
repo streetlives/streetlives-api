@@ -117,7 +117,6 @@ describe('find locations', () => {
   afterAll(async () => {
     await clearData();
     await models.sequelize.close();
-    app.server.close();
   });
 
   it('should return locations within a given radius of a given position', () =>
