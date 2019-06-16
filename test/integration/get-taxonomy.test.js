@@ -48,10 +48,7 @@ describe('get taxonomy', () => {
   ]);
 
   beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => {
-    models.sequelize.close();
-    app.server.close();
-  });
+  afterAll(() => models.sequelize.close());
 
   it('should return all taxonomy objects in a hierarchical structure', () =>
     request(app)
