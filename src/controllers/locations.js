@@ -50,9 +50,9 @@ export default {
       }
 
       const filterParameters = {
-        openAt,
         documents,
         eligibility,
+        openAt: openAt && new Date(openAt),
         serviceArea: servesZipcode,
       };
 

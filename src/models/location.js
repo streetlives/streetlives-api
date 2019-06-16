@@ -1,3 +1,5 @@
+import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
+
 module.exports = (sequelize, DataTypes) => {
   const Location = sequelize.define('Location', {
     id: {
@@ -60,6 +62,16 @@ module.exports = (sequelize, DataTypes) => {
     '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
   });
 
+  const getOpeningHoursCondition = (openAt) => {
+    const weekday = getDayOfWeekIntegerFromDate(openAt);
+    const timeOfDay = formatTime(openAt);
+    return {
+      '$Services.RegularSchedules.weekday$': weekday,
+      '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
+      '$Services.RegularSchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
+    };
+  };
+
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
@@ -111,8 +123,8 @@ module.exports = (sequelize, DataTypes) => {
     const {
       searchString,
       taxonomyIds,
+      openAt,
       // TODO: Implement.
-      // openAt,
       // serviceArea,
       eligibility,
       documents,
@@ -126,6 +138,9 @@ module.exports = (sequelize, DataTypes) => {
     }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
+    }
+    if (openAt) {
+      whereConditions.push(getOpeningHoursCondition(openAt));
     }
 
     const havingConditions = [];
@@ -162,6 +177,7 @@ module.exports = (sequelize, DataTypes) => {
           include: [
             sequelize.models.Taxonomy,
             sequelize.models.RequiredDocument,
+            ...(openAt ? [sequelize.models.RegularSchedule] : []),
             ...(isEligibilitySpecified ? [{
               model: sequelize.models.Eligibility,
               include: {

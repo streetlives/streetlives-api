@@ -10,6 +10,15 @@ const dayOfWeekStringsToInts = {
 
 export const getDayOfWeekInteger = dayString => dayOfWeekStringsToInts[dayString.toLowerCase()];
 
+export const getDayOfWeekIntegerFromDate = (date) => {
+  const jsDayOfWeek = date.getUTCDay();
+  return (jsDayOfWeek === 0) ? 7 : jsDayOfWeek;
+};
+
+export const formatTime = date => `${date.getUTCHours()}:${date.getUTCMinutes()}`;
+
 export default {
   getDayOfWeekInteger,
+  getDayOfWeekIntegerFromDate,
+  formatTime,
 };

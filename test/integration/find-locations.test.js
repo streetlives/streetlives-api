@@ -17,69 +17,78 @@ describe('find locations', () => {
   let hiddenLocation;
   let farLocation;
 
-  const setupData = () => models.Organization.create({
-    name: 'The Test Org',
-    description: 'An organization meant for testing purposes.',
-  })
-    .then((organization) => {
-      const baseLocationData = {
-        organization_id: organization.id,
-        Services: [{
-          organization_id: organization.id,
-          name: 'A specific offering',
-          Taxonomies: [{
-            name: 'Shelter',
-          }],
-        }],
-      };
-      const associationParams = {
-        include: [{
-          model: models.Service,
-          include: [{ model: models.Taxonomy }],
-        }],
-      };
+  const clearData = async () => {
+    await Promise.all([
+      models.ServiceAtLocation.destroy({ where: {} }),
+      models.ServiceTaxonomy.destroy({ where: {} }),
+    ]);
+    await Promise.all([
+      models.Taxonomy.destroy({ where: {} }),
+      models.Service.destroy({ where: {} }),
+    ]);
+    await models.Location.destroy({ where: {} });
+    await models.Organization.destroy({ where: {} });
+  };
 
-      return Promise.all([
-        models.Location.create(
-          { ...baseLocationData, name: 'Nearby center', position: pointNearOrigin },
-          associationParams,
-        ),
-        models.Location.create(
-          {
-            ...baseLocationData,
-            name: 'Nearby center (volunteers)',
-            position: pointNearOrigin,
-            hidden_from_search: true,
-          },
-          associationParams,
-        ),
-        models.Location.create(
-          {
-            ...baseLocationData,
-            name: 'Other nearby center',
-            position: pointSlightlyFurtherFromOrigin,
-            Services: [{
-              organization_id: organization.id,
-              name: 'A different kind of service',
-              Taxonomies: [{
-                name: 'Food',
-              }],
-            }],
-          },
-          associationParams,
-        ),
-        models.Location.create(
-          { ...baseLocationData, name: 'Far-off center', position: pointFarFromOrigin },
-          associationParams,
-        ),
-      ]);
-    })
-    .then(([firstNewLocation, secondNewLocation, thirdNewLocation, fourthNewLocation]) => {
-      primaryLocation = firstNewLocation;
-      hiddenLocation = secondNewLocation;
-      otherServiceLocation = thirdNewLocation;
-      farLocation = fourthNewLocation;
+  const setupData = async () => {
+    await clearData();
+    const organization = await models.Organization.create({
+      name: 'The Test Org',
+      description: 'An organization meant for testing purposes.',
     });
+
+    const baseLocationData = {
+      organization_id: organization.id,
+      Services: [{
+        organization_id: organization.id,
+        name: 'A specific offering',
+        Taxonomies: [{
+          name: 'Shelter',
+        }],
+      }],
+    };
+    const associationParams = {
+      include: [{
+        model: models.Service,
+        include: [{ model: models.Taxonomy }],
+      }],
+    };
+
+    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all([
+      models.Location.create(
+        { ...baseLocationData, name: 'Nearby center', position: pointNearOrigin },
+        associationParams,
+      ),
+      models.Location.create(
+        {
+          ...baseLocationData,
+          name: 'Nearby center (volunteers)',
+          position: pointNearOrigin,
+          hidden_from_search: true,
+        },
+        associationParams,
+      ),
+      models.Location.create(
+        {
+          ...baseLocationData,
+          name: 'Other nearby center',
+          position: pointSlightlyFurtherFromOrigin,
+          Services: [{
+            organization_id: organization.id,
+            name: 'A different kind of service',
+            Taxonomies: [{
+              name: 'Food',
+            }],
+          }],
+        },
+        associationParams,
+      ),
+      models.Location.create(
+        { ...baseLocationData, name: 'Far-off center', position: pointFarFromOrigin },
+        associationParams,
+      ),
+    ]);
+  };
 
   const expectMatchNearbyLocations = (res) => {
     const returnedLocations = res.body;
@@ -103,9 +112,11 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual([]);
   };
 
-  beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => {
-    models.sequelize.close();
+  beforeAll(() => models.sequelize.sync({ force: true }));
+  beforeEach(setupData);
+  afterAll(async () => {
+    await clearData();
+    await models.sequelize.close();
     app.server.close();
   });
 
@@ -326,27 +337,23 @@ describe('find locations', () => {
         taxonomy_id: matchingId,
       });
 
-      try {
-        const res = await request(app)
-          .get('/locations')
-          .query({
-            latitude: originLatitude,
-            longitude: originLongitude,
-            radius,
-            minResults: 3,
-          })
-          .expect(200);
+      const res = await request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          minResults: 3,
+        })
+        .expect(200);
 
-        const returnedLocations = res.body;
-        expect(returnedLocations).toHaveLength(3);
-        expect(returnedLocations).toEqual(expect.arrayContaining([
-          expect.objectContaining({ name: primaryLocation.name }),
-          expect.objectContaining({ name: otherServiceLocation.name }),
-          expect.objectContaining({ name: farLocation.name }),
-        ]));
-      } finally {
-        await otherMatchingService.destroy();
-      }
+      const returnedLocations = res.body;
+      expect(returnedLocations).toHaveLength(3);
+      expect(returnedLocations).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: primaryLocation.name }),
+        expect.objectContaining({ name: otherServiceLocation.name }),
+        expect.objectContaining({ name: farLocation.name }),
+      ]));
     });
   });
 
@@ -373,8 +380,10 @@ describe('find locations', () => {
     let service1;
     let service2;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
       await models.EligibilityParameter.destroy({ where: {} });
+      await models.Eligibility.destroy({ where: {} });
+
       genderParam = await models.EligibilityParameter.create({ name: eligibilityParams.gender });
       memberParam =
         await models.EligibilityParameter.create({ name: eligibilityParams.membership });
@@ -390,8 +399,10 @@ describe('find locations', () => {
       });
     });
 
-    beforeEach(() => models.Eligibility.destroy({ where: {} }));
-    afterAll(() => models.Eligibility.destroy({ where: {} }));
+    afterAll(() => Promise.all([
+      models.Eligibility.destroy({ where: {} }),
+      models.EligibilityParameter.destroy({ where: {} }),
+    ]));
 
     it('should filter out services with no eligibility (assumed to be unknown)', () =>
       request(app)
@@ -511,6 +522,130 @@ describe('find locations', () => {
           photoIdRequired: true,
         })
         .then(expectMatchPrimaryLocation);
+    });
+  });
+
+  describe('when "open at" is specified', () => {
+    const someSunday = '2019-06-09';
+    const someSaturday = '2019-06-08';
+
+    beforeEach(() => models.RegularSchedule.destroy({ where: {} }));
+    afterAll(() => models.RegularSchedule.destroy({ where: {} }));
+
+    const setupBaseSchedule = () => Promise.all([
+      models.RegularSchedule.create({
+        weekday: 7,
+        opens_at: '10:00',
+        closes_at: '11:00',
+        service_id: primaryLocation.Services[0].id,
+      }),
+      models.RegularSchedule.create({
+        weekday: 6,
+        opens_at: '8:00',
+        closes_at: '11:00',
+        service_id: primaryLocation.Services[0].id,
+      }),
+    ]);
+
+    it('should filter out services closed at the given time', () =>
+      setupBaseSchedule()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: new Date(`${someSunday}T09:00Z`),
+          }))
+        .then(expectNoMatchingLocations));
+
+    it('should return locations with a service open at the given time', () =>
+      setupBaseSchedule()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: new Date(`${someSaturday}T09:00Z`),
+          }))
+        .then(expectMatchPrimaryLocation));
+
+    it('should filter out services whose opening times are unknown (no schedule records)', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          openAt: new Date(`${someSaturday}T09:00Z`),
+        })
+        .then(expectNoMatchingLocations));
+
+    it('should not include the minute at which the service closes', () =>
+      setupBaseSchedule()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: new Date(`${someSaturday}T11:00Z`),
+          }))
+        .then(expectNoMatchingLocations));
+
+    it('should include the minute at which the service opens', () =>
+      setupBaseSchedule()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: new Date(`${someSaturday}T08:00Z`),
+          }))
+        .then(expectMatchPrimaryLocation));
+
+    it('should include locations with a service whose taxonomy and time both match', async () => {
+      const otherTaxonomy = await primaryLocation.Services[0].createTaxonomy({
+        name: 'Other category',
+      });
+
+      await setupBaseSchedule();
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: otherTaxonomy.id,
+          openAt: new Date(`${someSaturday}T09:00Z`),
+        })
+        .then(expectMatchPrimaryLocation);
+    });
+
+    it('should exclude locations with different services matching taxonomy and time', async () => {
+      const otherService = await primaryLocation.createService({
+        organization_id: primaryLocation.organization_id,
+        name: 'Second service',
+      });
+      const otherTaxonomy = await otherService.createTaxonomy({
+        name: 'Other category',
+      });
+
+      await setupBaseSchedule();
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: otherTaxonomy.id,
+          openAt: new Date(`${someSaturday}T09:00Z`),
+        })
+        .then(expectNoMatchingLocations);
     });
   });
 });
