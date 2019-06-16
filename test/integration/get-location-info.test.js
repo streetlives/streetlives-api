@@ -51,10 +51,7 @@ describe('get location info', () => {
     });
 
   beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => {
-    models.sequelize.close();
-    app.server.close();
-  });
+  afterAll(() => models.sequelize.close());
 
   const stripTimestampsAndIds = obj => Object.keys(obj).reduce((currStrippedObj, key) => {
     const value = obj[key];

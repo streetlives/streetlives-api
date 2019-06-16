@@ -24,10 +24,7 @@ describe('add comments', () => {
   afterEach(() => {
     location.setComments([]);
   });
-  afterAll(() => {
-    models.sequelize.close();
-    app.server.close();
-  });
+  afterAll(() => models.sequelize.close());
 
   it('should add a comment and return a 201 status code', () =>
     request(app)

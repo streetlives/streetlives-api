@@ -12,7 +12,10 @@ app.use(morgan('dev'));
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(awsServerlessExpressMiddleware.eventContext());
+
+if (process.env.NODE_ENV !== 'test') {
+  app.use(awsServerlessExpressMiddleware.eventContext());
+}
 
 app.use(bodyParser.json());
 
