@@ -1,5 +1,5 @@
 /* eslint-disable import/no-extraneous-dependencies */
-require('babel-core/register');
+require('@babel/register');
 
 const env = process.env.NODE_ENV || 'development';
 
