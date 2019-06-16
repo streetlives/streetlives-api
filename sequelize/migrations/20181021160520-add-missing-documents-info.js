@@ -8,11 +8,16 @@ export default {
       WHERE id NOT IN (
         SELECT DISTINCT service_id
         FROM documents_infos
+        WHERE service_id IS NOT NULL
       );`;
     const servicesWithMissingDocs = await queryInterface.sequelize.query(
       query,
       { type: Sequelize.QueryTypes.SELECT },
     );
+
+    if (!servicesWithMissingDocs.length) {
+      return Promise.resolve();
+    }
 
     const documentsInfoObjects = servicesWithMissingDocs.map(({ id }) => ({
       id: uuid(),
