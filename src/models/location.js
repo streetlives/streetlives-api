@@ -21,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
           // Mutating args is awful, but is how sequelize hooks officially work:
           // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
           // eslint-disable-next-line no-param-reassign
-          options.where.hidden_from_search = { $or: [false, null] };
+          options.where.hidden_from_search = { [sequelize.Op.or]: [false, null] };
         }
         return options;
       },
@@ -105,7 +105,7 @@ module.exports = (sequelize, DataTypes) => {
       filterConditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
     }
 
-    const distanceCondition = sequelize.where(distance, { $lte: radius });
+    const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
 
     let locationIds = await Location.getUniqueLocationIds({
       where: sequelize.and(...filterConditions, distanceCondition),
