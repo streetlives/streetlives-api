@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../src';
+import app from '../../src/app';
 import models from '../../src/models';
 
 describe('get location info', () => {
@@ -50,8 +50,7 @@ describe('get location info', () => {
       location = newLocation;
     });
 
-  beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => models.sequelize.close());
+  beforeAll(setupData);
 
   const stripTimestampsAndIds = obj => Object.keys(obj).reduce((currStrippedObj, key) => {
     const value = obj[key];
