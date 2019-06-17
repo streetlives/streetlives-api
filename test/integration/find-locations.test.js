@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../src';
+import app from '../../src/app';
 import models from '../../src/models';
 import geometry from '../../src/utils/geometry';
 import { documentTypes, eligibilityParams } from '../../src/services/services';
@@ -112,12 +112,8 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual([]);
   };
 
-  beforeAll(() => models.sequelize.sync({ force: true }));
   beforeEach(setupData);
-  afterAll(async () => {
-    await clearData();
-    await models.sequelize.close();
-  });
+  afterAll(clearData);
 
   it('should return locations within a given radius of a given position', () =>
     request(app)
