@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../src';
+import app from '../../src/app';
 import models from '../../src/models';
 
 describe('add comments', () => {
@@ -20,11 +20,10 @@ describe('add comments', () => {
       [location] = organization.Locations;
     });
 
-  beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
+  beforeAll(setupData);
   afterEach(() => {
     location.setComments([]);
   });
-  afterAll(() => models.sequelize.close());
 
   it('should add a comment and return a 201 status code', () =>
     request(app)

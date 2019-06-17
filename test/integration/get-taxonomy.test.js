@@ -1,6 +1,6 @@
 import request from 'supertest';
 import uuid from 'uuid/v4';
-import app from '../../src';
+import app from '../../src/app';
 import models from '../../src/models';
 
 describe('get taxonomy', () => {
@@ -47,8 +47,7 @@ describe('get taxonomy', () => {
     taxonomy6,
   ]);
 
-  beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => models.sequelize.close());
+  beforeAll(setupData);
 
   it('should return all taxonomy objects in a hierarchical structure', () =>
     request(app)
