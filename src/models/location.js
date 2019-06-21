@@ -187,7 +187,7 @@ module.exports = (sequelize, DataTypes) => {
           required: isEligibilitySpecified,
           include: [
             sequelize.models.Taxonomy,
-            sequelize.models.RequiredDocument,
+            ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
             ...(openAt ? [sequelize.models.RegularSchedule] : []),
             ...(zipcode ? [sequelize.models.ServiceArea] : []),
             ...(isEligibilitySpecified ? [{
