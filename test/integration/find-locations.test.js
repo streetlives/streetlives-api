@@ -643,4 +643,73 @@ describe('find locations', () => {
         .then(expectNoMatchingLocations);
     });
   });
+
+  describe('when "serves zipcode" is specified', () => {
+    const servedArea1 = ['10001', '10002', '10003'];
+    const servedArea2 = ['10010', '10018'];
+
+    beforeEach(() => models.ServiceArea.destroy({ where: {} }));
+    afterAll(() => models.ServiceArea.destroy({ where: {} }));
+
+    const setupBaseServiceArea = () => Promise.all([
+      models.ServiceArea.create({
+        postal_codes: servedArea1,
+        service_id: primaryLocation.Services[0].id,
+      }),
+      models.ServiceArea.create({
+        postal_codes: servedArea2,
+        service_id: primaryLocation.Services[0].id,
+      }),
+    ]);
+
+    it('should filter out locations that don\'t serve the given zipcode', () =>
+      setupBaseServiceArea()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+            servesZipcode: '10004',
+          }))
+        .then(expectNoMatchingLocations));
+
+    it('should return locations with a service that serves the given zipcode', () =>
+      setupBaseServiceArea()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+            servesZipcode: servedArea1[1],
+          }))
+        .then(expectMatchPrimaryLocation));
+
+    it('should return locations with services that have no service area restrictions', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+          servesZipcode: '10004',
+        })
+        .then(expectMatchPrimaryLocation));
+
+    it('should return a 400 status code when passed an invalid zipcode', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+          servesZipcode: 'nozip',
+        })
+        .expect(400));
+  });
 });

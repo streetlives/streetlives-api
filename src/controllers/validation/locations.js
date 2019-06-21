@@ -21,7 +21,7 @@ export default {
       photoIdRequired: Joi.boolean(),
       membershipRequired: Joi.boolean(),
       gender: Joi.string(),
-      servesZipcode: Joi.number().positive(),
+      servesZipcode: Joi.string().length(5).regex(/\d+/),
     }).required(),
   },
 

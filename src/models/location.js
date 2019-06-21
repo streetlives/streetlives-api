@@ -72,6 +72,15 @@ module.exports = (sequelize, DataTypes) => {
     };
   };
 
+  const getServiceAreaCondition = zipcode => ({
+    '$Services.ServiceAreas.postal_codes$': {
+      [sequelize.Op.or]: {
+        [sequelize.Op.eq]: null,
+        [sequelize.Op.contains]: [zipcode],
+      },
+    },
+  });
+
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
@@ -124,8 +133,7 @@ module.exports = (sequelize, DataTypes) => {
       searchString,
       taxonomyIds,
       openAt,
-      // TODO: Implement.
-      // serviceArea,
+      zipcode,
       eligibility,
       documents,
     } = filterParameters;
@@ -141,6 +149,9 @@ module.exports = (sequelize, DataTypes) => {
     }
     if (openAt) {
       whereConditions.push(getOpeningHoursCondition(openAt));
+    }
+    if (zipcode) {
+      whereConditions.push(getServiceAreaCondition(zipcode));
     }
 
     const havingConditions = [];
@@ -178,6 +189,7 @@ module.exports = (sequelize, DataTypes) => {
             sequelize.models.Taxonomy,
             sequelize.models.RequiredDocument,
             ...(openAt ? [sequelize.models.RegularSchedule] : []),
+            ...(zipcode ? [sequelize.models.ServiceArea] : []),
             ...(isEligibilitySpecified ? [{
               model: sequelize.models.Eligibility,
               include: {

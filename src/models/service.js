@@ -32,6 +32,7 @@ module.exports = (sequelize, DataTypes) => {
     Service.hasMany(models.PaymentAccepted);
     Service.hasMany(models.RegularSchedule);
     Service.hasMany(models.HolidaySchedule);
+    Service.hasMany(models.ServiceArea);
     Service.hasMany(models.Eligibility);
     Service.hasMany(models.ServiceTaxonomySpecificAttribute);
     Service.hasMany(models.RequiredDocument);

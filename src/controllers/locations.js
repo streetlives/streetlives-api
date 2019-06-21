@@ -53,7 +53,7 @@ export default {
         documents,
         eligibility,
         openAt: openAt && new Date(openAt),
-        serviceArea: servesZipcode,
+        zipcode: servesZipcode,
       };
 
       if (searchString) {
