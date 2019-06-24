@@ -107,6 +107,31 @@ module.exports = (sequelize, DataTypes) => {
     return sequelize.and(Object.keys(eligibility).map(paramIsUnrestrictedOrAllowsValue));
   };
 
+  const getTaxonomySpecificAttributesCondition = (requestedAttributes) => {
+    const serviceAttributes = sequelize.cast(
+      sequelize.fn(
+        'json_object_agg',
+        sequelize.col('"Services->ServiceTaxonomySpecificAttributes->TaxonomySpecificAttribute"'
+          + '.name'),
+        sequelize.col('"Services->ServiceTaxonomySpecificAttributes".values'),
+      ),
+      'jsonb',
+    );
+
+    const attributeIncludesRequestedValue = name =>
+      sequelize.where(
+        sequelize.where(serviceAttributes, '->', name),
+        '?',
+        requestedAttributes[name],
+      );
+
+    return sequelize.and([
+      // Yes, this is absolutely nonsensical: https://github.com/sequelize/sequelize/issues/10142.
+      {},
+      ...Object.keys(requestedAttributes).map(attributeIncludesRequestedValue),
+    ]);
+  };
+
   const getRequiredDocumentsCondition = (documents) => {
     const serviceRequiredDocuments = sequelize.cast(
       sequelize.fn('json_agg', sequelize.col('"Services->RequiredDocuments".document')),
@@ -136,9 +161,12 @@ module.exports = (sequelize, DataTypes) => {
       zipcode,
       eligibility,
       documents,
+      taxonomySpecificAttributes,
     } = filterParameters;
     const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
     const areRequiredDocsSpecified = documents && Object.keys(documents).length;
+    const areTaxonomyAttributesSpecified =
+      taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
 
     const whereConditions = [];
     if (searchString) {
@@ -160,6 +188,9 @@ module.exports = (sequelize, DataTypes) => {
     }
     if (areRequiredDocsSpecified) {
       havingConditions.push(getRequiredDocumentsCondition(documents));
+    }
+    if (areTaxonomyAttributesSpecified) {
+      havingConditions.push(getTaxonomySpecificAttributesCondition(taxonomySpecificAttributes));
     }
 
     const locations = await Location.findAll({
@@ -194,6 +225,14 @@ module.exports = (sequelize, DataTypes) => {
               model: sequelize.models.Eligibility,
               include: {
                 model: sequelize.models.EligibilityParameter,
+                required: true,
+              },
+              required: true,
+            }] : []),
+            ...(areTaxonomyAttributesSpecified ? [{
+              model: sequelize.models.ServiceTaxonomySpecificAttribute,
+              include: {
+                model: sequelize.models.TaxonomySpecificAttribute,
                 required: true,
               },
               required: true,

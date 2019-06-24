@@ -466,6 +466,128 @@ describe('find locations', () => {
     });
   });
 
+  describe('when taxonomy-specific attributes are specified', () => {
+    let clothesPurposeAttribute;
+    let clothesDemographicAttribute;
+
+    let service1;
+    let service2;
+
+    beforeEach(async () => {
+      await models.TaxonomySpecificAttribute.destroy({ where: {} });
+      await models.ServiceTaxonomySpecificAttribute.destroy({ where: {} });
+
+      clothesPurposeAttribute =
+        await models.TaxonomySpecificAttribute.create({ name: 'clothesPurpose' });
+      clothesDemographicAttribute =
+        await models.TaxonomySpecificAttribute.create({ name: 'clothesDemographic' });
+
+      [service1] = primaryLocation.Services;
+      service2 = await primaryLocation.createService({
+        organization_id: primaryLocation.organization_id,
+        name: 'Second service',
+      });
+      await service2.createTaxonomy({
+        name: 'Other category',
+      });
+    });
+
+    afterAll(() => Promise.all([
+      models.TaxonomySpecificAttribute.destroy({ where: {} }),
+      models.ServiceTaxonomySpecificAttribute.destroy({ where: {} }),
+    ]));
+
+    it('should filter out services that don\'t have a given attribute at all', async () => {
+      await service1.createServiceTaxonomySpecificAttribute({
+        attribute_id: clothesPurposeAttribute.id,
+        values: ['Work', 'Interview'],
+      });
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomySpecificAttributes: [clothesDemographicAttribute.name, 'Kids'],
+        })
+        .then(expectNoMatchingLocations);
+    });
+
+    it('should filter out locations where no one service matches all attributes', async () => {
+      await Promise.all([
+        service1.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesPurposeAttribute.id, values: ['Work', 'Interview'],
+        }),
+        service1.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesDemographicAttribute.id, values: ['Kids'],
+        }),
+        service2.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesPurposeAttribute.id, values: ['Everyday'],
+        }),
+      ]);
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomySpecificAttributes: [
+            clothesDemographicAttribute.name,
+            'Kids',
+            clothesPurposeAttribute.name,
+            'Everyday',
+          ],
+        })
+        .then(expectNoMatchingLocations);
+    });
+
+    it('should include locations with a service matching all the attributes', async () => {
+      await Promise.all([
+        service1.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesPurposeAttribute.id, values: ['Work', 'Interview'],
+        }),
+        service1.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesDemographicAttribute.id, values: ['Kids'],
+        }),
+        service2.createServiceTaxonomySpecificAttribute({
+          attribute_id: clothesPurposeAttribute.id, values: ['Everyday'],
+        }),
+      ]);
+
+      return request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomySpecificAttributes: [
+            clothesDemographicAttribute.name,
+            'Kids',
+            clothesPurposeAttribute.name,
+            'Work',
+          ],
+        })
+        .then(expectMatchPrimaryLocation);
+    });
+
+    it('should return a 400 status code when the attributes array is of odd length', () =>
+      request(app)
+        .get('/locations')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius,
+          taxonomySpecificAttributes: [
+            clothesDemographicAttribute.name,
+            'Kids',
+            clothesPurposeAttribute.name,
+          ],
+        })
+        .expect(400));
+  });
+
   describe('when required documents are specified', () => {
     beforeEach(() => models.RequiredDocument.destroy({ where: {} }));
     afterAll(() => models.RequiredDocument.destroy({ where: {} }));

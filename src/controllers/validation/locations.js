@@ -22,6 +22,7 @@ export default {
       membershipRequired: Joi.boolean(),
       gender: Joi.string(),
       servesZipcode: Joi.string().length(5).regex(/\d+/),
+      taxonomySpecificAttributes: Joi.array().items(Joi.string()),
     }).required(),
   },
 

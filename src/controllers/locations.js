@@ -6,7 +6,8 @@ import { getMetadataForLocation, getMetadataForService } from '../services/last-
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
-import { NotFoundError } from '../utils/errors';
+import { convertKeyValueArrayToObject } from '../utils/api-params';
+import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
@@ -29,7 +30,17 @@ export default {
         membership,
         gender,
         servesZipcode,
+        taxonomySpecificAttributes,
       } = req.query;
+
+      let attributesObject;
+      if (taxonomySpecificAttributes != null) {
+        try {
+          attributesObject = convertKeyValueArrayToObject(taxonomySpecificAttributes);
+        } catch (err) {
+          throw new ValidationError(`Invalid "taxonomySpecificAttributes" param: ${err.message}`);
+        }
+      }
 
       const position = geometry.createPoint(longitude, latitude);
 
@@ -54,6 +65,7 @@ export default {
         eligibility,
         openAt: openAt && new Date(openAt),
         zipcode: servesZipcode,
+        taxonomySpecificAttributes: attributesObject,
       };
 
       if (searchString) {
