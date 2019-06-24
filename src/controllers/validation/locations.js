@@ -19,7 +19,7 @@ export default {
       openAt: Joi.date().iso(),
       referralRequired: Joi.boolean(),
       photoIdRequired: Joi.boolean(),
-      membershipRequired: Joi.boolean(),
+      membership: Joi.boolean(),
       gender: Joi.string(),
       servesZipcode: Joi.string().length(5).regex(/\d+/),
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
