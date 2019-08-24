@@ -15,7 +15,11 @@ export const getDayOfWeekIntegerFromDate = (date) => {
   return (jsDayOfWeek === 0) ? 7 : jsDayOfWeek;
 };
 
-export const formatTime = date => `${date.getUTCHours()}:${date.getUTCMinutes()}`;
+export const formatTime = (date, timeZone) => new Intl.DateTimeFormat([], {
+  timeZone,
+  hour: 'numeric',
+  minute: 'numeric',
+}).format(date);
 
 export default {
   getDayOfWeekInteger,

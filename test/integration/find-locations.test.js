@@ -646,6 +646,12 @@ describe('find locations', () => {
     const someSunday = '2019-06-09';
     const someSaturday = '2019-06-08';
 
+    const timeZone = 'America/New_York';
+    const someDate = new Date(someSunday);
+    const timezoneOffset =
+      someDate.getTime() - new Date(someDate.toLocaleString([], { timeZone })).getTime();
+    const getDateFromNyTime = dateStr => new Date(new Date(dateStr).getTime() + timezoneOffset);
+
     beforeEach(() => models.RegularSchedule.destroy({ where: {} }));
     afterAll(() => models.RegularSchedule.destroy({ where: {} }));
 
@@ -672,7 +678,7 @@ describe('find locations', () => {
             latitude: originLatitude,
             longitude: originLongitude,
             radius,
-            openAt: new Date(`${someSunday}T09:00Z`),
+            openAt: getDateFromNyTime(`${someSunday}T09:00`),
           }))
         .then(expectNoMatchingLocations));
 
@@ -684,7 +690,7 @@ describe('find locations', () => {
             latitude: originLatitude,
             longitude: originLongitude,
             radius,
-            openAt: new Date(`${someSaturday}T09:00Z`),
+            openAt: getDateFromNyTime(`${someSaturday}T09:00`),
           }))
         .then(expectMatchPrimaryLocation));
 
@@ -695,7 +701,7 @@ describe('find locations', () => {
           latitude: originLatitude,
           longitude: originLongitude,
           radius,
-          openAt: new Date(`${someSaturday}T09:00Z`),
+          openAt: getDateFromNyTime(`${someSaturday}T09:00`),
         })
         .then(expectNoMatchingLocations));
 
@@ -707,7 +713,7 @@ describe('find locations', () => {
             latitude: originLatitude,
             longitude: originLongitude,
             radius,
-            openAt: new Date(`${someSaturday}T11:00Z`),
+            openAt: getDateFromNyTime(`${someSaturday}T11:00`),
           }))
         .then(expectNoMatchingLocations));
 
@@ -719,7 +725,7 @@ describe('find locations', () => {
             latitude: originLatitude,
             longitude: originLongitude,
             radius,
-            openAt: new Date(`${someSaturday}T08:00Z`),
+            openAt: getDateFromNyTime(`${someSaturday}T08:00`),
           }))
         .then(expectMatchPrimaryLocation));
 
@@ -737,7 +743,7 @@ describe('find locations', () => {
           longitude: originLongitude,
           radius,
           taxonomyId: otherTaxonomy.id,
-          openAt: new Date(`${someSaturday}T09:00Z`),
+          openAt: getDateFromNyTime(`${someSaturday}T09:00`),
         })
         .then(expectMatchPrimaryLocation);
     });

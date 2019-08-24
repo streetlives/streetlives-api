@@ -63,8 +63,13 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   const getOpeningHoursCondition = (openAt) => {
+    // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
+    // Once we have locations elsewhere, the Google Time Zone API can give us a TZ per position
+    // (or we just store the timezone with the hours).
+    const openingHoursTimezone = 'America/New_York';
+
     const weekday = getDayOfWeekIntegerFromDate(openAt);
-    const timeOfDay = formatTime(openAt);
+    const timeOfDay = formatTime(openAt, openingHoursTimezone);
     return {
       '$Services.RegularSchedules.weekday$': weekday,
       '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
