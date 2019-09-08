@@ -3,6 +3,7 @@
 exports[`get location info should get all relevant fields for a given location 1`] = `
 Object {
   "Organization": Object {
+    "Phones": Object {},
     "description": "An organization meant for testing purposes.",
     "email": null,
     "name": "The Test Org",
@@ -21,6 +22,7 @@ Object {
     "0": Object {
       "DocumentsInfo": null,
       "Languages": Object {},
+      "Phones": Object {},
       "RegularSchedules": Object {},
       "RequiredDocuments": Object {},
       "ServiceAtLocation": Object {
