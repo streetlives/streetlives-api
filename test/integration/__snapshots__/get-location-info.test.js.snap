@@ -22,6 +22,7 @@ Object {
   "Services": Object {
     "0": Object {
       "DocumentsInfo": null,
+      "Eligibilities": Object {},
       "Languages": Object {},
       "Phones": Object {},
       "RegularSchedules": Object {},
@@ -29,6 +30,7 @@ Object {
       "ServiceAtLocation": Object {
         "description": null,
       },
+      "ServiceTaxonomySpecificAttributes": Object {},
       "Taxonomies": Object {
         "0": Object {
           "ServiceTaxonomy": Object {},

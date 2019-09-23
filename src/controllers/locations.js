@@ -107,6 +107,8 @@ export default {
                 models.RequiredDocument,
                 models.DocumentsInfo,
                 models.Phone,
+                models.Eligibility,
+                models.ServiceTaxonomySpecificAttribute,
               ],
             },
             {
