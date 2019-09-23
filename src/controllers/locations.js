@@ -115,6 +115,7 @@ export default {
             },
             models.Phone,
             models.PhysicalAddress,
+            models.AccessibilityForDisabilities,
           ],
         },
       );
