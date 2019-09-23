@@ -101,14 +101,20 @@ export default {
             {
               model: models.Service,
               include: [
+                {
+                  model: models.Eligibility,
+                  include: [models.EligibilityParameter],
+                },
+                {
+                  model: models.ServiceTaxonomySpecificAttribute,
+                  include: [models.TaxonomySpecificAttribute],
+                },
                 models.Taxonomy,
                 models.RegularSchedule,
                 models.Language,
                 models.RequiredDocument,
                 models.DocumentsInfo,
                 models.Phone,
-                models.Eligibility,
-                models.ServiceTaxonomySpecificAttribute,
               ],
             },
             {
