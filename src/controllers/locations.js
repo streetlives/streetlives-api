@@ -107,7 +107,7 @@ export default {
                 },
                 {
                   model: models.ServiceTaxonomySpecificAttribute,
-                  include: [models.TaxonomySpecificAttribute],
+                  include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
                 },
                 models.Taxonomy,
                 models.RegularSchedule,

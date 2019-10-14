@@ -16,6 +16,7 @@ module.exports = (sequelize, DataTypes) => {
 
   ServiceTaxonomySpecificAttribute.associate = (models) => {
     ServiceTaxonomySpecificAttribute.belongsTo(models.TaxonomySpecificAttribute, {
+      as: 'attribute',
       foreignKey: {
         name: 'attribute_id',
         unique: 'single_value_per_attr_on_service',

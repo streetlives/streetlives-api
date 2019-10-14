@@ -116,7 +116,7 @@ module.exports = (sequelize, DataTypes) => {
     const serviceAttributes = sequelize.cast(
       sequelize.fn(
         'json_object_agg',
-        sequelize.col('"Services->ServiceTaxonomySpecificAttributes->TaxonomySpecificAttribute"'
+        sequelize.col('"Services->ServiceTaxonomySpecificAttributes->attribute"'
           + '.name'),
         sequelize.col('"Services->ServiceTaxonomySpecificAttributes".values'),
       ),
@@ -238,6 +238,7 @@ module.exports = (sequelize, DataTypes) => {
               model: sequelize.models.ServiceTaxonomySpecificAttribute,
               include: {
                 model: sequelize.models.TaxonomySpecificAttribute,
+                as: 'attribute',
                 required: true,
               },
               required: true,
