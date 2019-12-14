@@ -3,8 +3,11 @@ import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import { getMetadataForLocation, getMetadataForService } from '../services/last-updates';
+import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
-import { NotFoundError } from '../utils/errors';
+import { parseBoolean } from '../utils/strings';
+import { convertKeyValueArrayToObject } from '../utils/api-params';
+import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
@@ -21,11 +24,49 @@ export default {
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
         searchString,
         taxonomyId,
+        openAt,
+        referralRequired,
+        photoIdRequired,
+        membership,
+        gender,
+        servesZipcode,
+        taxonomySpecificAttributes,
       } = req.query;
+
+      let attributesObject;
+      if (taxonomySpecificAttributes != null) {
+        try {
+          attributesObject = convertKeyValueArrayToObject(taxonomySpecificAttributes);
+        } catch (err) {
+          throw new ValidationError(`Invalid "taxonomySpecificAttributes" param: ${err.message}`);
+        }
+      }
 
       const position = geometry.createPoint(longitude, latitude);
 
-      const filterParameters = {};
+      const eligibility = {};
+      if (membership != null) {
+        eligibility[eligibilityParams.membership] = membership;
+      }
+      if (gender != null) {
+        eligibility[eligibilityParams.gender] = gender;
+      }
+
+      const documents = {};
+      if (referralRequired != null) {
+        documents[documentTypes.referralLetter] = parseBoolean(referralRequired);
+      }
+      if (photoIdRequired != null) {
+        documents[documentTypes.photoId] = parseBoolean(photoIdRequired);
+      }
+
+      const filterParameters = {
+        documents,
+        eligibility,
+        openAt: openAt && new Date(openAt),
+        zipcode: servesZipcode,
+        taxonomySpecificAttributes: attributesObject,
+      };
 
       if (searchString) {
         filterParameters.searchString = searchString.trim();
@@ -60,16 +101,29 @@ export default {
             {
               model: models.Service,
               include: [
+                {
+                  model: models.Eligibility,
+                  include: [models.EligibilityParameter],
+                },
+                {
+                  model: models.ServiceTaxonomySpecificAttribute,
+                  include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
+                },
                 models.Taxonomy,
                 models.RegularSchedule,
                 models.Language,
                 models.RequiredDocument,
                 models.DocumentsInfo,
+                models.Phone,
               ],
             },
-            models.Organization,
+            {
+              model: models.Organization,
+              include: [models.Phone],
+            },
             models.Phone,
             models.PhysicalAddress,
+            models.AccessibilityForDisabilities,
           ],
         },
       );

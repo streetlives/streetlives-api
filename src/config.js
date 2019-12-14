@@ -1,9 +1,4 @@
-const parseBoolean = (value, defaultValue = false) =>
-  (value == null ? defaultValue : value.toLowerCase() === 'true');
-const parseNumber = (value, defaultValue) => {
-  const parsed = parseInt(value, 10);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
-};
+import { parseBoolean, parseNumber } from './utils/strings';
 
 export default {
   port: process.env.PORT || 3000,

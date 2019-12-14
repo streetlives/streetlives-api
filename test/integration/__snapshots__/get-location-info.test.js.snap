@@ -2,7 +2,9 @@
 
 exports[`get location info should get all relevant fields for a given location 1`] = `
 Object {
+  "AccessibilityForDisabilities": Object {},
   "Organization": Object {
+    "Phones": Object {},
     "description": "An organization meant for testing purposes.",
     "email": null,
     "name": "The Test Org",
@@ -20,12 +22,15 @@ Object {
   "Services": Object {
     "0": Object {
       "DocumentsInfo": null,
+      "Eligibilities": Object {},
       "Languages": Object {},
+      "Phones": Object {},
       "RegularSchedules": Object {},
       "RequiredDocuments": Object {},
       "ServiceAtLocation": Object {
         "description": null,
       },
+      "ServiceTaxonomySpecificAttributes": Object {},
       "Taxonomies": Object {
         "0": Object {
           "ServiceTaxonomy": Object {},
@@ -34,7 +39,6 @@ Object {
         },
       },
       "additional_info": "A service might have some other info as well.",
-      "ages_served": null,
       "description": null,
       "email": null,
       "fees": null,
@@ -45,7 +49,6 @@ Object {
       },
       "name": "A specific offering",
       "url": null,
-      "who_does_it_serve": null,
     },
   },
   "additionalInfo": "And some other, perhaps less standardized, information.",
