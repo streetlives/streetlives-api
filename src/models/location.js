@@ -1,3 +1,5 @@
+import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
+
 module.exports = (sequelize, DataTypes) => {
   const Location = sequelize.define('Location', {
     id: {
@@ -46,12 +48,164 @@ module.exports = (sequelize, DataTypes) => {
     }, { override: true });
   };
 
-  Location.getUniqueLocationIds = async (params) => {
-    const locations = Location.findAll({
-      ...params,
-      // Should be DISTINCT, not group, but sequelize is weird with distinct alongside associations.
-      group: ['Location.id'],
-      attributes: ['Location.id'],
+  const getSearchStringCondition = (searchString) => {
+    const fuzzySearchString = `%${searchString}%`;
+    return sequelize.or(
+      { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+    );
+  };
+
+  const getTaxonomyCondition = taxonomyIds => ({
+    '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
+  });
+
+  const getOpeningHoursCondition = (openAt) => {
+    // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
+    // Once we have locations elsewhere, the Google Time Zone API can give us a TZ per position
+    // (or we just store the timezone with the hours).
+    const openingHoursTimezone = 'America/New_York';
+
+    const weekday = getDayOfWeekIntegerFromDate(openAt);
+    const timeOfDay = formatTime(openAt, openingHoursTimezone);
+    return {
+      '$Services.RegularSchedules.weekday$': weekday,
+      '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
+      '$Services.RegularSchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
+    };
+  };
+
+  const getServiceAreaCondition = zipcode => ({
+    '$Services.ServiceAreas.postal_codes$': {
+      [sequelize.Op.or]: {
+        [sequelize.Op.eq]: null,
+        [sequelize.Op.contains]: [zipcode],
+      },
+    },
+  });
+
+  const getEligibilityCondition = (eligibility) => {
+    const serviceEligibilities = sequelize.cast(
+      sequelize.fn(
+        'json_object_agg',
+        sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
+        sequelize.col('"Services->Eligibilities".eligible_values'),
+      ),
+      'jsonb',
+    );
+
+    const paramIsUnrestrictedOrAllowsValue = eligibilityParam =>
+      sequelize.or(
+        sequelize.where(
+          sequelize.where(serviceEligibilities, '->', eligibilityParam),
+          'is',
+          null,
+        ),
+        sequelize.where(
+          sequelize.where(serviceEligibilities, '->', eligibilityParam),
+          '?',
+          eligibility[eligibilityParam],
+        ),
+      );
+    return sequelize.and(Object.keys(eligibility).map(paramIsUnrestrictedOrAllowsValue));
+  };
+
+  const getTaxonomySpecificAttributesCondition = (requestedAttributes) => {
+    const serviceAttributes = sequelize.cast(
+      sequelize.fn(
+        'json_object_agg',
+        sequelize.col('"Services->ServiceTaxonomySpecificAttributes->attribute"'
+          + '.name'),
+        sequelize.col('"Services->ServiceTaxonomySpecificAttributes".values'),
+      ),
+      'jsonb',
+    );
+
+    const attributeIncludesRequestedValue = name =>
+      sequelize.where(
+        sequelize.where(serviceAttributes, '->', name),
+        '?',
+        requestedAttributes[name],
+      );
+
+    return sequelize.and([
+      // Yes, this is absolutely nonsensical: https://github.com/sequelize/sequelize/issues/10142.
+      {},
+      ...Object.keys(requestedAttributes).map(attributeIncludesRequestedValue),
+    ]);
+  };
+
+  const getRequiredDocumentsCondition = (documents) => {
+    const serviceRequiredDocuments = sequelize.cast(
+      sequelize.fn('json_agg', sequelize.col('"Services->RequiredDocuments".document')),
+      'jsonb',
+    );
+
+    const requiredDocuments =
+      Object.keys(documents).filter(documentName => documents[documentName]);
+    const notRequiredDocuments =
+      Object.keys(documents).filter(documentName => !documents[documentName]);
+
+    const requiredDocumentCondition = sequelize.and(...requiredDocuments.map(doc =>
+      sequelize.where(serviceRequiredDocuments, '?', doc)));
+    const notRequiredDocumentCondition = {
+      [sequelize.Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
+        sequelize.where(serviceRequiredDocuments, '?', doc))),
+    };
+
+    return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
+  };
+
+  Location.findUniqueLocationIds = async (filterParameters, additionalConditions, queryProps) => {
+    const {
+      searchString,
+      taxonomyIds,
+      openAt,
+      zipcode,
+      eligibility,
+      documents,
+      taxonomySpecificAttributes,
+    } = filterParameters;
+    const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
+    const areRequiredDocsSpecified = documents && Object.keys(documents).length;
+    const areTaxonomyAttributesSpecified =
+      taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
+
+    const whereConditions = [];
+    if (searchString) {
+      whereConditions.push(getSearchStringCondition(searchString));
+    }
+    if (taxonomyIds) {
+      whereConditions.push(getTaxonomyCondition(taxonomyIds));
+    }
+    if (openAt) {
+      whereConditions.push(getOpeningHoursCondition(openAt));
+    }
+    if (zipcode) {
+      whereConditions.push(getServiceAreaCondition(zipcode));
+    }
+
+    const havingConditions = [];
+    if (isEligibilitySpecified) {
+      havingConditions.push(getEligibilityCondition(eligibility));
+    }
+    if (areRequiredDocsSpecified) {
+      havingConditions.push(getRequiredDocumentsCondition(documents));
+    }
+    if (areTaxonomyAttributesSpecified) {
+      havingConditions.push(getTaxonomySpecificAttributesCondition(taxonomySpecificAttributes));
+    }
+
+    const locations = await Location.findAll({
+      ...queryProps,
+      where: sequelize.and(...whereConditions, ...additionalConditions),
+      attributes: [
+        sequelize.fn('DISTINCT', sequelize.col('Location.id')),
+        // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
+        ...(queryProps.order || []),
+      ],
       raw: true,
       // Not like associations and grouping work perfectly out of the box either though...
       // https://github.com/sequelize/sequelize/issues/5481
@@ -66,9 +220,34 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.models.Organization,
         {
           model: sequelize.models.Service,
-          include: sequelize.models.Taxonomy,
+          required: isEligibilitySpecified,
+          include: [
+            sequelize.models.Taxonomy,
+            ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
+            ...(openAt ? [sequelize.models.RegularSchedule] : []),
+            ...(zipcode ? [sequelize.models.ServiceArea] : []),
+            ...(isEligibilitySpecified ? [{
+              model: sequelize.models.Eligibility,
+              include: {
+                model: sequelize.models.EligibilityParameter,
+                required: true,
+              },
+              required: true,
+            }] : []),
+            ...(areTaxonomyAttributesSpecified ? [{
+              model: sequelize.models.ServiceTaxonomySpecificAttribute,
+              include: {
+                model: sequelize.models.TaxonomySpecificAttribute,
+                as: 'attribute',
+                required: true,
+              },
+              required: true,
+            }] : []),
+          ],
         },
       ],
+      group: ['Location.id', 'Services.id'],
+      having: havingConditions,
     });
 
     return locations.map(location => location.id);
@@ -81,34 +260,15 @@ module.exports = (sequelize, DataTypes) => {
     maxResults,
     filterParameters,
   }) => {
-    const { searchString, taxonomyIds } = filterParameters;
-
     const distance = sequelize.fn(
       'ST_Distance_Sphere',
       sequelize.col('position'),
       sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
     );
 
-    const filterConditions = [];
-
-    if (searchString) {
-      const fuzzySearchString = `%${searchString}%`;
-      filterConditions.push(sequelize.or(
-        { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Organization.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-        { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      ));
-    }
-
-    if (taxonomyIds) {
-      filterConditions.push({ '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds } });
-    }
-
     const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
 
-    let locationIds = await Location.getUniqueLocationIds({
-      where: sequelize.and(...filterConditions, distanceCondition),
+    let locationIds = await Location.findUniqueLocationIds(filterParameters, [distanceCondition], {
       order: [[distance, 'ASC']],
       limit: maxResults,
     });
@@ -120,8 +280,7 @@ module.exports = (sequelize, DataTypes) => {
     // aren't natively supported by sequelize and would require a raw query.
     // For now, the simplicity and security of sequelize seems worth the slight performance hit.
     if (minResults && locationIds.length < minResults) {
-      locationIds = await Location.getUniqueLocationIds({
-        where: sequelize.and(...filterConditions),
+      locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         order: [[distance, 'ASC']],
         limit: minResults,
       });
@@ -133,7 +292,10 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.models.Organization,
         {
           model: sequelize.models.Service,
-          include: sequelize.models.Taxonomy,
+          include: [
+            sequelize.models.Taxonomy,
+            sequelize.models.RequiredDocument,
+          ],
         },
         sequelize.models.Phone,
         sequelize.models.PhysicalAddress,
