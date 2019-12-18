@@ -42,6 +42,7 @@ describe('find locations', () => {
       Services: [{
         organization_id: organization.id,
         name: 'A specific offering',
+        description: 'Only this service is described this way',
         Taxonomies: [{
           name: 'Shelter',
         }],
@@ -219,18 +220,18 @@ describe('find locations', () => {
         .expect(200)
         .then(expectMatchNearbyLocations));
 
-    it('should match locations whose organization has the given string in its description', () =>
-      makeRequestWithSearchString('testing purpose')
-        .expect(200)
-        .then(expectMatchNearbyLocations));
-
     it('should match locations which belong to a taxonomy containing the given string', () =>
       makeRequestWithSearchString('shelter')
         .expect(200)
         .then(expectMatchPrimaryLocation));
 
-    it('should match locations that provide a service with the given string in its name', () =>
+    it('should match locations providing a service with the given string in its name', () =>
       makeRequestWithSearchString('offering')
+        .expect(200)
+        .then(expectMatchPrimaryLocation));
+
+    it('should match locations providing a service with the given string in its description', () =>
+      makeRequestWithSearchString('service is described')
         .expect(200)
         .then(expectMatchPrimaryLocation));
 
