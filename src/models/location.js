@@ -139,7 +139,10 @@ module.exports = (sequelize, DataTypes) => {
 
   const getRequiredDocumentsCondition = (documents) => {
     const serviceRequiredDocuments = sequelize.cast(
-      sequelize.fn('json_agg', sequelize.col('"Services->RequiredDocuments".document')),
+      sequelize.fn(
+        'json_agg',
+        sequelize.fn('lower', sequelize.col('"Services->RequiredDocuments".document')),
+      ),
       'jsonb',
     );
 
@@ -149,10 +152,10 @@ module.exports = (sequelize, DataTypes) => {
       Object.keys(documents).filter(documentName => !documents[documentName]);
 
     const requiredDocumentCondition = sequelize.and(...requiredDocuments.map(doc =>
-      sequelize.where(serviceRequiredDocuments, '?', doc)));
+      sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase())));
     const notRequiredDocumentCondition = {
       [sequelize.Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
-        sequelize.where(serviceRequiredDocuments, '?', doc))),
+        sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase()))),
     };
 
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
