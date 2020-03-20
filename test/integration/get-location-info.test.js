@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../src';
+import app from '../../src/app';
 import models from '../../src/models';
 
 describe('get location info', () => {
@@ -15,6 +15,7 @@ describe('get location info', () => {
       name: 'Some kind of center',
       description: 'This is how one would describe this shelter.',
       additional_info: 'And some other, perhaps less standardized, information.',
+      hidden_from_search: true,
       PhysicalAddresses: [{
         address_1: '123 West 30th Street',
         city: 'New York',
@@ -49,11 +50,7 @@ describe('get location info', () => {
       location = newLocation;
     });
 
-  beforeAll(() => models.sequelize.sync({ force: true }).then(setupData));
-  afterAll(() => {
-    models.sequelize.close();
-    app.server.close();
-  });
+  beforeAll(setupData);
 
   const stripTimestampsAndIds = obj => Object.keys(obj).reduce((currStrippedObj, key) => {
     const value = obj[key];

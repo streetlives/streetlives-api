@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
     where: {
       location_id: locationId,
       reply_to_id: null,
-      hidden: { $or: [false, null] },
+      hidden: { [sequelize.Op.or]: [false, null] },
     },
     attributes,
     order,

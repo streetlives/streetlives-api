@@ -5,7 +5,12 @@ import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import comments from './controllers/comments';
 import getUser from './middleware/get-user';
-import { NotFoundError, AuthError, ForbiddenError } from './utils/errors';
+import {
+  NotFoundError,
+  AuthError,
+  ForbiddenError,
+  ValidationError,
+} from './utils/errors';
 
 export default (app) => {
   app.get('/organizations', organizations.find);
@@ -47,7 +52,7 @@ export default (app) => {
       return next(err);
     }
 
-    if (err.name === 'ValidationError') {
+    if (err.name === 'ValidationError' || err instanceof ValidationError) {
       return res.status(400).send({ error: err.stack });
     }
 
