@@ -23,6 +23,7 @@ Object {
     "0": Object {
       "DocumentsInfo": null,
       "Eligibilities": Object {},
+      "EventRelatedInfos": Object {},
       "HolidaySchedules": Object {},
       "Languages": Object {},
       "Phones": Object {},

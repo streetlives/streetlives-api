@@ -88,6 +88,23 @@ const updateDocuments = async (user, service, documents, t) => {
   await updateInstance(user, service.DocumentsInfo, documentsInfoUpdates, { transaction: t });
 };
 
+const updateEventRelatedInfo = async (service, eventRelatedInfo, t, user) => {
+  await models.EventRelatedInfo.destroy({
+    where: {
+      service_id: service.id,
+      event: eventRelatedInfo.event,
+    },
+    transaction: t,
+  });
+
+  const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+  await createInstance(user, modelCreateFunction, {
+    service_id: service.id,
+    event: eventRelatedInfo.event,
+    information: eventRelatedInfo.information,
+  }, { transaction: t });
+};
+
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
   const {
     taxonomy,
@@ -96,6 +113,7 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     languageIds,
     documents,
     additionalInfo,
+    eventRelatedInfo,
     agesServed,
     whoDoesItServe,
     ...otherUpdateProps
@@ -112,6 +130,10 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (irregularHours) {
     updatePromises.push(updateIrregularHours(service, irregularHours, t, user));
+  }
+
+  if (eventRelatedInfo) {
+    updatePromises.push(updateEventRelatedInfo(service, eventRelatedInfo, t, user));
   }
 
   if (languageIds) {

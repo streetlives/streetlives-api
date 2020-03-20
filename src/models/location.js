@@ -39,6 +39,7 @@ module.exports = (sequelize, DataTypes) => {
     Location.hasMany(models.RegularSchedule);
     Location.hasMany(models.HolidaySchedule);
     Location.hasMany(models.AccessibilityForDisabilities);
+    Location.hasMany(models.EventRelatedInfo);
     Location.hasMany(models.Comment);
 
     // Can't just set defaultScope on the initial model definition:

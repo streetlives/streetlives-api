@@ -62,6 +62,10 @@ export default {
         gracePeriod: Joi.string(),
         additionalInfo: Joi.string(),
       }),
+      eventRelatedInfo: Joi.object().keys({
+        event: Joi.string().required(),
+        information: Joi.string().required(),
+      }),
       agesServed: Joi.any(),
       whoDoesItServe: Joi.any(),
     }).required(),
