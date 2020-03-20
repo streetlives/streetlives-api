@@ -20,7 +20,14 @@ const categoryData = {
     'Families',
     'Veterans short term housing',
   ],
-  'Other services': [
+  'Personal Care': [
+    'Shower',
+  ],
+  Clothing: [
+    'Clothing Pantry',
+    'Laundry',
+  ],
+  'Other service': [
     'Benefits',
     'Advocates / Legal Aid',
     'Case Workers',
@@ -40,8 +47,14 @@ const createTaxonomy = (name, parentObject) => ({
 });
 
 export default {
-  up: (queryInterface, Sequelize) =>
-    Promise.all(Object.keys(categoryData).map(async (categoryName) => {
+  up: async (queryInterface, Sequelize) => {
+    const existingCategories = await queryInterface.sequelize.query('SELECT name FROM taxonomies');
+
+    const existingCategoryNames = existingCategories[0].map(({ name }) => name);
+    const remainingCategoryNames = Object.keys(categoryData).filter(categoryName =>
+      !existingCategoryNames.includes(categoryName));
+
+    return Promise.all(remainingCategoryNames.map(async (categoryName) => {
       const categoryObject = createTaxonomy(categoryName);
       await queryInterface.bulkInsert('taxonomies', [categoryObject], {});
 
@@ -51,7 +64,8 @@ export default {
           createTaxonomy(subcategoryName, categoryObject)),
         {},
       );
-    })),
+    }));
+  },
 
   down: (queryInterface, Sequelize) => queryInterface.bulkDelete('taxonomies', null, {}),
 };

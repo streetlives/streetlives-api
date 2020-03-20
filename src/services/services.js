@@ -4,6 +4,16 @@ import { updateInstance, createInstance } from './data-changes';
 
 const { sequelize } = models;
 
+export const documentTypes = {
+  referralLetter: 'referral letter',
+  photoId: 'photo ID',
+};
+
+export const eligibilityParams = {
+  membership: 'membership',
+  gender: 'gender',
+};
+
 const updateHours = async (service, hours, t, user) => {
   await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
 

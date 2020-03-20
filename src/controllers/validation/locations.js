@@ -8,8 +8,21 @@ export default {
       radius: Joi.number()
         .integer().positive().max(50000)
         .required(),
+      minResults: Joi.number()
+        .integer().positive().max(500),
+      maxResults: Joi.number()
+        .integer().positive()
+        .min(Joi.ref('minResults', { default: 0 }))
+        .max(1000),
       searchString: Joi.string().allow(''),
-      taxonomyId: Joi.string().guid(),
+      taxonomyId: Joi.string(),
+      openAt: Joi.date().iso(),
+      referralRequired: Joi.boolean(),
+      photoIdRequired: Joi.boolean(),
+      membership: Joi.boolean(),
+      gender: Joi.string(),
+      servesZipcode: Joi.string().length(5).regex(/\d+/),
+      taxonomySpecificAttributes: Joi.array().items(Joi.string()),
     }).required(),
   },
 
