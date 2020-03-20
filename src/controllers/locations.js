@@ -111,6 +111,7 @@ export default {
                 },
                 models.Taxonomy,
                 models.RegularSchedule,
+                models.HolidaySchedule,
                 models.Language,
                 models.RequiredDocument,
                 models.DocumentsInfo,

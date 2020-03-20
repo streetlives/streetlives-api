@@ -26,6 +26,29 @@ const updateHours = async (service, hours, t, user) => {
   }, { transaction: t })));
 };
 
+const updateIrregularHours = async (service, hours, t, user) => {
+  const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
+  await models.HolidaySchedule.destroy({
+    where: {
+      service_id: service.id,
+      occasion: { [sequelize.Op.in]: relevantOccasions },
+    },
+    transaction: t,
+  });
+
+  const modelCreateFunction = models.HolidaySchedule.create.bind(models.HolidaySchedule);
+  await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
+    service_id: service.id,
+    opens_at: hoursPart.opensAt,
+    closes_at: hoursPart.closesAt,
+    closed: hoursPart.closed,
+    start_date: hoursPart.startDate,
+    end_date: hoursPart.endDate,
+    occasion: hoursPart.occasion,
+    weekday: hoursPart.weekday != null ? getDayOfWeekInteger(hoursPart.weekday) : undefined,
+  }, { transaction: t })));
+};
+
 // TODO: This is far less efficient than "service.setLanguages(languageIds, { transaction: t })".
 // Need to track metadata without having to explicitly insert (/delete) every instance.
 const updateLanguages = async (service, languageIds, t, user) => {
@@ -69,6 +92,7 @@ export const updateService = (service, update, user) => sequelize.transaction(as
   const {
     taxonomy,
     hours,
+    irregularHours,
     languageIds,
     documents,
     additionalInfo,
@@ -84,6 +108,10 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (hours) {
     updatePromises.push(updateHours(service, hours, t, user));
+  }
+
+  if (irregularHours) {
+    updatePromises.push(updateIrregularHours(service, irregularHours, t, user));
   }
 
   if (languageIds) {
