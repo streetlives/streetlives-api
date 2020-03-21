@@ -8,7 +8,6 @@ module.exports = (sequelize, DataTypes) => {
     event: {
       type: DataTypes.TEXT,
       allowNull: false,
-      unique: 'unique_info_per_event_and_entity',
     },
     information: {
       type: DataTypes.TEXT,
