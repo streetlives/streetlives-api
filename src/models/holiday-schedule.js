@@ -11,14 +11,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     opens_at: DataTypes.TIME,
     closes_at: DataTypes.TIME,
-    start_date: {
-      type: DataTypes.DATEONLY,
-      allowNull: false,
-    },
-    end_date: {
-      type: DataTypes.DATEONLY,
-      allowNull: false,
-    },
+    start_date: DataTypes.DATEONLY,
+    end_date: DataTypes.DATEONLY,
+    weekday: DataTypes.INTEGER,
+    occasion: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
