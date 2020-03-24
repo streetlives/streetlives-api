@@ -26,6 +26,29 @@ const updateHours = async (service, hours, t, user) => {
   }, { transaction: t })));
 };
 
+const updateIrregularHours = async (service, hours, t, user) => {
+  const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
+  await models.HolidaySchedule.destroy({
+    where: {
+      service_id: service.id,
+      occasion: { [sequelize.Op.in]: relevantOccasions },
+    },
+    transaction: t,
+  });
+
+  const modelCreateFunction = models.HolidaySchedule.create.bind(models.HolidaySchedule);
+  await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
+    service_id: service.id,
+    opens_at: hoursPart.opensAt,
+    closes_at: hoursPart.closesAt,
+    closed: hoursPart.closed,
+    start_date: hoursPart.startDate,
+    end_date: hoursPart.endDate,
+    occasion: hoursPart.occasion,
+    weekday: hoursPart.weekday != null ? getDayOfWeekInteger(hoursPart.weekday) : undefined,
+  }, { transaction: t })));
+};
+
 // TODO: This is far less efficient than "service.setLanguages(languageIds, { transaction: t })".
 // Need to track metadata without having to explicitly insert (/delete) every instance.
 const updateLanguages = async (service, languageIds, t, user) => {
@@ -65,13 +88,32 @@ const updateDocuments = async (user, service, documents, t) => {
   await updateInstance(user, service.DocumentsInfo, documentsInfoUpdates, { transaction: t });
 };
 
+const updateEventRelatedInfo = async (service, eventRelatedInfo, t, user) => {
+  await models.EventRelatedInfo.destroy({
+    where: {
+      service_id: service.id,
+      event: eventRelatedInfo.event,
+    },
+    transaction: t,
+  });
+
+  const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+  await createInstance(user, modelCreateFunction, {
+    service_id: service.id,
+    event: eventRelatedInfo.event,
+    information: eventRelatedInfo.information,
+  }, { transaction: t });
+};
+
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
   const {
     taxonomy,
     hours,
+    irregularHours,
     languageIds,
     documents,
     additionalInfo,
+    eventRelatedInfo,
     agesServed,
     whoDoesItServe,
     ...otherUpdateProps
@@ -84,6 +126,14 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (hours) {
     updatePromises.push(updateHours(service, hours, t, user));
+  }
+
+  if (irregularHours) {
+    updatePromises.push(updateIrregularHours(service, irregularHours, t, user));
+  }
+
+  if (eventRelatedInfo) {
+    updatePromises.push(updateEventRelatedInfo(service, eventRelatedInfo, t, user));
   }
 
   if (languageIds) {
