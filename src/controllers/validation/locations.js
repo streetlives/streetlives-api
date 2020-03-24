@@ -70,6 +70,10 @@ export default {
         postalCode: Joi.string(),
         country: Joi.string(),
       }),
+      eventRelatedInfo: Joi.object().keys({
+        event: Joi.string().required(),
+        information: Joi.string().required(),
+      }),
     }).required(),
   },
 

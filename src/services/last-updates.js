@@ -53,7 +53,9 @@ export const getMetadataForService = async (service) => {
   const [
     serviceMetadata,
     hoursLatestUpdate,
+    irregularHoursLatestUpdate,
     languagesLatestUpdate,
+    eventRelatedInfoLatestUpdate,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(service.id),
     models.Metadata.getLatestUpdateDateForQuery({
@@ -62,10 +64,16 @@ export const getMetadataForService = async (service) => {
       replacement_value: service.id,
     }),
     models.Metadata.getLatestUpdateDateForQuery({
+      resource_table: 'holiday_schedules',
+      field_name: 'service_id',
+      replacement_value: service.id,
+    }),
+    models.Metadata.getLatestUpdateDateForQuery({
       resource_table: 'service_languages',
       field_name: 'service_id',
       replacement_value: service.id,
     }),
+    models.Metadata.getLatestUpdateDateForResources(service.EventRelatedInfos.map(info => info.id)),
   ]);
 
   const serviceWithAdditionalMetadata = [...serviceMetadata];
@@ -75,10 +83,22 @@ export const getMetadataForService = async (service) => {
       last_action_date: hoursLatestUpdate,
     });
   }
+  if (irregularHoursLatestUpdate) {
+    serviceWithAdditionalMetadata.push({
+      field_name: 'irregularHours',
+      last_action_date: irregularHoursLatestUpdate,
+    });
+  }
   if (languagesLatestUpdate) {
     serviceWithAdditionalMetadata.push({
       field_name: 'languages',
       last_action_date: languagesLatestUpdate,
+    });
+  }
+  if (eventRelatedInfoLatestUpdate) {
+    serviceWithAdditionalMetadata.push({
+      field_name: 'eventRelatedInfo',
+      last_action_date: eventRelatedInfoLatestUpdate,
     });
   }
 

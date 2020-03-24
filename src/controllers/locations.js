@@ -111,10 +111,12 @@ export default {
                 },
                 models.Taxonomy,
                 models.RegularSchedule,
+                models.HolidaySchedule,
                 models.Language,
                 models.RequiredDocument,
                 models.DocumentsInfo,
                 models.Phone,
+                models.EventRelatedInfo,
               ],
             },
             {
@@ -124,6 +126,7 @@ export default {
             models.Phone,
             models.PhysicalAddress,
             models.AccessibilityForDisabilities,
+            models.EventRelatedInfo,
           ],
         },
       );
@@ -255,6 +258,18 @@ export default {
       return updateInstance(req.user, currentAddress, addressUpdate);
     };
 
+    const updateEventRelatedInfo = async (location, eventRelatedInfo) => {
+      const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+      await models.EventRelatedInfo.destroy({
+        where: { location_id: location.id, event: eventRelatedInfo.event },
+      });
+      await createInstance(req.user, createFunction, {
+        location_id: location.id,
+        event: eventRelatedInfo.event,
+        information: eventRelatedInfo.information,
+      });
+    };
+
     try {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
@@ -272,6 +287,10 @@ export default {
 
       if (req.body.address) {
         updatePromises.push(updateAddress(location, req.body.address));
+      }
+
+      if (req.body.eventRelatedInfo) {
+        updatePromises.push(updateEventRelatedInfo(location, req.body.eventRelatedInfo));
       }
 
       updatePromises.push(updateLocation(location, req.body));
