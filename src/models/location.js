@@ -63,7 +63,7 @@ module.exports = (sequelize, DataTypes) => {
     '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
   });
 
-  const getOpeningHoursCondition = (openAt) => {
+  const getOpeningHoursCondition = (openAt, occasion) => {
     // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
     // Once we have locations elsewhere, the Google Time Zone API can give us a TZ per position
     // (or we just store the timezone with the hours).
@@ -71,6 +71,17 @@ module.exports = (sequelize, DataTypes) => {
 
     const weekday = getDayOfWeekIntegerFromDate(openAt);
     const timeOfDay = formatTime(openAt, openingHoursTimezone);
+
+    if (occasion) {
+      return {
+        '$Services.HolidaySchedules.occasion$': occasion,
+        '$Services.HolidaySchedules.weekday$': weekday,
+        '$Services.HolidaySchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
+        '$Services.HolidaySchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
+        '$Services.HolidaySchedules.closed$': { [sequelize.Op.or]: [false, null] },
+      };
+    }
+
     return {
       '$Services.RegularSchedules.weekday$': weekday,
       '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
@@ -167,6 +178,7 @@ module.exports = (sequelize, DataTypes) => {
       searchString,
       taxonomyIds,
       openAt,
+      occasion,
       zipcode,
       eligibility,
       documents,
@@ -185,7 +197,7 @@ module.exports = (sequelize, DataTypes) => {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
     }
     if (openAt) {
-      whereConditions.push(getOpeningHoursCondition(openAt));
+      whereConditions.push(getOpeningHoursCondition(openAt, occasion));
     }
     if (zipcode) {
       whereConditions.push(getServiceAreaCondition(zipcode));
@@ -228,7 +240,9 @@ module.exports = (sequelize, DataTypes) => {
           include: [
             sequelize.models.Taxonomy,
             ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
-            ...(openAt ? [sequelize.models.RegularSchedule] : []),
+            ...(openAt ?
+              [occasion ? sequelize.models.HolidaySchedule : sequelize.models.RegularSchedule] :
+              []),
             ...(zipcode ? [sequelize.models.ServiceArea] : []),
             ...(isEligibilitySpecified ? [{
               model: sequelize.models.Eligibility,
