@@ -98,6 +98,10 @@ module.exports = (sequelize, DataTypes) => {
     },
   });
 
+  const getOccasionCondition = occasion => ({
+    '$Services.HolidaySchedules.occasion$': occasion,
+  });
+
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
@@ -202,6 +206,9 @@ module.exports = (sequelize, DataTypes) => {
     if (zipcode) {
       whereConditions.push(getServiceAreaCondition(zipcode));
     }
+    if (occasion) {
+      whereConditions.push(getOccasionCondition(occasion));
+    }
 
     const havingConditions = [];
     if (isEligibilitySpecified) {
@@ -240,9 +247,8 @@ module.exports = (sequelize, DataTypes) => {
           include: [
             sequelize.models.Taxonomy,
             ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
-            ...(openAt ?
-              [occasion ? sequelize.models.HolidaySchedule : sequelize.models.RegularSchedule] :
-              []),
+            ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
+            ...(occasion ? [sequelize.models.HolidaySchedule] : []),
             ...(zipcode ? [sequelize.models.ServiceArea] : []),
             ...(isEligibilitySpecified ? [{
               model: sequelize.models.Eligibility,
