@@ -72,7 +72,7 @@ export default {
       }),
       eventRelatedInfo: Joi.object().keys({
         event: Joi.string().required(),
-        information: Joi.string().required(),
+        information: Joi.string().required().allow(null),
       }),
     }).required(),
   },
