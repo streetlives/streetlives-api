@@ -17,6 +17,7 @@ export default {
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),
+      occasion: Joi.string(),
       referralRequired: Joi.boolean(),
       photoIdRequired: Joi.boolean(),
       membership: Joi.boolean(),
@@ -72,7 +73,7 @@ export default {
       }),
       eventRelatedInfo: Joi.object().keys({
         event: Joi.string().required(),
-        information: Joi.string().required(),
+        information: Joi.string().required().allow(null),
       }),
     }).required(),
   },
