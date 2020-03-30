@@ -771,6 +771,81 @@ describe('find locations', () => {
         })
         .then(expectNoMatchingLocations);
     });
+
+    describe('when a specific occasion is specified', () => {
+      beforeEach(() => models.HolidaySchedule.destroy({ where: {} }));
+      afterAll(() => models.HolidaySchedule.destroy({ where: {} }));
+
+      const setupHolidaySchedule = () => Promise.all([
+        setupBaseSchedule(),
+        models.HolidaySchedule.create({
+          weekday: 7,
+          service_id: primaryLocation.Services[0].id,
+          occasion: 'COVID-19',
+          closed: true,
+        }),
+        models.HolidaySchedule.create({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          service_id: primaryLocation.Services[0].id,
+          occasion: 'COVID-19',
+          closed: false,
+        }),
+      ]);
+
+      it('should filter out locations that only have a regular schedule for that time', () =>
+        setupBaseSchedule()
+          .then(() => request(app)
+            .get('/locations')
+            .query({
+              latitude: originLatitude,
+              longitude: originLongitude,
+              radius,
+              openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+              occasion: 'COVID-19',
+            }))
+          .then(expectNoMatchingLocations));
+
+      it('should filter out locations without a holiday schedule for that specific occasion', () =>
+        setupHolidaySchedule()
+          .then(() => request(app)
+            .get('/locations')
+            .query({
+              latitude: originLatitude,
+              longitude: originLongitude,
+              radius,
+              openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+              occasion: 'Christmas',
+            }))
+          .then(expectNoMatchingLocations));
+
+      it('should return locations closed at the given time during the occasion', () =>
+        setupHolidaySchedule()
+          .then(() => request(app)
+            .get('/locations')
+            .query({
+              latitude: originLatitude,
+              longitude: originLongitude,
+              radius,
+              openAt: getDateFromNyTime(`${someSaturday}T10:30`),
+              occasion: 'COVID-19',
+            }))
+          .then(expectNoMatchingLocations));
+
+      it('should return locations with a service open at the given time during the occasion', () =>
+        setupHolidaySchedule()
+          .then(() => request(app)
+            .get('/locations')
+            .query({
+              latitude: originLatitude,
+              longitude: originLongitude,
+              radius,
+              openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+              occasion: 'COVID-19',
+            }))
+          .then(expectMatchPrimaryLocation));
+    });
   });
 
   describe('when "serves zipcode" is specified', () => {

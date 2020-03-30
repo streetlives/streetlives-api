@@ -30,6 +30,13 @@ export default {
           created_at: new Date(),
           updated_at: new Date(),
         },
+        {
+          id: uuid(),
+          name: 'tgncClothing',
+          taxonomy_id: getTaxonomyId('Clothing'),
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
       ]),
 
       queryInterface.bulkInsert('eligibility_parameters', [

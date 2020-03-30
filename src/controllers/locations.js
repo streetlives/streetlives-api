@@ -25,6 +25,7 @@ export default {
         searchString,
         taxonomyId,
         openAt,
+        occasion,
         referralRequired,
         photoIdRequired,
         membership,
@@ -63,6 +64,7 @@ export default {
       const filterParameters = {
         documents,
         eligibility,
+        occasion,
         openAt: openAt && new Date(openAt),
         zipcode: servesZipcode,
         taxonomySpecificAttributes: attributesObject,
@@ -259,15 +261,18 @@ export default {
     };
 
     const updateEventRelatedInfo = async (location, eventRelatedInfo) => {
-      const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
       await models.EventRelatedInfo.destroy({
         where: { location_id: location.id, event: eventRelatedInfo.event },
       });
-      await createInstance(req.user, createFunction, {
-        location_id: location.id,
-        event: eventRelatedInfo.event,
-        information: eventRelatedInfo.information,
-      });
+
+      if (eventRelatedInfo.information) {
+        const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+        await createInstance(req.user, createFunction, {
+          location_id: location.id,
+          event: eventRelatedInfo.event,
+          information: eventRelatedInfo.information,
+        });
+      }
     };
 
     try {
