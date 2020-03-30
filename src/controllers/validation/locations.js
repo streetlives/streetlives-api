@@ -17,6 +17,7 @@ export default {
       searchString: Joi.string().allow(''),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),
+      occasion: Joi.string(),
       referralRequired: Joi.boolean(),
       photoIdRequired: Joi.boolean(),
       membership: Joi.boolean(),

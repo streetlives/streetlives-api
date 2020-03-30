@@ -41,7 +41,7 @@ const updateIrregularHours = async (service, hours, t, user) => {
     service_id: service.id,
     opens_at: hoursPart.opensAt,
     closes_at: hoursPart.closesAt,
-    closed: hoursPart.closed,
+    closed: hoursPart.closed || false,
     start_date: hoursPart.startDate,
     end_date: hoursPart.endDate,
     occasion: hoursPart.occasion,
