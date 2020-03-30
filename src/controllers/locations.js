@@ -25,6 +25,7 @@ export default {
         searchString,
         taxonomyId,
         openAt,
+        occasion,
         referralRequired,
         photoIdRequired,
         membership,
@@ -63,6 +64,7 @@ export default {
       const filterParameters = {
         documents,
         eligibility,
+        occasion,
         openAt: openAt && new Date(openAt),
         zipcode: servesZipcode,
         taxonomySpecificAttributes: attributesObject,
