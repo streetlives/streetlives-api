@@ -6,20 +6,25 @@ export const getMetadataForLocation = async (location, address) => {
     organizationMetadata,
     addressMetadata,
     phonesLatestUpdate,
+    eventInfoLatestUpdate,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(location.id),
     models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
     models.Metadata.getLastUpdateDatesForResourceFields(address.id),
-    models.Metadata.getLatestUpdateDateForResources(location.Phones.map(phone => phone.id)),
+    models.Metadata.getLatestUpdateDateForResources(location.Phones.map(({ id }) => id)),
+    models.Metadata.getLatestUpdateDateForResources(location.EventRelatedInfos.map(({ id }) => id)),
   ]);
 
-  const locationWithPhonesMetadata = phonesLatestUpdate ? [
-    ...locationMetadata,
-    { field_name: 'phones', last_action_date: phonesLatestUpdate },
-  ] : locationMetadata;
-
   return {
-    location: locationWithPhonesMetadata,
+    location: [
+      ...locationMetadata,
+      ...(phonesLatestUpdate ?
+        [{ field_name: 'phones', last_action_date: phonesLatestUpdate }] :
+        []),
+      ...(eventInfoLatestUpdate ?
+        [{ field_name: 'eventRelatedInfo', last_action_date: eventInfoLatestUpdate }] :
+        []),
+    ],
     organization: organizationMetadata,
     address: addressMetadata,
   };
