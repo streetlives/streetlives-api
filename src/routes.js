@@ -43,10 +43,9 @@ export default (app) => {
   app.delete('/comments/:commentId', getUser, comments.delete);
   app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
 
-  app.get('/errorreports', errorReports.get);
+  app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);
   app.delete('/errorreports/:errorReportId', getUser, errorReports.delete);
-  app.put('/errorreports/:errorReportId/hidden', getUser, errorReports.setHidden);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
