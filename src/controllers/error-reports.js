@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import errorReportSchemas from './validation/error-report';
 import models from '../models';
-import { createInstance, updateInstance, destroyInstance } from '../services/data-changes';
+import { createInstance, destroyInstance } from '../services/data-changes';
 import slackNotifier from '../services/slack-notifier';
 import { NotFoundError, ForbiddenError } from '../utils/errors';
 
@@ -9,6 +9,11 @@ export default {
   get: async (req, res, next) => {
     try {
       await Joi.validate(req, errorReportSchemas.get, { allowUnknown: true });
+
+      // Authentication of administrative user
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to get error reports!');
+      }
 
       const { locationId } = req.query;
 
@@ -32,8 +37,8 @@ export default {
         locationId,
         services,
         content,
-        postedBy,
-        contactInfo,
+        postedBy, // not currently collected in frontend
+        contactInfo, // not currently collected in frontend
       } = req.body;
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
@@ -47,8 +52,8 @@ export default {
         location.createErrorReport.bind(location), {
           content,
           services,
-          posted_by: postedBy,
-          contact_info: contactInfo,
+          posted_by: postedBy, // not currently collected in frontend
+          contact_info: contactInfo, // not currently collected in frontend
         },
       );
 
@@ -57,8 +62,8 @@ export default {
           location,
           services,
           content,
-          postedBy,
-          contactInfo,
+          postedBy, // not currently collected in frontend
+          contactInfo, // not currently collected in frontend
         });
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -85,40 +90,13 @@ export default {
         throw new NotFoundError('Error report not found when attempting to delete it!');
       }
 
-      const organizationId = errorReport.Location.organization_id;
-
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to delete error reports for this organization');
+      // Authentication of administrative user
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to delete error reports!');
       }
 
       await destroyInstance(req.user, errorReport);
 
-      res.sendStatus(204);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  setHidden: async (req, res, next) => {
-    try {
-      await Joi.validate(req, errorReportSchemas.setHidden, { allowUnknown: true });
-
-      const { errorReportId } = req.params;
-      const { hidden } = req.body;
-
-      const errorReport = await models.ErrorReport.findById(errorReportId, {
-        include: models.Location,
-      });
-
-      if (!errorReport) {
-        throw new NotFoundError('Error report not found when attempting to make it hidden!');
-      }
-
-      if (!req.userIsAdmin) {
-        throw new ForbiddenError('Not authorized to hide error report.');
-      }
-
-      await updateInstance(req.user, errorReport, { hidden });
       res.sendStatus(204);
     } catch (err) {
       next(err);

@@ -12,9 +12,9 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ARRAY(DataTypes.UUID), // This could also be a JSONB data type?
     },
     content: DataTypes.TEXT,
-    posted_by: DataTypes.TEXT,
-    contact_info: DataTypes.TEXT,
-    hidden: DataTypes.BOOLEAN,
+    posted_by: DataTypes.TEXT, // Currently not collected from React frontend
+    contact_info: DataTypes.TEXT, // Currently not collected from React frontend
+    hidden: DataTypes.BOOLEAN, // Not currently required (table not public-facing)
   }, {
     underscored: true,
     underscoredAll: true,
@@ -27,7 +27,6 @@ module.exports = (sequelize, DataTypes) => {
   ErrorReport.findAllForLocation = (locationId, { attributes, order }) => ErrorReport.findAll({
     where: {
       location_id: locationId,
-      hidden: { [sequelize.Op.or]: [false, null] },
     },
     attributes,
     order,

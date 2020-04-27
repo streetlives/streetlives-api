@@ -22,13 +22,4 @@ export default {
       errorReportId: Joi.string().guid().required(),
     }).required(),
   },
-
-  setHidden: {
-    params: Joi.object().keys({
-      errorReportId: Joi.string().guid().required(),
-    }).required(),
-    body: Joi.object().keys({
-      hidden: Joi.boolean().required(),
-    }).required(),
-  },
 };
