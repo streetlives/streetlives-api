@@ -33,8 +33,8 @@ const notifyErrorReport = (baseText, {
   location,
   services,
   content,
-  postedBy,
-  contactInfo,
+  postedBy, // not currently collected in frontend
+  contactInfo, // not currently collected in frontend
 }) => {
   const { slackWebhookUrl } = config;
 
