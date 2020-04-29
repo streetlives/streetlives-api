@@ -12,8 +12,6 @@ export default {
       locationId: Joi.string().guid().required(),
       services: Joi.array().items(Joi.string().guid()),
       content: Joi.string(),
-      postedBy: Joi.string(),
-      contactInfo: Joi.string(),
     }).required(),
   },
 

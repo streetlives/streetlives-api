@@ -12,9 +12,6 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ARRAY(DataTypes.UUID), // This could also be a JSONB data type?
     },
     content: DataTypes.TEXT,
-    posted_by: DataTypes.TEXT, // Currently not collected from React frontend
-    contact_info: DataTypes.TEXT, // Currently not collected from React frontend
-    hidden: DataTypes.BOOLEAN, // Not currently required (table not public-facing)
   }, {
     underscored: true,
     underscoredAll: true,

@@ -10,11 +10,6 @@ export default {
     try {
       await Joi.validate(req, errorReportSchemas.get, { allowUnknown: true });
 
-      // Authentication of administrative user
-      if (!req.userIsAdmin) {
-        throw new ForbiddenError('Not authorized to get error reports!');
-      }
-
       const { locationId } = req.query;
 
       const publicAttributes = ['id', 'content', 'services', 'created_at'];
@@ -37,8 +32,6 @@ export default {
         locationId,
         services,
         content,
-        postedBy, // not currently collected in frontend
-        contactInfo, // not currently collected in frontend
       } = req.body;
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
@@ -52,8 +45,6 @@ export default {
         location.createErrorReport.bind(location), {
           content,
           services,
-          posted_by: postedBy, // not currently collected in frontend
-          contact_info: contactInfo, // not currently collected in frontend
         },
       );
 
@@ -62,8 +53,6 @@ export default {
           location,
           services,
           content,
-          postedBy, // not currently collected in frontend
-          contactInfo, // not currently collected in frontend
         });
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -90,7 +79,6 @@ export default {
         throw new NotFoundError('Error report not found when attempting to delete it!');
       }
 
-      // Authentication of administrative user
       if (!req.userIsAdmin) {
         throw new ForbiddenError('Not authorized to delete error reports!');
       }
