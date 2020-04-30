@@ -30,9 +30,11 @@ export default {
 
       const {
         locationId,
-        services,
         content,
       } = req.body;
+
+      // Parse services array before sending to 'createInstance' in data-changes.js
+      const services = JSON.parse(req.body.services);
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
 
@@ -49,7 +51,7 @@ export default {
       );
 
       try {
-        await slackNotifier.notifyNewErrorReport({
+        await slackNotifier.notifyErrorReport({
           location,
           services,
           content,
