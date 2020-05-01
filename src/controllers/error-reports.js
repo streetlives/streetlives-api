@@ -55,7 +55,7 @@ export default {
       }
 
       // Perhaps change 'values' object so it's dynamic based on req.body?
-      // Would need to filter out 
+      // Would need to validate list, however.
       const postedErrorReport = await createInstance(
         req.user,
         location.createErrorReport.bind(location), {
