@@ -3,11 +3,10 @@ import Joi from 'joi';
 export default {
   find: {
     query: Joi.object().keys({
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
+      latitude: Joi.number(),
+      longitude: Joi.number(),
       radius: Joi.number()
-        .integer().positive().max(50000)
-        .required(),
+        .integer().positive().max(50000),
       minResults: Joi.number()
         .integer().positive().max(500),
       maxResults: Joi.number()
@@ -15,6 +14,7 @@ export default {
         .min(Joi.ref('minResults', { default: 0 }))
         .max(1000),
       searchString: Joi.string().allow(''),
+      organizationName: Joi.string().min(3),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),
       occasion: Joi.string(),
@@ -24,7 +24,10 @@ export default {
       gender: Joi.string(),
       servesZipcode: Joi.string().length(5).regex(/\d+/),
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
-    }).required(),
+    })
+      .or('radius', 'organizationName')
+      .and('radius', 'latitude', 'longitude')
+      .required(),
   },
 
   getInfo: {
