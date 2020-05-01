@@ -5,11 +5,18 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
+    general: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     services: {
       // May need to create an index for this datatype (array of UUIDs) for look-ups
       // https://coderwall.com/p/1b5eyq/index-for-uuid-array-data-type
 
-      type: DataTypes.ARRAY(DataTypes.UUID), // This could also be a JSONB data type?
+      type: DataTypes.ARRAY(DataTypes.UUID),
+      allowNull: false,
+      defaultValue: [],
     },
     content: DataTypes.TEXT,
   }, {

@@ -12,7 +12,12 @@ export default {
 
       const { locationId } = req.query;
 
-      const publicAttributes = ['id', 'content', 'services', 'created_at'];
+      const publicAttributes = [
+        'id',
+        'content',
+        'location_general_report',
+        'services', 'created_at',
+      ];
 
       const errorReports = await models.ErrorReport.findAllForLocation(locationId, {
         attributes: publicAttributes,
@@ -33,8 +38,15 @@ export default {
         content,
       } = req.body;
 
-      // Parse services array before sending to 'createInstance' in data-changes.js
-      const services = JSON.parse(req.body.services);
+      // Parse certain values before sending to 'createInstance' in data-changes.js
+      // Perhaps find more elequent of checking for null values?
+      const services = req.body.services
+        ? JSON.parse(req.body.services)
+        : [];
+
+      const general = req.body.general
+        ? JSON.parse(req.body.general)
+        : false;
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
 
@@ -42,10 +54,13 @@ export default {
         throw new NotFoundError('Location not found when attempting to create new error report!');
       }
 
+      // Perhaps change 'values' object so it's dynamic based on req.body?
+      // Would need to filter out 
       const postedErrorReport = await createInstance(
         req.user,
         location.createErrorReport.bind(location), {
           content,
+          general,
           services,
         },
       );
@@ -53,6 +68,7 @@ export default {
       try {
         await slackNotifier.notifyErrorReport({
           location,
+          general,
           services,
           content,
         });
