@@ -246,6 +246,34 @@ describe('find locations', () => {
         .then(expectNoMatchingLocations));
   });
 
+  describe('when an organization name is specified', () => {
+    it('should match locations whose organization has the given string in its name', () =>
+      request(app).get('/locations').query({ organizationName: 'test org' })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(3);
+          expect(returnedLocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: primaryLocation.name }),
+            expect.objectContaining({ name: otherServiceLocation.name }),
+            expect.objectContaining({ name: farLocation.name }),
+          ]));
+        }));
+
+    it('should not match locations whose organization doesn\'t have the string in its name', () =>
+      request(app).get('/locations').query({ organizationName: 'center' })
+        .expect(200)
+        .then(expectNoMatchingLocations));
+
+    it('should return no more than max results, if specified', () =>
+      request(app).get('/locations').query({ organizationName: 'test org', maxResults: 1 })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(1);
+        }));
+  });
+
   describe('when a minimum number of results is requested', () => {
     it('should return that many results even if some are outside the search radius', () =>
       request(app)

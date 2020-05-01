@@ -59,6 +59,10 @@ module.exports = (sequelize, DataTypes) => {
     );
   };
 
+  const getOrganizationNameCondition = organizationName => ({
+    '$Organization.name$': { [sequelize.Op.iLike]: `%${organizationName}%` },
+  });
+
   const getTaxonomyCondition = taxonomyIds => ({
     '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
   });
@@ -180,6 +184,7 @@ module.exports = (sequelize, DataTypes) => {
   Location.findUniqueLocationIds = async (filterParameters, additionalConditions, queryProps) => {
     const {
       searchString,
+      organizationName,
       taxonomyIds,
       openAt,
       occasion,
@@ -196,6 +201,9 @@ module.exports = (sequelize, DataTypes) => {
     const whereConditions = [];
     if (searchString) {
       whereConditions.push(getSearchStringCondition(searchString));
+    }
+    if (organizationName) {
+      whereConditions.push(getOrganizationNameCondition(organizationName));
     }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
@@ -277,36 +285,48 @@ module.exports = (sequelize, DataTypes) => {
     return locations.map(location => location.id);
   };
 
-  Location.findInArea = async ({
+  Location.search = async ({
     position,
     radius,
     minResults,
     maxResults,
     filterParameters,
   }) => {
-    const distance = sequelize.fn(
-      'ST_Distance_Sphere',
-      sequelize.col('position'),
-      sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
-    );
+    let locationIds;
+    let distance;
 
-    const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
+    if (position && radius) {
+      distance = sequelize.fn(
+        'ST_Distance_Sphere',
+        sequelize.col('position'),
+        sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
+      );
 
-    let locationIds = await Location.findUniqueLocationIds(filterParameters, [distanceCondition], {
-      order: [[distance, 'ASC']],
-      limit: maxResults,
-    });
+      const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
 
-    // Note: We could avoid having 2 separate queries if we were to first order by distance
-    // and assign row numbers per this order, and then filter the rows not just by distance but by:
-    // "distance < radius OR row_number <= minResults".
-    // However, filtering by window functions requires nested queries, which
-    // aren't natively supported by sequelize and would require a raw query.
-    // For now, the simplicity and security of sequelize seems worth the slight performance hit.
-    if (minResults && locationIds.length < minResults) {
+      locationIds = await Location.findUniqueLocationIds(
+        filterParameters,
+        [distanceCondition], {
+          order: [[distance, 'ASC']],
+          limit: maxResults,
+        },
+      );
+
+      // Note: We could avoid having 2 separate queries if we were to first order by distance
+      // and assign row numbers per this order, then filter the rows not just by distance but by:
+      // "distance < radius OR row_number <= minResults".
+      // However, filtering by window functions requires nested queries, which
+      // aren't natively supported by sequelize and would require a raw query.
+      // For now, the simplicity and security of sequelize seems worth the slight performance hit.
+      if (minResults && locationIds.length < minResults) {
+        locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
+          order: distance ? [[distance, 'ASC']] : null,
+          limit: minResults,
+        });
+      }
+    } else {
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-        order: [[distance, 'ASC']],
-        limit: minResults,
+        limit: maxResults,
       });
     }
 
@@ -324,7 +344,7 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.models.Phone,
         sequelize.models.PhysicalAddress,
       ],
-      order: [[distance, 'ASC']],
+      order: distance ? [[distance, 'ASC']] : null,
     });
     return locationsWithAssociations;
   };
