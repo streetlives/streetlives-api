@@ -23,6 +23,7 @@ export default {
         minResults,
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
         searchString,
+        organizationName,
         taxonomyId,
         openAt,
         occasion,
@@ -42,8 +43,6 @@ export default {
           throw new ValidationError(`Invalid "taxonomySpecificAttributes" param: ${err.message}`);
         }
       }
-
-      const position = geometry.createPoint(longitude, latitude);
 
       const eligibility = {};
       if (membership != null) {
@@ -73,14 +72,17 @@ export default {
       if (searchString) {
         filterParameters.searchString = searchString.trim();
       }
+      if (organizationName) {
+        filterParameters.organizationName = organizationName.trim();
+      }
 
       if (taxonomyId) {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
 
-      const locations = await models.Location.findInArea({
-        position,
+      const locations = await models.Location.search({
+        position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
         maxResults,
