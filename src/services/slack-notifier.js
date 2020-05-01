@@ -31,6 +31,7 @@ const notifyComment = (baseText, {
 
 const notifyErrorReport = async ({
   location,
+  general,
   services,
   content,
 }) => {
@@ -40,9 +41,13 @@ const notifyErrorReport = async ({
     return Promise.resolve();
   }
 
-  let text = `New error report for *${location.Organization.name}*: "_${content}_"\n`;
+  let text = `New error report for *${location.Organization.name}*\n"_${content}_"\n`;
 
-  if (services) {
+  if (general) {
+    text += 'Report relates to general location information.\n';
+  }
+
+  if (services.length) {
     text += `Services reported: ${services})\n`;
   }
 
