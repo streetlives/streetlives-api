@@ -31,8 +31,6 @@ const notifyComment = (baseText, {
 
 const notifyErrorReport = async ({
   location,
-  general,
-  services,
   content,
 }) => {
   const { slackWebhookUrl } = config;
@@ -41,15 +39,7 @@ const notifyErrorReport = async ({
     return Promise.resolve();
   }
 
-  let text = `New error report for *${location.Organization.name}*\n"_${content}_"\n`;
-
-  if (general) {
-    text += 'Report relates to general location information.\n';
-  }
-
-  if (services.length) {
-    text += `Services reported: ${services})\n`;
-  }
+  const text = `New error report for *${location.Organization.name}*\n"_${content}_"\n`;
 
   return axios.post(config.slackWebhookUrl, { text });
 };
