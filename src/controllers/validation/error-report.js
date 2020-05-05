@@ -10,7 +10,7 @@ export default {
   create: {
     body: Joi.object().keys({
       locationId: Joi.string().guid().required(),
-      general: Joi.boolean(),
+      generalLocationError: Joi.boolean(),
       services: Joi.array().items(Joi.string().guid()),
       content: Joi.string(),
     }).required(),

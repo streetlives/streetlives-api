@@ -5,7 +5,7 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
-    general: {
+    general_location_error: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,

@@ -15,8 +15,9 @@ export default {
       const publicAttributes = [
         'id',
         'content',
-        'location_general_report',
-        'services', 'created_at',
+        'general_location_error',
+        'services',
+        'created_at',
       ];
 
       const errorReports = await models.ErrorReport.findAllForLocation(locationId, {
@@ -44,14 +45,15 @@ export default {
         ? JSON.parse(req.body.services)
         : [];
 
-      const general = req.body.general
-        ? JSON.parse(req.body.general)
+      // eslint-disable-next-line camelcase
+      const general_location_error = req.body.generalLocationError
+        ? JSON.parse(req.body.generalLocationError)
         : false;
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
 
       if (!location) {
-        throw new NotFoundError('Location not found when attempting to create new error report!');
+        throw new NotFoundError('Location not found when attempting to create new error report');
       }
 
       // Perhaps change 'values' object so it's dynamic based on req.body?
@@ -60,7 +62,7 @@ export default {
         req.user,
         location.createErrorReport.bind(location), {
           content,
-          general,
+          general_location_error,
           services,
         },
       );
@@ -68,13 +70,11 @@ export default {
       try {
         await slackNotifier.notifyErrorReport({
           location,
-          general,
-          services,
           content,
         });
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('Error notifying Slack of new error report!', err);
+        console.error('Error notifying Slack of new error report', err);
       }
 
       res.status(201).send(postedErrorReport);
@@ -93,12 +93,12 @@ export default {
         include: models.Location,
       });
 
-      if (!errorReport) {
-        throw new NotFoundError('Error report not found when attempting to delete it!');
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to delete error reports');
       }
 
-      if (!req.userIsAdmin) {
-        throw new ForbiddenError('Not authorized to delete error reports!');
+      if (!errorReport) {
+        throw new NotFoundError('Error report not found when attempting to delete it');
       }
 
       await destroyInstance(req.user, errorReport);
