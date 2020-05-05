@@ -41,7 +41,7 @@ module.exports = (sequelize, DataTypes) => {
     Location.hasMany(models.AccessibilityForDisabilities);
     Location.hasMany(models.EventRelatedInfo);
     Location.hasMany(models.Comment);
-    Location.hasMany(models.ErrorReport); // ADDED FOR ERROR REPORTS BY cade_cameron
+    Location.hasMany(models.ErrorReport);
 
     // Can't just set defaultScope on the initial model definition:
     // https://github.com/sequelize/sequelize/issues/6245.
