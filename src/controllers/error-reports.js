@@ -36,19 +36,14 @@ export default {
 
       const {
         locationId,
+        generalLocationError,
+        services,
         content,
       } = req.body;
 
-      // Parse certain values before sending to 'createInstance' in data-changes.js
-      // Perhaps find more elequent of checking for null values?
-      const services = req.body.services
-        ? JSON.parse(req.body.services)
-        : [];
-
-      // eslint-disable-next-line camelcase
-      const general_location_error = req.body.generalLocationError
-        ? JSON.parse(req.body.generalLocationError)
-        : false;
+      // Remove following comments after testing
+      // const services = req.body.services || [];
+      // const general_location_error = req.body.generalLocationError || false;
 
       const location = await models.Location.findById(locationId, { include: models.Organization });
 
@@ -56,13 +51,11 @@ export default {
         throw new NotFoundError('Location not found when attempting to create new error report');
       }
 
-      // Perhaps change 'values' object so it's dynamic based on req.body?
-      // Would need to validate list, however.
       const postedErrorReport = await createInstance(
         req.user,
         location.createErrorReport.bind(location), {
           content,
-          general_location_error,
+          general_location_error: generalLocationError,
           services,
         },
       );
