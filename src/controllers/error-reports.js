@@ -41,10 +41,6 @@ export default {
         content,
       } = req.body;
 
-      // Remove following comments after testing
-      // const services = req.body.services || [];
-      // const general_location_error = req.body.generalLocationError || false;
-
       const location = await models.Location.findById(locationId, { include: models.Organization });
 
       if (!location) {
