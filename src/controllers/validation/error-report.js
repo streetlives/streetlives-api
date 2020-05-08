@@ -12,7 +12,7 @@ export default {
       locationId: Joi.string().guid().required(),
       generalLocationError: Joi.boolean().required(),
       services: Joi.array().items(Joi.string().guid()).required(),
-      content: Joi.string().empty(''),
+      content: Joi.string(),
     }).required(),
   },
 
