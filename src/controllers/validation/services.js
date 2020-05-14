@@ -12,6 +12,11 @@ const weekdays = [
 
 const hourRegex = /^\d{2}:\d{2}$/;
 
+const updateMetadataSchema = Joi.object().keys({
+  source: Joi.string(),
+  lastUpdated: Joi.date().iso(),
+});
+
 export default {
   create: {
     body: Joi.object().keys({
@@ -21,6 +26,7 @@ export default {
       additionalInfo: Joi.string(),
       taxonomyId: Joi.string().guid().required(),
       locationId: Joi.string().guid().required(),
+      metadata: updateMetadataSchema,
     }).required(),
   },
 
@@ -68,6 +74,7 @@ export default {
       }),
       agesServed: Joi.any(),
       whoDoesItServe: Joi.any(),
+      metadata: updateMetadataSchema,
     }).required(),
   },
 };
