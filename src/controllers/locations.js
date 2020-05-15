@@ -206,7 +206,7 @@ export default {
         description,
         position,
         additional_info: additionalInfo,
-      });
+      }, { metadata });
 
       const addressCreateFunction = createdLocation.createPhysicalAddress.bind(createdLocation);
       await createInstance(req.user, addressCreateFunction, {
@@ -359,7 +359,7 @@ export default {
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
       const { metadata, ...updateParams } = req.body;
-      await updateInstance(req.user, phone, updateParams, { fields: editableFields }, { metadata });
+      await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
 
       res.sendStatus(204);
     } catch (err) {
