@@ -97,12 +97,14 @@ const updateEventRelatedInfo = async (service, eventRelatedInfo, t, user) => {
     transaction: t,
   });
 
-  const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
-  await createInstance(user, modelCreateFunction, {
-    service_id: service.id,
-    event: eventRelatedInfo.event,
-    information: eventRelatedInfo.information,
-  }, { transaction: t });
+  if (eventRelatedInfo.information) {
+    const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+    await createInstance(user, modelCreateFunction, {
+      service_id: service.id,
+      event: eventRelatedInfo.event,
+      information: eventRelatedInfo.information,
+    }, { transaction: t });
+  }
 };
 
 export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
