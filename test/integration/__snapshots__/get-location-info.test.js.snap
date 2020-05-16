@@ -49,6 +49,7 @@ Object {
       "metadata": Object {
         "documents": null,
         "service": Object {},
+        "sources": Object {},
       },
       "name": "A specific offering",
       "url": null,
@@ -68,6 +69,7 @@ Object {
     "address": Object {},
     "location": Object {},
     "organization": Object {},
+    "sources": Object {},
   },
   "name": "Some kind of center",
   "position": null,
