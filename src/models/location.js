@@ -297,7 +297,7 @@ module.exports = (sequelize, DataTypes) => {
 
     if (position && radius) {
       distance = sequelize.fn(
-        'ST_Distance_Sphere',
+        'ST_DistanceSphere',
         sequelize.col('position'),
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
@@ -330,23 +330,11 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
-    const locationsWithAssociations = await Location.findAll({
+    const basicLocationData = await Location.findAll({
       where: { id: { [sequelize.Op.in]: locationIds } },
-      include: [
-        sequelize.models.Organization,
-        {
-          model: sequelize.models.Service,
-          include: [
-            sequelize.models.Taxonomy,
-            sequelize.models.RequiredDocument,
-          ],
-        },
-        sequelize.models.Phone,
-        sequelize.models.PhysicalAddress,
-      ],
       order: distance ? [[distance, 'ASC']] : null,
     });
-    return locationsWithAssociations;
+    return basicLocationData;
   };
 
   return Location;
