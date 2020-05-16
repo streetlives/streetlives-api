@@ -191,6 +191,7 @@ export default {
         organizationId,
         address,
         additionalInfo,
+        metadata,
       } = req.body;
       const position = geometry.createPoint(longitude, latitude);
 
@@ -205,7 +206,7 @@ export default {
         description,
         position,
         additional_info: additionalInfo,
-      });
+      }, { metadata });
 
       const addressCreateFunction = createdLocation.createPhysicalAddress.bind(createdLocation);
       await createInstance(req.user, addressCreateFunction, {
@@ -215,7 +216,7 @@ export default {
         state_province: address.state,
         postal_code: address.postalCode,
         country: address.country,
-      });
+      }, { metadata });
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -224,7 +225,7 @@ export default {
   },
 
   update: async (req, res, next) => {
-    const updateLocation = (location, updateParams) => {
+    const updateLocation = (location, updateParams, metadata) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
       if (updateParams.description != null) {
@@ -241,10 +242,10 @@ export default {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
-      return updateInstance(req.user, location, locationUpdate);
+      return updateInstance(req.user, location, locationUpdate, { metadata });
     };
 
-    const updateAddress = (location, updateParams) => {
+    const updateAddress = (location, updateParams, metadata) => {
       if (!location.PhysicalAddresses || location.PhysicalAddresses.length !== 1) {
         throw new Error('Trying to update address for location with no valid existing address');
       }
@@ -259,10 +260,10 @@ export default {
       if (updateParams.postalCode != null) { addressUpdate.postal_code = updateParams.postalCode; }
       if (updateParams.country != null) { addressUpdate.country = updateParams.country; }
 
-      return updateInstance(req.user, currentAddress, addressUpdate);
+      return updateInstance(req.user, currentAddress, addressUpdate, { metadata });
     };
 
-    const updateEventRelatedInfo = async (location, eventRelatedInfo) => {
+    const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata) => {
       await models.EventRelatedInfo.destroy({
         where: { location_id: location.id, event: eventRelatedInfo.event },
       });
@@ -273,7 +274,7 @@ export default {
           location_id: location.id,
           event: eventRelatedInfo.event,
           information: eventRelatedInfo.information,
-        });
+        }, { metadata });
       }
     };
 
@@ -281,6 +282,7 @@ export default {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
       const { locationId } = req.params;
+      const { metadata } = req.body;
 
       const location = await models.Location.findById(locationId, {
         include: models.PhysicalAddress,
@@ -293,14 +295,14 @@ export default {
       const updatePromises = [];
 
       if (req.body.address) {
-        updatePromises.push(updateAddress(location, req.body.address));
+        updatePromises.push(updateAddress(location, req.body.address, metadata));
       }
 
       if (req.body.eventRelatedInfo) {
-        updatePromises.push(updateEventRelatedInfo(location, req.body.eventRelatedInfo));
+        updatePromises.push(updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata));
       }
 
-      updatePromises.push(updateLocation(location, req.body));
+      updatePromises.push(updateLocation(location, req.body, metadata));
 
       await Promise.all(updatePromises);
 
@@ -327,6 +329,7 @@ export default {
         type,
         language,
         description,
+        metadata,
       } = req.body;
 
       const createdPhone = await createInstance(req.user, location.createPhone.bind(location), {
@@ -335,7 +338,7 @@ export default {
         type,
         language,
         description,
-      });
+      }, { metadata });
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -355,7 +358,8 @@ export default {
       }
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
-      await updateInstance(req.user, phone, req.body, { fields: editableFields });
+      const { metadata, ...updateParams } = req.body;
+      await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
 
       res.sendStatus(204);
     } catch (err) {

@@ -14,7 +14,15 @@ const startTransactionOrUseExisting = (callback, options) => {
   return sequelize.transaction(callback);
 };
 
-const createMetadataForFields = async (user, actionType, values, previousValues, newInstance, t) =>
+const createMetadataForFields = async ({
+  user,
+  actionType,
+  values,
+  previousValues,
+  newInstance,
+  customMetadata = {},
+  t,
+}) =>
   Promise.all(Object.keys(values).map(async (fieldName) => {
     if (!(fieldName in newInstance)) {
       return;
@@ -25,37 +33,57 @@ const createMetadataForFields = async (user, actionType, values, previousValues,
 
     await newInstance.createMetadatum({
       resource_id: newInstance.id,
-      last_action_date: new Date(),
+      last_action_date: customMetadata.lastUpdated || new Date(),
       last_action_type: actionType,
       field_name: fieldName,
       previous_value: previousValue,
       replacement_value: replacementValue,
       updated_by: user,
+      source: customMetadata.source,
     }, { transaction: t });
   }));
 
-export const createInstance = async (user, modelCreateFunction, values, options) =>
+export const createInstance = async (user, modelCreateFunction, values, options = {}) =>
   startTransactionOrUseExisting(async (t) => {
+    const { metadata, ...createOptions } = options;
+
     const newInstance = await modelCreateFunction(values, {
-      ...options,
+      ...createOptions,
       transaction: t,
     });
 
-    await createMetadataForFields(user, actionTypes.create, values, null, newInstance, t);
+    await createMetadataForFields({
+      user,
+      actionType: actionTypes.create,
+      values,
+      newInstance,
+      customMetadata: metadata,
+      t,
+    });
 
     return newInstance;
   }, options);
 
-export const updateInstance = async (user, instance, values, options) =>
+export const updateInstance = async (user, instance, values, options = {}) =>
   startTransactionOrUseExisting(async (t) => {
+    const { metadata, ...updateOptions } = options;
+
     const previousValues = { ...instance.get({ plain: true }) };
 
     const newInstance = await instance.update(values, {
-      ...options,
+      ...updateOptions,
       transaction: t,
     });
 
-    await createMetadataForFields(user, actionTypes.update, values, previousValues, newInstance, t);
+    await createMetadataForFields({
+      user,
+      actionType: actionTypes.update,
+      values,
+      previousValues,
+      newInstance,
+      customMetadata: metadata,
+      t,
+    });
 
     return newInstance;
   }, options);

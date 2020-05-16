@@ -32,6 +32,7 @@ module.exports = (sequelize, DataTypes) => {
     previous_value: DataTypes.TEXT,
     replacement_value: DataTypes.TEXT,
     updated_by: DataTypes.TEXT,
+    source: DataTypes.TEXT,
   }, {
     tableName: 'metadata',
     underscored: true,
