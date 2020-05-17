@@ -331,13 +331,23 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
-    const additionalLocationData = locationFieldsOnly ? [] : [
+    const additionalLocationData = locationFieldsOnly ? [
+      sequelize.models.EventRelatedInfo,
+      {
+        model: sequelize.models.Service,
+        include: [
+          sequelize.models.HolidaySchedule,
+        ],
+      },
+    ] : [
       sequelize.models.Organization,
+      sequelize.models.EventRelatedInfo,
       {
         model: sequelize.models.Service,
         include: [
           sequelize.models.Taxonomy,
           sequelize.models.RequiredDocument,
+          sequelize.models.HolidaySchedule,
         ],
       },
       sequelize.models.Phone,

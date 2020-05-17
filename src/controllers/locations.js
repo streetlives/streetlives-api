@@ -81,16 +81,39 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-
-      const locations = await models.Location.search({
+      const locations = (await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
         maxResults,
         filterParameters,
         locationFieldsOnly,
+      })).map(location => location.get({ plain: true }));
+
+      const formattedLocations = locations.map((location) => {
+
+        const hasCOVIDEventRelatedInfo = location.EventRelatedInfos &&
+          location.EventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === 'COVID19');
+        const locationServices = location.Services;
+        const locationServicesAllClosed = locationServices &&
+          locationServices.every(service => service.HolidaySchedules.every(holidaySchedule =>
+            holidaySchedule.closed));
+        const closed = hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+
+        if (locationFieldsOnly) {
+          const {EventRelatedInfos, Services, ...simplifiedLocation} = location;
+          return {
+            ...simplifiedLocation,
+            closed,
+          };
+        }
+
+        return {
+          ...location,
+          closed,
+        };
       });
-      res.send(locations);
+      res.send(formattedLocations);
     } catch (err) {
       next(err);
     }
