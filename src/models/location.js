@@ -291,6 +291,7 @@ module.exports = (sequelize, DataTypes) => {
     minResults,
     maxResults,
     filterParameters,
+    basicMapOnly,
   }) => {
     let locationIds;
     let distance;
@@ -330,11 +331,25 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
-    const basicLocationData = await Location.findAll({
+    const additionalLocationData = basicMapOnly ? [] : [
+      sequelize.models.Organization,
+      {
+        model: sequelize.models.Service,
+        include: [
+          sequelize.models.Taxonomy,
+          sequelize.models.RequiredDocument,
+        ],
+      },
+      sequelize.models.Phone,
+      sequelize.models.PhysicalAddress,
+    ];
+
+    const locationsWithAssociations = await Location.findAll({
       where: { id: { [sequelize.Op.in]: locationIds } },
+      include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
-    return basicLocationData;
+    return locationsWithAssociations;
   };
 
   return Location;
