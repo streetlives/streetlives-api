@@ -291,13 +291,14 @@ module.exports = (sequelize, DataTypes) => {
     minResults,
     maxResults,
     filterParameters,
+    locationFieldsOnly,
   }) => {
     let locationIds;
     let distance;
 
     if (position && radius) {
       distance = sequelize.fn(
-        'ST_Distance_Sphere',
+        'ST_DistanceSphere',
         sequelize.col('position'),
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
@@ -330,20 +331,22 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
+    const additionalLocationData = locationFieldsOnly ? [] : [
+      sequelize.models.Organization,
+      {
+        model: sequelize.models.Service,
+        include: [
+          sequelize.models.Taxonomy,
+          sequelize.models.RequiredDocument,
+        ],
+      },
+      sequelize.models.Phone,
+      sequelize.models.PhysicalAddress,
+    ];
+
     const locationsWithAssociations = await Location.findAll({
       where: { id: { [sequelize.Op.in]: locationIds } },
-      include: [
-        sequelize.models.Organization,
-        {
-          model: sequelize.models.Service,
-          include: [
-            sequelize.models.Taxonomy,
-            sequelize.models.RequiredDocument,
-          ],
-        },
-        sequelize.models.Phone,
-        sequelize.models.PhysicalAddress,
-      ],
+      include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
     return locationsWithAssociations;

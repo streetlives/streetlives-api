@@ -33,6 +33,7 @@ export default {
         gender,
         servesZipcode,
         taxonomySpecificAttributes,
+        locationFieldsOnly,
       } = req.query;
 
       let attributesObject;
@@ -87,6 +88,7 @@ export default {
         minResults,
         maxResults,
         filterParameters,
+        locationFieldsOnly,
       });
       res.send(locations);
     } catch (err) {
