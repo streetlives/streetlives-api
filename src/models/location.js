@@ -291,7 +291,7 @@ module.exports = (sequelize, DataTypes) => {
     minResults,
     maxResults,
     filterParameters,
-    basicMapOnly,
+    locationFieldsOnly,
   }) => {
     let locationIds;
     let distance;
@@ -331,7 +331,7 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
-    const additionalLocationData = basicMapOnly ? [] : [
+    const additionalLocationData = locationFieldsOnly ? [] : [
       sequelize.models.Organization,
       {
         model: sequelize.models.Service,
