@@ -77,5 +77,18 @@ module.exports = (sequelize, DataTypes) => {
     resource_id: { [sequelize.Op.in]: resourceIds },
   });
 
+  Metadata.getSourcesForResources = async (resourceIds) => {
+    const rows = await Metadata.findAll({
+      attributes: [
+        [sequelize.fn('DISTINCT', sequelize.col('source')), 'source'],
+      ],
+      where: {
+        resource_id: { [sequelize.Op.in]: resourceIds },
+        source: { [sequelize.Op.ne]: null },
+      },
+    });
+    return rows.map(({ source }) => source);
+  };
+
   return Metadata;
 };
