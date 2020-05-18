@@ -14,7 +14,7 @@ You can install and run the database locally (instructions [here](https://wiki.p
 
 See the [Configuration](#configuration) section for how to configure the database connection info.
 
-Since Streetlives relies heavily on geographical data, it requires enabling PostGIS on the database. When connected to the database (using e.g. [psql](https://www.postgresql.org/docs/current/static/app-psql.html)), run:
+Since Streetlives relies heavily on geographical data, it requires enabling PostGIS (version < 2.2.0) on the database. After [installing](https://postgis.net/install) the PostGIS software locally, connect to the correct database within PostgreSQL (Default: 'streetlives') using [psql](https://www.postgresql.org/docs/current/static/app-psql.html) (or another PostgreSQL management tool) and run:
 
 ```
 CREATE EXTENSION postgis;

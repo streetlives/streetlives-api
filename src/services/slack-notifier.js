@@ -29,6 +29,21 @@ const notifyComment = (baseText, {
   return axios.post(config.slackWebhookUrl, { text });
 };
 
+const notifyErrorReport = async ({
+  location,
+  content,
+}) => {
+  const { slackWebhookUrl } = config;
+
+  if (!slackWebhookUrl) {
+    return Promise.resolve();
+  }
+
+  const text = `New error report for *${location.Organization.name}*\n"_${content}_"\n`;
+
+  return axios.post(config.slackWebhookUrl, { text });
+};
+
 export default {
   notifyNewComment: async commentParams => notifyComment('New comment', commentParams),
 
@@ -36,4 +51,6 @@ export default {
     originalComment,
     ...commentParams
   }) => notifyComment(`New reply to comment "${originalComment.content}"`, commentParams),
+
+  notifyErrorReport,
 };

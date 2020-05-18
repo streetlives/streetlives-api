@@ -1,6 +1,8 @@
 import models from '../models';
 
 export const getMetadataForLocation = async (location, address) => {
+  const phoneIds = location.Phones.map(({ id }) => id);
+  const eventRelatedInfoIds = location.EventRelatedInfos.map(({ id }) => id);
   const [
     locationMetadata,
     organizationMetadata,
@@ -11,9 +13,17 @@ export const getMetadataForLocation = async (location, address) => {
     models.Metadata.getLastUpdateDatesForResourceFields(location.id),
     models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
     models.Metadata.getLastUpdateDatesForResourceFields(address.id),
-    models.Metadata.getLatestUpdateDateForResources(location.Phones.map(({ id }) => id)),
-    models.Metadata.getLatestUpdateDateForResources(location.EventRelatedInfos.map(({ id }) => id)),
+    models.Metadata.getLatestUpdateDateForResources(phoneIds),
+    models.Metadata.getLatestUpdateDateForResources(eventRelatedInfoIds),
   ]);
+
+  const sources = [...new Set(await models.Metadata.getSourcesForResources([
+    location.id,
+    location.organization_id,
+    address.id,
+    ...phoneIds,
+    ...eventRelatedInfoIds,
+  ]))];
 
   return {
     location: [
@@ -27,6 +37,7 @@ export const getMetadataForLocation = async (location, address) => {
     ],
     organization: organizationMetadata,
     address: addressMetadata,
+    sources,
   };
 };
 
@@ -109,9 +120,20 @@ export const getMetadataForService = async (service) => {
 
   const documentsMetadata = await getMetadataForServiceDocuments(service);
 
+  const sources = [...new Set(await models.Metadata.getSourcesForResources([
+    service.id,
+    ...service.RegularSchedules.map(({ id }) => id),
+    ...service.HolidaySchedules.map(({ id }) => id),
+    ...service.Languages.map(({ id }) => id),
+    ...service.EventRelatedInfos.map(({ id }) => id),
+    ...service.RequiredDocuments.map(({ id }) => id),
+    ...(service.DocumentsInfo ? [service.DocumentsInfo.id] : []),
+  ]))];
+
   return {
     service: serviceWithAdditionalMetadata,
     documents: documentsMetadata,
+    sources,
   };
 };
 
