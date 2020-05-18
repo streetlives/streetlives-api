@@ -11,6 +11,18 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
+const isLocationClosed = (occasion, eventRelatedInfos, services) => {
+  if (!occasion) {
+    return false;
+  }
+  const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
+  eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
+  const locationServicesAllClosed = !services ||
+  services.every(service => service.HolidaySchedules.every(holidaySchedule =>
+    holidaySchedule.closed));
+  return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+};
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -81,16 +93,32 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-
-      const locations = await models.Location.search({
+      const locations = (await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
         maxResults,
         filterParameters,
         locationFieldsOnly,
+      })).map(location => location.get({ plain: true }));
+
+      const formattedLocations = locations.map((location) => {
+        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+
+        if (locationFieldsOnly) {
+          return {
+            ...simplifiedLocation,
+            closed,
+          };
+        }
+
+        return {
+          ...location,
+          closed,
+        };
       });
-      res.send(locations);
+      res.send(formattedLocations);
     } catch (err) {
       next(err);
     }
