@@ -23,14 +23,19 @@ export default {
     try {
       await Joi.validate(req, organizationSchemas.create, { allowUnknown: true });
 
-      const { name, description, url } = req.body;
+      const {
+        name,
+        description,
+        url,
+        metadata,
+      } = req.body;
 
       const modelCreateFunction = models.Organization.create.bind(models.Organization);
       const createdOrganization = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
         url,
-      });
+      }, { metadata });
 
       res.status(201).send(createdOrganization);
     } catch (err) {
@@ -50,8 +55,14 @@ export default {
       }
 
       const editableFields = ['name', 'description', 'url'];
+      const { metadata, ...updateParams } = req.body;
+      await updateInstance(
+        req.user,
+        organization,
+        updateParams,
+        { fields: editableFields, metadata },
+      );
 
-      await updateInstance(req.user, organization, req.body, { fields: editableFields });
       res.sendStatus(204);
     } catch (err) {
       next(err);
