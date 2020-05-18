@@ -4,6 +4,7 @@ import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import comments from './controllers/comments';
+import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
 import {
@@ -42,6 +43,10 @@ export default (app) => {
   app.post('/comments/:commentId/reply', getUser, comments.reply);
   app.delete('/comments/:commentId', getUser, comments.delete);
   app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
+
+  app.get('/errorreports', getUser, errorReports.get);
+  app.post('/errorreports', errorReports.create);
+  app.delete('/errorreports/:errorReportId', getUser, errorReports.delete);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,
