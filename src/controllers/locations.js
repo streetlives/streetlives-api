@@ -11,6 +11,18 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
+const isLocationClosed = (occasion, eventRelatedInfos, services) => {
+  if (!occasion) {
+    return false;
+  }
+  const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
+  eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
+  const locationServicesAllClosed = !services ||
+  services.every(service => service.HolidaySchedules.every(holidaySchedule =>
+    holidaySchedule.closed));
+  return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+};
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -91,17 +103,10 @@ export default {
       })).map(location => location.get({ plain: true }));
 
       const formattedLocations = locations.map((location) => {
-
-        const hasCOVIDEventRelatedInfo = location.EventRelatedInfos &&
-          location.EventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === 'COVID19');
-        const locationServices = location.Services;
-        const locationServicesAllClosed = locationServices &&
-          locationServices.every(service => service.HolidaySchedules.every(holidaySchedule =>
-            holidaySchedule.closed));
-        const closed = hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
 
         if (locationFieldsOnly) {
-          const {EventRelatedInfos, Services, ...simplifiedLocation} = location;
           return {
             ...simplifiedLocation,
             closed,
