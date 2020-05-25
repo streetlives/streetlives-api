@@ -14,6 +14,13 @@ export const eligibilityParams = {
   gender: 'gender',
 };
 
+const serviceTaxonomySpecificAttributeNames = [
+  'hasHivNutrition',
+  'tgncClothing',
+  'clothingOccasion',
+  'wearerAge',
+];
+
 const updateHours = async (service, hours, t, user) => {
   await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
 
@@ -59,6 +66,98 @@ const updateLanguages = async (service, languageIds, t, user) => {
     service_id: service.id,
     language_id: languageId,
   }, { transaction: t })));
+};
+
+const updateServiceAreas = async (user, service, area, t) => {
+  if (area != null) {
+    const { postal_codes: postalCodes, description } = area;
+
+    await models.ServiceArea.destroy({ where: { service_id: service.id }, transaction: t });
+
+    createInstance(user, models.ServiceArea.create.bind(models.ServiceArea), {
+      service_id: service.id,
+      postal_codes: postalCodes,
+      description,
+    }, { transaction: t });
+  }
+};
+
+const updateMembership = async (
+  user, service, { eligible_values: eligibleValues, description }, t,
+) => {
+  const eligibilityParam = await models.EligibilityParameter.find({
+    where: { name: eligibilityParams.membership },
+  });
+
+  const eligibilityParamValue = await models.Eligibility.find({
+    where: {
+      service_id: service.id,
+      parameter_id: eligibilityParam.id,
+    },
+  });
+
+  if (eligibilityParamValue) {
+    await updateInstance(
+      user,
+      eligibilityParamValue,
+      {
+        eligible_values: eligibleValues,
+        description,
+      },
+    );
+  } else {
+    await createInstance(
+      user,
+      models
+        .Eligibility
+        .create
+        .bind(models.Eligibility),
+      {
+        service_id: service.id,
+        parameter_id: eligibilityParam.id,
+        eligible_values: eligibleValues,
+        description,
+      },
+      { transaction: t },
+    );
+  }
+};
+
+const updateServiceTaxonomySpecificAttributes = async (user, service, attributeName, value, t) => {
+  const specificAttribute = await models.TaxonomySpecificAttribute.find({
+    where: { name: attributeName },
+  });
+
+  const specificAttributeValue = await models.ServiceTaxonomySpecificAttribute.find({
+    where: {
+      service_id: service.id,
+      attribute_id: specificAttribute.id,
+    },
+  });
+
+  if (specificAttributeValue) {
+    await updateInstance(
+      user,
+      specificAttributeValue,
+      {
+        values: value,
+      },
+    );
+  } else {
+    await createInstance(
+      user,
+      models
+        .ServiceTaxonomySpecificAttribute
+        .create
+        .bind(models.ServiceTaxonomySpecificAttribute),
+      {
+        service_id: service.id,
+        attribute_id: specificAttribute.id,
+        values: value,
+      },
+      { transaction: t },
+    );
+  }
 };
 
 const updateDocuments = async (user, service, documents, t) => {
@@ -116,6 +215,8 @@ export const updateService = (service, update, user) => sequelize.transaction(as
     eventRelatedInfo,
     agesServed,
     whoDoesItServe,
+    area,
+    membership,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -142,6 +243,31 @@ export const updateService = (service, update, user) => sequelize.transaction(as
 
   if (documents) {
     updatePromises.push(updateDocuments(user, service, documents, t));
+  }
+
+  if (area) {
+    updatePromises.push(updateServiceAreas(user, service, area, t));
+  }
+
+  serviceTaxonomySpecificAttributeNames.forEach((attr) => {
+    if (attr in otherUpdateProps) {
+      updatePromises.push(updateServiceTaxonomySpecificAttributes(
+        user,
+        service,
+        attr,
+        otherUpdateProps[attr],
+        t,
+      ));
+    }
+  });
+
+  if (membership) {
+    updatePromises.push(updateMembership(
+      user,
+      service,
+      membership,
+      t,
+    ));
   }
 
   const editableFields = [

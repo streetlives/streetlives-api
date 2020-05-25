@@ -30,6 +30,7 @@ Object {
       "Phones": Object {},
       "RegularSchedules": Object {},
       "RequiredDocuments": Object {},
+      "ServiceAreas": Object {},
       "ServiceAtLocation": Object {
         "description": null,
       },
