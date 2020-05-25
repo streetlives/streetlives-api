@@ -32,6 +32,7 @@ module.exports = (sequelize, DataTypes) => {
     previous_value: DataTypes.TEXT,
     replacement_value: DataTypes.TEXT,
     updated_by: DataTypes.TEXT,
+    source: DataTypes.TEXT,
   }, {
     tableName: 'metadata',
     underscored: true,
@@ -75,6 +76,19 @@ module.exports = (sequelize, DataTypes) => {
   Metadata.getLatestUpdateDateForResources = resourceIds => Metadata.getLatestUpdateDateForQuery({
     resource_id: { [sequelize.Op.in]: resourceIds },
   });
+
+  Metadata.getSourcesForResources = async (resourceIds) => {
+    const rows = await Metadata.findAll({
+      attributes: [
+        [sequelize.fn('DISTINCT', sequelize.col('source')), 'source'],
+      ],
+      where: {
+        resource_id: { [sequelize.Op.in]: resourceIds },
+        source: { [sequelize.Op.ne]: null },
+      },
+    });
+    return rows.map(({ source }) => source);
+  };
 
   return Metadata;
 };

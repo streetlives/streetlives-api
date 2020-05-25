@@ -21,7 +21,7 @@ const serviceTaxonomySpecificAttributeNames = [
   'wearerAge',
 ];
 
-const updateHours = async (service, hours, t, user) => {
+const updateHours = async (service, hours, { t, user, metadata }) => {
   await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
 
   const modelCreateFunction = models.RegularSchedule.create.bind(models.RegularSchedule);
@@ -30,10 +30,10 @@ const updateHours = async (service, hours, t, user) => {
     weekday: getDayOfWeekInteger(hoursPart.weekday),
     opens_at: hoursPart.opensAt,
     closes_at: hoursPart.closesAt,
-  }, { transaction: t })));
+  }, { transaction: t, metadata })));
 };
 
-const updateIrregularHours = async (service, hours, t, user) => {
+const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
   const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
   await models.HolidaySchedule.destroy({
     where: {
@@ -53,19 +53,19 @@ const updateIrregularHours = async (service, hours, t, user) => {
     end_date: hoursPart.endDate,
     occasion: hoursPart.occasion,
     weekday: hoursPart.weekday != null ? getDayOfWeekInteger(hoursPart.weekday) : undefined,
-  }, { transaction: t })));
+  }, { transaction: t, metadata })));
 };
 
 // TODO: This is far less efficient than "service.setLanguages(languageIds, { transaction: t })".
 // Need to track metadata without having to explicitly insert (/delete) every instance.
-const updateLanguages = async (service, languageIds, t, user) => {
+const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
   await models.ServiceLanguages.destroy({ where: { service_id: service.id }, transaction: t });
 
   const modelCreateFunction = models.ServiceLanguages.create.bind(models.ServiceLanguages);
   await Promise.all(languageIds.map(languageId => createInstance(user, modelCreateFunction, {
     service_id: service.id,
     language_id: languageId,
-  }, { transaction: t })));
+  }, { transaction: t, metadata })));
 };
 
 const updateServiceAreas = async (user, service, area, t) => {
@@ -160,7 +160,7 @@ const updateServiceTaxonomySpecificAttributes = async (user, service, attributeN
   }
 };
 
-const updateDocuments = async (user, service, documents, t) => {
+const updateDocuments = async (service, documents, { t, user, metadata }) => {
   const {
     proofs,
     recertificationTime,
@@ -174,7 +174,7 @@ const updateDocuments = async (user, service, documents, t) => {
       createInstance(user, models.RequiredDocument.create.bind(models.RequiredDocument), {
         service_id: service.id,
         document: proof,
-      }, { transaction: t })));
+      }, { transaction: t, metadata })));
   }
 
   const documentsInfoUpdates = {};
@@ -184,10 +184,15 @@ const updateDocuments = async (user, service, documents, t) => {
   if (gracePeriod != null) { documentsInfoUpdates.grace_period = gracePeriod; }
   if (additionalInfo != null) { documentsInfoUpdates.additional_info = additionalInfo; }
 
-  await updateInstance(user, service.DocumentsInfo, documentsInfoUpdates, { transaction: t });
+  await updateInstance(
+    user,
+    service.DocumentsInfo,
+    documentsInfoUpdates,
+    { transaction: t, metadata },
+  );
 };
 
-const updateEventRelatedInfo = async (service, eventRelatedInfo, t, user) => {
+const updateEventRelatedInfo = async (service, eventRelatedInfo, { t, user, metadata }) => {
   await models.EventRelatedInfo.destroy({
     where: {
       service_id: service.id,
@@ -196,15 +201,22 @@ const updateEventRelatedInfo = async (service, eventRelatedInfo, t, user) => {
     transaction: t,
   });
 
-  const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
-  await createInstance(user, modelCreateFunction, {
-    service_id: service.id,
-    event: eventRelatedInfo.event,
-    information: eventRelatedInfo.information,
-  }, { transaction: t });
+  if (eventRelatedInfo.information) {
+    const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
+    await createInstance(user, modelCreateFunction, {
+      service_id: service.id,
+      event: eventRelatedInfo.event,
+      information: eventRelatedInfo.information,
+    }, { transaction: t, metadata });
+  }
 };
 
-export const updateService = (service, update, user) => sequelize.transaction(async (t) => {
+export const updateService = (
+  service,
+  update,
+  user,
+  metadata,
+) => sequelize.transaction(async (t) => {
   const {
     taxonomy,
     hours,
@@ -226,23 +238,23 @@ export const updateService = (service, update, user) => sequelize.transaction(as
   }
 
   if (hours) {
-    updatePromises.push(updateHours(service, hours, t, user));
+    updatePromises.push(updateHours(service, hours, { t, user, metadata }));
   }
 
   if (irregularHours) {
-    updatePromises.push(updateIrregularHours(service, irregularHours, t, user));
+    updatePromises.push(updateIrregularHours(service, irregularHours, { t, user, metadata }));
   }
 
   if (eventRelatedInfo) {
-    updatePromises.push(updateEventRelatedInfo(service, eventRelatedInfo, t, user));
+    updatePromises.push(updateEventRelatedInfo(service, eventRelatedInfo, { t, user, metadata }));
   }
 
   if (languageIds) {
-    updatePromises.push(updateLanguages(service, languageIds, t, user));
+    updatePromises.push(updateLanguages(service, languageIds, { t, user, metadata }));
   }
 
   if (documents) {
-    updatePromises.push(updateDocuments(user, service, documents, t));
+    updatePromises.push(updateDocuments(service, documents, { t, user, metadata }));
   }
 
   if (area) {
@@ -287,7 +299,7 @@ export const updateService = (service, update, user) => sequelize.transaction(as
       ages_served: agesServed,
       who_does_it_serve: whoDoesItServe,
     },
-    { fields: editableFields, transaction: t },
+    { fields: editableFields, transaction: t, metadata },
   ));
 
   await Promise.all(updatePromises);
@@ -297,6 +309,7 @@ export const createService = async (
   location,
   serviceData,
   user,
+  metadata,
 ) => sequelize.transaction(async (t) => {
   const {
     name,
@@ -313,18 +326,18 @@ export const createService = async (
     url,
     additional_info: additionalInfo,
     organization_id: location.organization_id,
-  }, { transaction: t });
+  }, { transaction: t, metadata });
 
   await createInstance(user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
     service_id: createdService.id,
     taxonomy_id: taxonomy.id,
-  }, { transaction: t });
+  }, { transaction: t, metadata });
 
   await createInstance(
     user,
     models.DocumentsInfo.create.bind(models.DocumentsInfo),
     { service_id: createdService.id },
-    { transaction: t },
+    { transaction: t, metadata },
   );
 
   return createdService;

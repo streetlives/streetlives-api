@@ -41,6 +41,7 @@ module.exports = (sequelize, DataTypes) => {
     Location.hasMany(models.AccessibilityForDisabilities);
     Location.hasMany(models.EventRelatedInfo);
     Location.hasMany(models.Comment);
+    Location.hasMany(models.ErrorReport);
 
     // Can't just set defaultScope on the initial model definition:
     // https://github.com/sequelize/sequelize/issues/6245.
@@ -298,13 +299,14 @@ module.exports = (sequelize, DataTypes) => {
     minResults,
     maxResults,
     filterParameters,
+    locationFieldsOnly,
   }) => {
     let locationIds;
     let distance;
 
     if (position && radius) {
       distance = sequelize.fn(
-        'ST_Distance_Sphere',
+        'ST_DistanceSphere',
         sequelize.col('position'),
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
@@ -337,20 +339,32 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
 
+    const additionalLocationData = locationFieldsOnly ? [
+      sequelize.models.EventRelatedInfo,
+      {
+        model: sequelize.models.Service,
+        include: [
+          sequelize.models.HolidaySchedule,
+        ],
+      },
+    ] : [
+      sequelize.models.Organization,
+      sequelize.models.EventRelatedInfo,
+      {
+        model: sequelize.models.Service,
+        include: [
+          sequelize.models.Taxonomy,
+          sequelize.models.RequiredDocument,
+          sequelize.models.HolidaySchedule,
+        ],
+      },
+      sequelize.models.Phone,
+      sequelize.models.PhysicalAddress,
+    ];
+
     const locationsWithAssociations = await Location.findAll({
       where: { id: { [sequelize.Op.in]: locationIds } },
-      include: [
-        sequelize.models.Organization,
-        {
-          model: sequelize.models.Service,
-          include: [
-            sequelize.models.Taxonomy,
-            sequelize.models.RequiredDocument,
-          ],
-        },
-        sequelize.models.Phone,
-        sequelize.models.PhysicalAddress,
-      ],
+      include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
     return locationsWithAssociations;

@@ -1,5 +1,10 @@
 import Joi from 'joi';
 
+const updateMetadataSchema = Joi.object().keys({
+  source: Joi.string(),
+  lastUpdated: Joi.date().iso(),
+});
+
 export default {
   find: {
     query: Joi.object().keys({
@@ -52,6 +57,7 @@ export default {
         postalCode: Joi.string().required(),
         country: Joi.string().required(),
       }).required(),
+      metadata: updateMetadataSchema,
     }).required(),
   },
 
@@ -78,6 +84,7 @@ export default {
         event: Joi.string().required(),
         information: Joi.string().required().allow(null),
       }),
+      metadata: updateMetadataSchema,
     }).required(),
   },
 
@@ -91,6 +98,7 @@ export default {
       type: Joi.string(),
       language: Joi.string(),
       description: Joi.string(),
+      metadata: updateMetadataSchema,
     }).required(),
   },
 
@@ -104,6 +112,7 @@ export default {
       type: Joi.string(),
       language: Joi.string(),
       description: Joi.string(),
+      metadata: updateMetadataSchema,
     }),
   },
 

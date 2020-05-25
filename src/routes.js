@@ -4,7 +4,9 @@ import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import comments from './controllers/comments';
+import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
+import dataEntryAuth from './middleware/data-entry-auth';
 import {
   NotFoundError,
   AuthError,
@@ -14,8 +16,8 @@ import {
 
 export default (app) => {
   app.get('/organizations', organizations.find);
-  app.post('/organizations', getUser, organizations.create);
-  app.patch('/organizations/:organizationId', getUser, organizations.update);
+  app.post('/organizations', getUser, dataEntryAuth, organizations.create);
+  app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
@@ -23,15 +25,15 @@ export default (app) => {
   app.post('/locations/suggestions', locations.suggestNew);
 
   app.get('/locations/:locationId', locations.getInfo);
-  app.post('/locations', getUser, locations.create);
-  app.patch('/locations/:locationId', getUser, locations.update);
+  app.post('/locations', getUser, dataEntryAuth, locations.create);
+  app.patch('/locations/:locationId', getUser, dataEntryAuth, locations.update);
 
-  app.post('/locations/:locationId/phones', getUser, locations.addPhone);
-  app.patch('/phones/:phoneId', getUser, locations.updatePhone);
+  app.post('/locations/:locationId/phones', getUser, dataEntryAuth, locations.addPhone);
+  app.patch('/phones/:phoneId', getUser, dataEntryAuth, locations.updatePhone);
   app.delete('/phones/:phoneId', getUser, locations.deletePhone);
 
-  app.post('/services', getUser, services.create);
-  app.patch('/services/:serviceId', getUser, services.update);
+  app.post('/services', getUser, dataEntryAuth, services.create);
+  app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
@@ -41,6 +43,10 @@ export default (app) => {
   app.post('/comments/:commentId/reply', getUser, comments.reply);
   app.delete('/comments/:commentId', getUser, comments.delete);
   app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
+
+  app.get('/errorreports', getUser, errorReports.get);
+  app.post('/errorreports', errorReports.create);
+  app.delete('/errorreports/:errorReportId', getUser, errorReports.delete);
 
   app.use((req, res) => res.status(404).send({
     url: req.originalUrl,

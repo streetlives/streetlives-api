@@ -9,7 +9,12 @@ export default {
     try {
       await Joi.validate(req, serviceSchemas.create, { allowUnknown: true });
 
-      const { taxonomyId, locationId, ...otherProps } = req.body;
+      const {
+        metadata,
+        taxonomyId,
+        locationId,
+        ...otherProps
+      } = req.body;
 
       const location = await models.Location.findById(locationId);
       if (!location) {
@@ -21,7 +26,12 @@ export default {
         throw new NotFoundError('Taxonomy not found');
       }
 
-      const createdService = await createService(location, { ...otherProps, taxonomy }, req.user);
+      const createdService = await createService(
+        location,
+        { ...otherProps, taxonomy },
+        req.user,
+        metadata,
+      );
       res.status(201).send(createdService);
     } catch (err) {
       next(err);
@@ -33,7 +43,7 @@ export default {
       await Joi.validate(req, serviceSchemas.update, { allowUnknown: true });
 
       const { serviceId } = req.params;
-      const { taxonomyId, ...otherProps } = req.body;
+      const { metadata, taxonomyId, ...otherProps } = req.body;
 
       const service = await models.Service.findById(serviceId, {
         include: [models.DocumentsInfo],
@@ -53,7 +63,7 @@ export default {
         }
       }
 
-      await updateService(service, { ...otherProps, taxonomy }, req.user);
+      await updateService(service, { ...otherProps, taxonomy }, req.user, metadata);
       res.sendStatus(204);
     } catch (err) {
       next(err);
