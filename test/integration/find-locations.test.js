@@ -1,4 +1,5 @@
 import request from 'supertest';
+import qs from 'qs';
 import app from '../../src/app';
 import models from '../../src/models';
 import geometry from '../../src/utils/geometry';
@@ -21,6 +22,7 @@ describe('find locations', () => {
     await Promise.all([
       models.ServiceAtLocation.destroy({ where: {} }),
       models.ServiceTaxonomy.destroy({ where: {} }),
+      models.PhysicalAddress.destroy({ where: {} }),
     ]);
     await Promise.all([
       models.Taxonomy.destroy({ where: {} }),
@@ -49,15 +51,29 @@ describe('find locations', () => {
       }],
     };
     const associationParams = {
-      include: [{
-        model: models.Service,
-        include: [{ model: models.Taxonomy }],
-      }],
+      include: [
+        {
+          model: models.Service,
+          include: [{ model: models.Taxonomy }],
+        },
+        models.PhysicalAddress,
+      ],
     };
 
     [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all([
       models.Location.create(
-        { ...baseLocationData, name: 'Nearby center', position: pointNearOrigin },
+        {
+          ...baseLocationData,
+          name: 'Nearby center',
+          position: pointNearOrigin,
+          PhysicalAddresses: [{
+            address_1: '123 W 50th St.',
+            city: 'New York',
+            state_province: 'NY',
+            postal_code: '10001',
+            country: 'US',
+          }],
+        },
         associationParams,
       ),
       models.Location.create(
@@ -66,6 +82,13 @@ describe('find locations', () => {
           name: 'Nearby center (volunteers)',
           position: pointNearOrigin,
           hidden_from_search: true,
+          PhysicalAddresses: [{
+            address_1: '222 E 75th St.',
+            city: 'New York',
+            state_province: 'NY',
+            postal_code: '10002',
+            country: 'US',
+          }],
         },
         associationParams,
       ),
@@ -150,11 +173,6 @@ describe('find locations', () => {
       })
       .expect(200)
       .then(expectNoMatchingLocations));
-
-  it('should return a 400 status code if not passed a position', () =>
-    request(app)
-      .get('/locations')
-      .expect(400));
 
   describe('when taxonomy ID is specified', () => {
     it('should return locations that match the taxonomy ID', () => {
@@ -943,5 +961,31 @@ describe('find locations', () => {
           servesZipcode: 'nozip',
         })
         .expect(400));
+  });
+
+  describe('when "zipcodes" are specified', () => {
+    it('should filter out locations that aren\'t in any of the given zipcodes', () =>
+      request(app)
+        .get('/locations')
+        .query(qs.stringify({ zipcodes: ['20001'] }))
+        .then(expectNoMatchingLocations));
+
+    it('should return locations that are in one of the given zipcodes', () =>
+      request(app)
+        .get('/locations')
+        .query(qs.stringify({ zipcodes: ['10001', '20001'] }))
+        .then(expectMatchPrimaryLocation));
+
+    it('should return a 400 status code when passed an invalid zipcode', () =>
+      request(app)
+        .get('/locations')
+        .query(qs.stringify({ zipcodes: ['nozip'] }))
+        .expect(400));
+
+    it('should return locations without filtering when passed an empty array', () =>
+      request(app)
+        .get('/locations')
+        .query(qs.stringify({ zipcodes: [] }))
+        .then(res => expect(res.body.length).toBeGreaterThan(0)));
   });
 });
