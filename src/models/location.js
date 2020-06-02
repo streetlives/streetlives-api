@@ -64,6 +64,10 @@ module.exports = (sequelize, DataTypes) => {
     '$Organization.name$': { [sequelize.Op.iLike]: `%${organizationName}%` },
   });
 
+  const getZipcodesCondition = zipcodes => ({
+    '$PhysicalAddresses.postal_code$': { [sequelize.Op.in]: zipcodes },
+  });
+
   const getTaxonomyCondition = taxonomyIds => ({
     '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
   });
@@ -186,10 +190,11 @@ module.exports = (sequelize, DataTypes) => {
     const {
       searchString,
       organizationName,
+      zipcodes,
       taxonomyIds,
       openAt,
       occasion,
-      zipcode,
+      servesZipcode,
       eligibility,
       documents,
       taxonomySpecificAttributes,
@@ -206,14 +211,17 @@ module.exports = (sequelize, DataTypes) => {
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
+    if (zipcodes) {
+      whereConditions.push(getZipcodesCondition(zipcodes));
+    }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
     }
     if (openAt) {
       whereConditions.push(getOpeningHoursCondition(openAt, occasion));
     }
-    if (zipcode) {
-      whereConditions.push(getServiceAreaCondition(zipcode));
+    if (servesZipcode) {
+      whereConditions.push(getServiceAreaCondition(servesZipcode));
     }
     if (occasion) {
       whereConditions.push(getOccasionCondition(occasion));
@@ -250,6 +258,7 @@ module.exports = (sequelize, DataTypes) => {
       subQuery: false,
       include: [
         sequelize.models.Organization,
+        ...(zipcodes ? [sequelize.models.PhysicalAddress] : []),
         {
           model: sequelize.models.Service,
           required: isEligibilitySpecified,
@@ -258,7 +267,7 @@ module.exports = (sequelize, DataTypes) => {
             ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
             ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
             ...(occasion ? [sequelize.models.HolidaySchedule] : []),
-            ...(zipcode ? [sequelize.models.ServiceArea] : []),
+            ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
             ...(isEligibilitySpecified ? [{
               model: sequelize.models.Eligibility,
               include: {
