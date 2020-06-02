@@ -68,18 +68,15 @@ const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
   }, { transaction: t, metadata })));
 };
 
-const updateServiceAreas = async (user, service, area, t) => {
-  if (area != null) {
-    const { postal_codes: postalCodes, description } = area;
+const updateServiceAreas = async (service, area, { t, user, metadata }) => {
+  const { postal_codes: postalCodes } = area;
 
-    await models.ServiceArea.destroy({ where: { service_id: service.id }, transaction: t });
+  await models.ServiceArea.destroy({ where: { service_id: service.id }, transaction: t });
 
-    createInstance(user, models.ServiceArea.create.bind(models.ServiceArea), {
-      service_id: service.id,
-      postal_codes: postalCodes,
-      description,
-    }, { transaction: t });
-  }
+  await createInstance(user, models.ServiceArea.create.bind(models.ServiceArea), {
+    service_id: service.id,
+    postal_codes: postalCodes,
+  }, { transaction: t, metadata });
 };
 
 const updateMembership = async (
@@ -258,7 +255,7 @@ export const updateService = (
   }
 
   if (area) {
-    updatePromises.push(updateServiceAreas(user, service, area, t));
+    updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
   }
 
   serviceTaxonomySpecificAttributeNames.forEach((attr) => {
