@@ -36,6 +36,7 @@ export default {
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
         searchString,
         organizationName,
+        zipcodes,
         taxonomyId,
         openAt,
         occasion,
@@ -77,8 +78,8 @@ export default {
         documents,
         eligibility,
         occasion,
+        servesZipcode,
         openAt: openAt && new Date(openAt),
-        zipcode: servesZipcode,
         taxonomySpecificAttributes: attributesObject,
       };
 
@@ -87,6 +88,9 @@ export default {
       }
       if (organizationName) {
         filterParameters.organizationName = organizationName.trim();
+      }
+      if (zipcodes && zipcodes.length) {
+        filterParameters.zipcodes = zipcodes;
       }
 
       if (taxonomyId) {
