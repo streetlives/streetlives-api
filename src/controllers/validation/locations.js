@@ -20,6 +20,7 @@ export default {
         .max(1000),
       searchString: Joi.string().allow(''),
       organizationName: Joi.string().min(3),
+      zipcodes: Joi.array().items(Joi.string().length(5).regex(/\d+/)),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),
       occasion: Joi.string(),
@@ -30,7 +31,6 @@ export default {
       servesZipcode: Joi.string().length(5).regex(/\d+/),
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
     })
-      .or('radius', 'organizationName')
       .and('radius', 'latitude', 'longitude')
       .required(),
   },
