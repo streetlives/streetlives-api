@@ -31,11 +31,19 @@ const createMetadataForFields = async ({
     const previousValue = previousValues && stringifyFieldValue(previousValues[fieldName]);
     const replacementValue = stringifyFieldValue(newInstance[fieldName]);
 
+    let attributeName;
+
+    if (newInstance instanceof models.ServiceTaxonomySpecificAttribute) {
+      const attribute = await newInstance.getAttribute();
+
+      attributeName = attribute.name;
+    }
+
     await newInstance.createMetadatum({
       resource_id: newInstance.id,
       last_action_date: customMetadata.lastUpdated || new Date(),
       last_action_type: actionType,
-      field_name: fieldName,
+      field_name: attributeName || fieldName,
       previous_value: previousValue,
       replacement_value: replacementValue,
       updated_by: user,

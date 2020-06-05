@@ -120,7 +120,9 @@ const updateMembership = async (
   }
 };
 
-const updateServiceTaxonomySpecificAttributes = async (user, service, attributeName, value, t) => {
+const updateServiceTaxonomySpecificAttributes = async (
+  service, attributeName, value, { t, user, metadata },
+) => {
   const specificAttribute = await models.TaxonomySpecificAttribute.find({
     where: { name: attributeName },
   });
@@ -261,11 +263,10 @@ export const updateService = (
   serviceTaxonomySpecificAttributeNames.forEach((attr) => {
     if (attr in otherUpdateProps) {
       updatePromises.push(updateServiceTaxonomySpecificAttributes(
-        user,
         service,
         attr,
         otherUpdateProps[attr],
-        t,
+        { t, user, metadata },
       ));
     }
   });
