@@ -79,11 +79,11 @@ const updateServiceAreas = async (service, area, { t, user, metadata }) => {
   }, { transaction: t, metadata });
 };
 
-const updateMembership = async (
-  user, service, { eligible_values: eligibleValues, description }, t,
+const updateEligibilityParam = async (
+  service, paramName, { eligible_values: eligibleValues, description }, { t, user, metadata },
 ) => {
   const eligibilityParam = await models.EligibilityParameter.find({
-    where: { name: eligibilityParams.membership },
+    where: { name: paramName },
   });
 
   const eligibilityParamValue = await models.Eligibility.find({
@@ -227,7 +227,6 @@ export const updateService = (
     agesServed,
     whoDoesItServe,
     area,
-    membership,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -271,14 +270,16 @@ export const updateService = (
     }
   });
 
-  if (membership) {
-    updatePromises.push(updateMembership(
-      user,
-      service,
-      membership,
-      t,
-    ));
-  }
+  Object.keys(eligibilityParams).forEach((attr) => {
+    if (attr in otherUpdateProps) {
+      updatePromises.push(updateEligibilityParam(
+        service,
+        attr,
+        otherUpdateProps[attr],
+        { t, user, metadata },
+      ));
+    }
+  });
 
   const editableFields = [
     'name',
