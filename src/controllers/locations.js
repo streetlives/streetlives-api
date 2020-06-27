@@ -155,6 +155,7 @@ export default {
                 models.DocumentsInfo,
                 models.Phone,
                 models.EventRelatedInfo,
+                models.ServiceArea,
               ],
             },
             {
