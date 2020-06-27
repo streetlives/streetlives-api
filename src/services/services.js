@@ -14,6 +14,13 @@ export const eligibilityParams = {
   gender: 'gender',
 };
 
+const serviceTaxonomySpecificAttributeNames = [
+  'hasHivNutrition',
+  'tgncClothing',
+  'clothingOccasion',
+  'wearerAge',
+];
+
 const updateHours = async (service, hours, { t, user, metadata }) => {
   await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
 
@@ -59,6 +66,97 @@ const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
     service_id: service.id,
     language_id: languageId,
   }, { transaction: t, metadata })));
+};
+
+const updateServiceAreas = async (service, area, { t, user, metadata }) => {
+  const { postal_codes: postalCodes } = area;
+
+  await models.ServiceArea.destroy({ where: { service_id: service.id }, transaction: t });
+
+  await createInstance(user, models.ServiceArea.create.bind(models.ServiceArea), {
+    service_id: service.id,
+    postal_codes: postalCodes,
+  }, { transaction: t, metadata });
+};
+
+const updateEligibilityParam = async (
+  service, paramName, { eligible_values: eligibleValues, description }, { t, user, metadata },
+) => {
+  const eligibilityParam = await models.EligibilityParameter.find({
+    where: { name: paramName },
+  });
+
+  const eligibilityParamValue = await models.Eligibility.find({
+    where: {
+      service_id: service.id,
+      parameter_id: eligibilityParam.id,
+    },
+  });
+
+  if (eligibilityParamValue) {
+    await updateInstance(
+      user,
+      eligibilityParamValue,
+      {
+        eligible_values: eligibleValues,
+        description,
+      },
+    );
+  } else {
+    await createInstance(
+      user,
+      models
+        .Eligibility
+        .create
+        .bind(models.Eligibility),
+      {
+        service_id: service.id,
+        parameter_id: eligibilityParam.id,
+        eligible_values: eligibleValues,
+        description,
+      },
+      { transaction: t },
+    );
+  }
+};
+
+const updateServiceTaxonomySpecificAttributes = async (
+  service, attributeName, value, { t, user, metadata },
+) => {
+  const specificAttribute = await models.TaxonomySpecificAttribute.find({
+    where: { name: attributeName },
+  });
+
+  const specificAttributeValue = await models.ServiceTaxonomySpecificAttribute.find({
+    where: {
+      service_id: service.id,
+      attribute_id: specificAttribute.id,
+    },
+  });
+
+  if (specificAttributeValue) {
+    await updateInstance(
+      user,
+      specificAttributeValue,
+      {
+        values: value,
+      },
+    );
+  } else {
+    await createInstance(
+      user,
+      models
+        .ServiceTaxonomySpecificAttribute
+        .create
+        .bind(models.ServiceTaxonomySpecificAttribute),
+      {
+        service_id: service.id,
+        attribute_id: specificAttribute.id,
+        values: value,
+      },
+      { transaction: t },
+    );
+  }
 };
 
 const updateDocuments = async (service, documents, { t, user, metadata }) => {
@@ -128,6 +226,7 @@ export const updateService = (
     eventRelatedInfo,
     agesServed,
     whoDoesItServe,
+    area,
     ...otherUpdateProps
   } = update;
   const updatePromises = [];
@@ -155,6 +254,32 @@ export const updateService = (
   if (documents) {
     updatePromises.push(updateDocuments(service, documents, { t, user, metadata }));
   }
+
+  if (area) {
+    updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
+  }
+
+  serviceTaxonomySpecificAttributeNames.forEach((attr) => {
+    if (attr in otherUpdateProps) {
+      updatePromises.push(updateServiceTaxonomySpecificAttributes(
+        service,
+        attr,
+        otherUpdateProps[attr],
+        { t, user, metadata },
+      ));
+    }
+  });
+
+  Object.keys(eligibilityParams).forEach((attr) => {
+    if (attr in otherUpdateProps) {
+      updatePromises.push(updateEligibilityParam(
+        service,
+        attr,
+        otherUpdateProps[attr],
+        { t, user, metadata },
+      ));
+    }
+  });
 
   const editableFields = [
     'name',

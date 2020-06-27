@@ -98,14 +98,21 @@ module.exports = (sequelize, DataTypes) => {
     };
   };
 
-  const getServiceAreaCondition = zipcode => ({
-    '$Services.ServiceAreas.postal_codes$': {
-      [sequelize.Op.or]: {
-        [sequelize.Op.eq]: null,
-        [sequelize.Op.contains]: [zipcode],
+  const getServiceAreaCondition = zipcode => sequelize.or(
+    sequelize.where(
+      sequelize.col('"Services->ServiceAreas".id'),
+      'is',
+      null,
+    ),
+    {
+      '$Services.ServiceAreas.postal_codes$': {
+        [sequelize.Op.or]: {
+          [sequelize.Op.contains]: [zipcode],
+          [sequelize.Op.eq]: '{}',
+        },
       },
     },
-  });
+  );
 
   const getOccasionCondition = occasion => ({
     '$Services.HolidaySchedules.occasion$': occasion,

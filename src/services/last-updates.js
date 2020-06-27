@@ -72,6 +72,7 @@ export const getMetadataForService = async (service) => {
     irregularHoursLatestUpdate,
     languagesLatestUpdate,
     eventRelatedInfoLatestUpdate,
+    taxonomySpecificAttributesUpdates,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(service.id),
     models.Metadata.getLatestUpdateDateForQuery({
@@ -90,6 +91,9 @@ export const getMetadataForService = async (service) => {
       replacement_value: service.id,
     }),
     models.Metadata.getLatestUpdateDateForResources(service.EventRelatedInfos.map(info => info.id)),
+    models.Metadata
+      .getLastUpdateDatesForResourceFields(service
+        .ServiceTaxonomySpecificAttributes.map(a => a.id)),
   ]);
 
   const serviceWithAdditionalMetadata = [...serviceMetadata];
@@ -119,6 +123,13 @@ export const getMetadataForService = async (service) => {
   }
 
   const documentsMetadata = await getMetadataForServiceDocuments(service);
+
+  taxonomySpecificAttributesUpdates.forEach((m) => {
+    serviceWithAdditionalMetadata.push({
+      field_name: m.field_name,
+      last_action_date: m.last_action_date,
+    });
+  });
 
   const sources = [...new Set(await models.Metadata.getSourcesForResources([
     service.id,
