@@ -1,6 +1,6 @@
-# Simplified macOS Instructions
+# Easy macOS Instructions
 
-How to get Streetlives API working on mac:
+How to get Streetlives API working on a mac:
 
 1. Clone the repo in your desired parent directory:
 ```$ git clone git@github.com:streetlives/streetlives-api.git```
