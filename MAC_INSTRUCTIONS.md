@@ -18,4 +18,6 @@ $ npm install
 8. Run this command to upload this dump into your local database server:
 ```$ sudo -u postgres psql < streetlives_backup.dump https://stackoverflow.com/questions/6842393/import-sql-dump-into-postgresql-database```
 if this command doesn't work, you may need to replace `postgres` with your personal username (by default, this matches your mac username. In my case, `adamnguyen`)
-9. Run ```env DATABASE_HOST=localhost DATABASE_USER=postgres DATABASE_PASSWORD=mypassword npm run dev``` inside your `streetlives-api` directory to boot your server.
+9. Connect to your server using `$ psql`, `\connect streetlives` and run the command `CREATE EXTENSION postgis;`
+10. As of now, you will need to manually create a `test` database for tests to successfully run, so while in psql run the commands `CREATE DATABASE test;`, `\connect test`, and `CREATE EXTENSION postgit;`
+11. Run ```env DATABASE_HOST=localhost DATABASE_USER=postgres DATABASE_PASSWORD=mypassword npm run dev``` inside your `streetlives-api` directory to boot your server
