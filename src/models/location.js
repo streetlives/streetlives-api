@@ -53,6 +53,7 @@ module.exports = (sequelize, DataTypes) => {
   const getSearchStringCondition = (searchString) => {
     const fuzzySearchString = `%${searchString}%`;
     return sequelize.or(
+      { name: { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Services.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
