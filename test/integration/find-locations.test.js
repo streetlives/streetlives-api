@@ -258,10 +258,10 @@ describe('find locations', () => {
         .expect(200)
         .then(expectNoMatchingLocations));
 
-    it('should not match locations that have the given string in their name', () =>
+    it('should match locations that have the given string in their name', () =>
       makeRequestWithSearchString('center')
         .expect(200)
-        .then(expectNoMatchingLocations));
+        .then(expectMatchNearbyLocations));
   });
 
   describe('when an organization name is specified', () => {
