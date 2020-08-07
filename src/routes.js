@@ -77,6 +77,8 @@ export default (app) => {
       return res.status(403).send({ error: err.message });
     }
 
+    // eslint-disable-next-line no-console
+    console.error('Server error:', err.message);
     return res.status(500).send({ error: err.stack });
   });
 };
