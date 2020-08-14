@@ -258,10 +258,10 @@ describe('find locations', () => {
         .expect(200)
         .then(expectNoMatchingLocations));
 
-    it('should not match locations that have the given string in their name', () =>
+    it('should match locations that have the given string in their name', () =>
       makeRequestWithSearchString('center')
         .expect(200)
-        .then(expectNoMatchingLocations));
+        .then(expectMatchNearbyLocations));
   });
 
   describe('when an organization name is specified', () => {
@@ -912,6 +912,13 @@ describe('find locations', () => {
       }),
     ]);
 
+    const setupAllServiceArea = () => Promise.all([
+      models.ServiceArea.create({
+        postal_codes: [],
+        service_id: primaryLocation.Services[0].id,
+      }),
+    ]);
+
     it('should filter out locations that don\'t serve the given zipcode', () =>
       setupBaseServiceArea()
         .then(() => request(app)
@@ -948,6 +955,19 @@ describe('find locations', () => {
           taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
           servesZipcode: '10004',
         })
+        .then(expectMatchPrimaryLocation));
+
+    it('should return locations with services that serves all areas', () =>
+      setupAllServiceArea()
+        .then(() => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            taxonomyId: primaryLocation.Services[0].Taxonomies[0].id,
+            servesZipcode: '10004',
+          }))
         .then(expectMatchPrimaryLocation));
 
     it('should return a 400 status code when passed an invalid zipcode', () =>
