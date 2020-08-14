@@ -53,6 +53,7 @@ module.exports = (sequelize, DataTypes) => {
   const getSearchStringCondition = (searchString) => {
     const fuzzySearchString = `%${searchString}%`;
     return sequelize.or(
+      { name: { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
       { '$Services.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
@@ -98,14 +99,21 @@ module.exports = (sequelize, DataTypes) => {
     };
   };
 
-  const getServiceAreaCondition = zipcode => ({
-    '$Services.ServiceAreas.postal_codes$': {
-      [sequelize.Op.or]: {
-        [sequelize.Op.eq]: null,
-        [sequelize.Op.contains]: [zipcode],
+  const getServiceAreaCondition = zipcode => sequelize.or(
+    sequelize.where(
+      sequelize.col('"Services->ServiceAreas".id'),
+      'is',
+      null,
+    ),
+    {
+      '$Services.ServiceAreas.postal_codes$': {
+        [sequelize.Op.or]: {
+          [sequelize.Op.contains]: [zipcode],
+          [sequelize.Op.eq]: '{}',
+        },
       },
     },
-  });
+  );
 
   const getOccasionCondition = occasion => ({
     '$Services.HolidaySchedules.occasion$': occasion,
