@@ -1,6 +1,6 @@
 {
   "name": "streetlives-api",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "The Streetlives backend providing the API",
   "main": "dist",
   "config": {
@@ -54,12 +54,12 @@
     "sequelize": "^4.32.2"
   },
   "devDependencies": {
-    "@babel/cli": "^7.8.4",
+    "@babel/cli": "^7.12.1",
     "@babel/core": "^7.4.5",
     "@babel/node": "^7.4.5",
     "@babel/preset-env": "^7.4.5",
     "@babel/register": "^7.8.6",
-    "eslint": "^4.16.0",
+    "eslint": "^4.18.2",
     "eslint-config-airbnb-base": "^12.1.0",
     "eslint-plugin-import": "^2.8.0",
     "jest": "^24.8.0",
