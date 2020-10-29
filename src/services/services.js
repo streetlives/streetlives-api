@@ -268,6 +268,7 @@ export const updateService = (
         otherUpdateProps[attr],
         { t, user, metadata },
       ));
+      delete otherUpdateProps[attr];
     }
   });
 
@@ -279,6 +280,7 @@ export const updateService = (
         otherUpdateProps[attr],
         { t, user, metadata },
       ));
+      delete otherUpdateProps[attr];
     }
   });
 
@@ -290,17 +292,18 @@ export const updateService = (
     'ages_served',
     'who_does_it_serve',
   ];
-  updatePromises.push(updateInstance(
-    user,
-    service,
-    {
-      ...otherUpdateProps,
-      additional_info: additionalInfo,
-      ages_served: agesServed,
-      who_does_it_serve: whoDoesItServe,
-    },
-    { fields: editableFields, transaction: t, metadata },
-  ));
+  const serviceFieldUpdates = { ...otherUpdateProps };
+  if (additionalInfo !== undefined) serviceFieldUpdates.additional_info = additionalInfo;
+  if (agesServed !== undefined) serviceFieldUpdates.ages_served = agesServed;
+  if (whoDoesItServe !== undefined) serviceFieldUpdates.who_does_it_serve = whoDoesItServe;
+  if (Object.keys(serviceFieldUpdates).length) {
+    updatePromises.push(updateInstance(
+      user,
+      service,
+      serviceFieldUpdates,
+      { fields: editableFields, transaction: t, metadata },
+    ));
+  }
 
   await Promise.all(updatePromises);
 });
