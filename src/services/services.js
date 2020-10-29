@@ -141,6 +141,7 @@ const updateServiceTaxonomySpecificAttributes = async (
       {
         values: value,
       },
+      { transaction: t },
     );
   } else {
     await createInstance(
