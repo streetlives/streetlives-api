@@ -125,6 +125,7 @@ const updateServiceTaxonomySpecificAttributes = async (
 ) => {
   const specificAttribute = await models.TaxonomySpecificAttribute.find({
     where: { name: attributeName },
+    transaction: t,
   });
 
   const specificAttributeValue = await models.ServiceTaxonomySpecificAttribute.find({
@@ -132,6 +133,7 @@ const updateServiceTaxonomySpecificAttributes = async (
       service_id: service.id,
       attribute_id: specificAttribute.id,
     },
+    transaction: t,
   });
 
   if (specificAttributeValue) {
