@@ -1,6 +1,6 @@
 {
   "name": "streetlives-api",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "The Streetlives backend providing the API",
   "main": "dist",
   "config": {
