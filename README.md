@@ -22,6 +22,8 @@ CREATE EXTENSION postgis;
 
 ### Installing
 
+[Easy macOS Installation Instructions](MAC_INSTRUCTIONS.md)
+
 1. Clone the repo:
 
 ```
