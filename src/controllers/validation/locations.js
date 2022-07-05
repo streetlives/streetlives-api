@@ -66,7 +66,7 @@ export default {
       locationId: Joi.string().guid().required(),
     }).required(),
     body: Joi.object().keys({
-      name: Joi.string(),
+      name: Joi.string().allow(null),
       description: Joi.string(),
       latitude: Joi.number(),
       longitude: Joi.number(),
