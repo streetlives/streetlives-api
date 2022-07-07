@@ -1,6 +1,6 @@
 import { getDayOfWeekInteger } from '../utils/times';
 import models from '../models';
-import { updateInstance, createInstance } from './data-changes';
+import { updateInstance, createInstance, destroyInstance } from './data-changes';
 
 const { sequelize } = models;
 
@@ -348,7 +348,45 @@ export const createService = async (
   return createdService;
 });
 
+export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
+  const service = await models.Service.findById(serviceId, { include: [models.Location] });
+  if (!service) return;
+
+  const destroyAssociation = model =>
+    model.destroy({ where: { service_id: serviceId }, transaction: t });
+  await Promise.all([
+    destroyAssociation(models.DocumentsInfo),
+    destroyAssociation(models.Eligibility),
+    destroyAssociation(models.HolidaySchedule),
+    destroyAssociation(models.RegularSchedule),
+    destroyAssociation(models.RequiredDocument),
+    destroyAssociation(models.ServiceArea),
+    destroyAssociation(models.Phone),
+    destroyAssociation(models.ServiceTaxonomySpecificAttribute),
+  ]);
+
+  const recordLocationOfDeletedService = async () => {
+    const location = service.Locations[0];
+    await models.Metadata.create({
+      resource_table: models.ServiceAtLocation.tableName,
+      resource_id: location.ServiceAtLocation.id,
+      last_action_date: new Date(),
+      last_action_type: models.Metadata.actionTypes.delete,
+      field_name: 'location_id',
+      previous_value: location.id,
+      updated_by: user,
+      source: `${service.id} service deletion`,
+    }, { transaction: t });
+  };
+
+  await Promise.all([
+    destroyInstance(user, service, { transaction: t }),
+    recordLocationOfDeletedService(),
+  ]);
+});
+
 export default {
   updateService,
   createService,
+  deleteService,
 };
