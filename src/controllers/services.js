@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import serviceSchemas from './validation/services';
 import models from '../models';
-import { createService, updateService } from '../services/services';
+import { createService, updateService, deleteService } from '../services/services';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -64,6 +64,19 @@ export default {
       }
 
       await updateService(service, { ...otherProps, taxonomy }, req.user, metadata);
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  delete: async (req, res, next) => {
+    try {
+      await Joi.validate(req, serviceSchemas.delete, { allowUnknown: true });
+      const { serviceId } = req.params;
+
+      await deleteService(serviceId, req.user);
+
       res.sendStatus(204);
     } catch (err) {
       next(err);
