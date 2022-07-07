@@ -77,4 +77,10 @@ export default {
       metadata: updateMetadataSchema,
     }).required(),
   },
+
+  delete: {
+    params: Joi.object().keys({
+      serviceId: Joi.string().guid().required(),
+    }).required(),
+  },
 };
