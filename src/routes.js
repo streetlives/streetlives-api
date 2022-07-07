@@ -34,6 +34,7 @@ export default (app) => {
 
   app.post('/services', getUser, dataEntryAuth, services.create);
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
+  app.delete('/services/:serviceId', getUser, services.delete);
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
