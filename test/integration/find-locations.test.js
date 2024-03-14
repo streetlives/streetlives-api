@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import qs from 'qs';
 import app from '../../src/app';

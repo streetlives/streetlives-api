@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import uuid from 'uuid/v4';
 import app from '../../src/app';
