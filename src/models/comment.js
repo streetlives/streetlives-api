@@ -1,6 +1,4 @@
-import { Op } from 'sequelize';
-
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const Comment = sequelize.define('Comment', {
     id: {
       type: DataTypes.UUID,

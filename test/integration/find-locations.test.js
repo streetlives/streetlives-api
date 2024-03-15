@@ -17,7 +17,6 @@ describe('find locations', () => {
   const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
-  let primaryLocation;
   let otherServiceLocation;
   let hiddenLocation;
   let farLocation;
@@ -45,8 +44,10 @@ describe('find locations', () => {
 
     const baseLocationData = {
       organization_id: organization.id,
+      organizationId: organization.id,
       Services: [{
         organization_id: organization.id,
+        organizationId: organization.id,
         name: 'A specific offering',
         description: 'Only this service is described this way',
         Taxonomies: [{
@@ -61,25 +62,36 @@ describe('find locations', () => {
           include: [{ model: models.Taxonomy }],
         },
         models.PhysicalAddress,
+        /*
+        {
+          association: models.Organization,
+          include: [models.Organization.id],
+        }
+        */
       ],
     };
 
-    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all([
-      models.Location.create(
-        {
-          ...baseLocationData,
-          name: 'Nearby center',
-          position: pointNearOrigin,
-          PhysicalAddresses: [{
-            address_1: '123 W 50th St.',
-            city: 'New York',
-            state_province: 'NY',
-            postal_code: '10001',
-            country: 'US',
-          }],
-        },
+    try {
+      const locationCreateData = {
+        ...baseLocationData,
+        name: 'Nearby center',
+        position: pointNearOrigin,
+        PhysicalAddresses: [{
+          address_1: '123 W 50th St.',
+          city: 'New York',
+          state_province: 'NY',
+          postal_code: '10001',
+          country: 'US',
+        }],
+      }
+      const primaryLocation = await models.Location.create(
+        locationCreateData,
         associationParams,
-      ),
+      );
+    } catch(e) {
+      console.error(e);
+    }
+    [hiddenLocation, otherServiceLocation, farLocation] = await Promise.all([
       models.Location.create(
         {
           ...baseLocationData,

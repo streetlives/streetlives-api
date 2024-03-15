@@ -1,7 +1,6 @@
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
-import { Op } from 'sequelize';
 
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const Location = sequelize.define('Location', {
     id: {
       type: DataTypes.UUID,

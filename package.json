@@ -51,7 +51,7 @@
     "morgan": "^1.9.1",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.2",
-    "sequelize": "^5.22.5"
+    "sequelize": "^6.37.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.12.1",
