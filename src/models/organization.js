@@ -1,3 +1,5 @@
+import { Op } from 'sequelize';
+
 module.exports = (sequelize, DataTypes) => {
   const Organization = sequelize.define('Organization', {
     id: {
@@ -31,7 +33,7 @@ module.exports = (sequelize, DataTypes) => {
 
     const where = {};
     if (searchString) {
-      where.name = { [sequelize.Op.iLike]: `%${searchString}%` };
+      where.name = { [Op.iLike]: `%${searchString}%` };
     }
 
     return Organization.findAll({ limit, where });

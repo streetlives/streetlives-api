@@ -1,4 +1,5 @@
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
+import { Op } from 'sequelize';
 
 module.exports = (sequelize, DataTypes) => {
   const Location = sequelize.define('Location', {
@@ -23,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
           // Mutating args is awful, but is how sequelize hooks officially work:
           // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
           // eslint-disable-next-line no-param-reassign
-          options.where.hidden_from_search = { [sequelize.Op.or]: [false, null] };
+          options.where.hidden_from_search = { [Op.or]: [false, null] };
         }
         return options;
       },
@@ -53,24 +54,24 @@ module.exports = (sequelize, DataTypes) => {
   const getSearchStringCondition = (searchString) => {
     const fuzzySearchString = `%${searchString}%`;
     return sequelize.or(
-      { name: { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { name: { [Op.iLike]: fuzzySearchString } },
+      { '$Organization.name$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.name$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.description$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.Taxonomies.name$': { [Op.iLike]: fuzzySearchString } },
     );
   };
 
   const getOrganizationNameCondition = organizationName => ({
-    '$Organization.name$': { [sequelize.Op.iLike]: `%${organizationName}%` },
+    '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
   });
 
   const getZipcodesCondition = zipcodes => ({
-    '$PhysicalAddresses.postal_code$': { [sequelize.Op.in]: zipcodes },
+    '$PhysicalAddresses.postal_code$': { [Op.in]: zipcodes },
   });
 
   const getTaxonomyCondition = taxonomyIds => ({
-    '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
+    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
   });
 
   const getOpeningHoursCondition = (openAt, occasion) => {
@@ -86,16 +87,16 @@ module.exports = (sequelize, DataTypes) => {
       return {
         '$Services.HolidaySchedules.occasion$': occasion,
         '$Services.HolidaySchedules.weekday$': weekday,
-        '$Services.HolidaySchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
-        '$Services.HolidaySchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
-        '$Services.HolidaySchedules.closed$': { [sequelize.Op.or]: [false, null] },
+        '$Services.HolidaySchedules.opens_at$': { [Op.lte]: timeOfDay },
+        '$Services.HolidaySchedules.closes_at$': { [Op.gt]: timeOfDay },
+        '$Services.HolidaySchedules.closed$': { [Op.or]: [false, null] },
       };
     }
 
     return {
       '$Services.RegularSchedules.weekday$': weekday,
-      '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
-      '$Services.RegularSchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
+      '$Services.RegularSchedules.opens_at$': { [Op.lte]: timeOfDay },
+      '$Services.RegularSchedules.closes_at$': { [Op.gt]: timeOfDay },
     };
   };
 
@@ -107,9 +108,9 @@ module.exports = (sequelize, DataTypes) => {
     ),
     {
       '$Services.ServiceAreas.postal_codes$': {
-        [sequelize.Op.or]: {
-          [sequelize.Op.contains]: [zipcode],
-          [sequelize.Op.eq]: '{}',
+        [Op.or]: {
+          [Op.contains]: [zipcode],
+          [Op.eq]: '{}',
         },
       },
     },
@@ -187,7 +188,7 @@ module.exports = (sequelize, DataTypes) => {
     const requiredDocumentCondition = sequelize.and(...requiredDocuments.map(doc =>
       sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase())));
     const notRequiredDocumentCondition = {
-      [sequelize.Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
+      [Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
         sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase()))),
     };
 
@@ -321,7 +322,7 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
 
-      const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
+      const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
@@ -373,7 +374,7 @@ module.exports = (sequelize, DataTypes) => {
     ];
 
     const locationsWithAssociations = await Location.findAll({
-      where: { id: { [sequelize.Op.in]: locationIds } },
+      where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
