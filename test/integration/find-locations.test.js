@@ -714,7 +714,7 @@ describe('find locations', () => {
 
     it('should include services with the right required and not required documents', async () => {
       await aSpecificOffering1.createRequiredDocument({
-        document: documentTypes.referralLetter,
+        document: documentTypes.photoId,
       });
 
       return request(app)
