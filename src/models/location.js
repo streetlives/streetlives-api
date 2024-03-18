@@ -18,12 +18,14 @@ module.exports = (sequelize, DataTypes, Op) => {
     underscoredAll: true,
     hooks: {
       beforeFind: (options) => {
-        const isSearchingBySpecificId = options.where.id != null;
-        if (!isSearchingBySpecificId) {
-          // Mutating args is awful, but is how sequelize hooks officially work:
-          // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
-          // eslint-disable-next-line no-param-reassign
-          options.where.hidden_from_search = { [Op.or]: [false, null] };
+        if(options && options.where){
+          const isSearchingBySpecificId = options.where.id != null;
+          if (!isSearchingBySpecificId) {
+            // Mutating args is awful, but is how sequelize hooks officially work:
+            // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
+            // eslint-disable-next-line no-param-reassign
+            options.where.hidden_from_search = { [Op.or]: [false, null] };
+          }
         }
         return options;
       },
