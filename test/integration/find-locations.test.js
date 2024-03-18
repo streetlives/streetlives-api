@@ -23,6 +23,8 @@ describe('find locations', () => {
   let hiddenLocation;
   let farLocation;
 
+  let aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3;
+
   const clearData = async () => {
     await Promise.all([
       models.ServiceAtLocation.destroy({ where: {} }),
@@ -124,7 +126,7 @@ describe('find locations', () => {
       let locations = organization.Locations;
       [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
 
-      const [aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3] = organization.Services;
+      [aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3] = organization.Services;
 
       // link locations to services
       await primaryLocation.setServices([aSpecificOffering1]);
@@ -681,10 +683,9 @@ describe('find locations', () => {
     beforeEach(() => models.RequiredDocument.destroy({ where: {} }));
     afterAll(() => models.RequiredDocument.destroy({ where: {} }));
 
-    it.only('should filter out services requiring documents not supposed to be required', async () => {
-      await models.RequiredDocument.create({
+    it('should filter out services requiring documents not supposed to be required', async () => {
+      await aSpecificOffering1.createRequiredDocument({
         document: documentTypes.referralLetter,
-        service_id: primaryLocation.Services[0].id,
       });
 
       return request(app)
@@ -712,9 +713,8 @@ describe('find locations', () => {
         .then(expectNoMatchingLocations));
 
     it('should include services with the right required and not required documents', async () => {
-      await models.RequiredDocument.create({
-        document: documentTypes.photoId,
-        service_id: primaryLocation.Services[0].id,
+      await aSpecificOffering1.createRequiredDocument({
+        document: documentTypes.referralLetter,
       });
 
       return request(app)
