@@ -17,6 +17,7 @@ describe('find locations', () => {
   const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
+  let organization;
   let primaryLocation;
   let otherServiceLocation;
   let hiddenLocation;
@@ -40,7 +41,7 @@ describe('find locations', () => {
     await clearData();
 
     try {
-      const organization = await models.Organization.create(
+      organization = await models.Organization.create(
         {
           name: 'The Test Org',
           description: 'An organization meant for testing purposes.',
@@ -402,10 +403,12 @@ describe('find locations', () => {
     it('should return no fewer locations even when some match on multiple services', async () => {
       const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
 
-      const otherMatchingService = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
+      
+      const otherMatchingService = await organization.createService({
         name: 'Other matching service',
       });
+      primaryLocation.setServices(primaryLocation.Services.concat(otherMatchingService))
+
       await models.ServiceTaxonomy.create({
         service_id: otherMatchingService.id,
         taxonomy_id: matchingId,
@@ -464,12 +467,14 @@ describe('find locations', () => {
       generalParam = await models.EligibilityParameter.create({ name: 'general' });
 
       [service1] = primaryLocation.Services;
-      service2 = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
+      service2 = await organization.createService({
         name: 'Second service',
-      });
-      await service2.createTaxonomy({
-        name: 'Other category',
+        Taxonomies: [{
+          name: 'Other category',
+        }],
+      },
+      {
+        include: [{ model: models.Taxonomy }]
       });
     });
 
