@@ -476,6 +476,7 @@ describe('find locations', () => {
       {
         include: [{ model: models.Taxonomy }]
       });
+      primaryLocation.setServices([service1, service2])
     });
 
     afterAll(() => Promise.all([
