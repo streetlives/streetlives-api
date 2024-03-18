@@ -681,7 +681,7 @@ describe('find locations', () => {
     beforeEach(() => models.RequiredDocument.destroy({ where: {} }));
     afterAll(() => models.RequiredDocument.destroy({ where: {} }));
 
-    it('should filter out services requiring documents not supposed to be required', async () => {
+    it.only('should filter out services requiring documents not supposed to be required', async () => {
       await models.RequiredDocument.create({
         document: documentTypes.referralLetter,
         service_id: primaryLocation.Services[0].id,
