@@ -948,13 +948,11 @@ describe('find locations', () => {
     afterAll(() => models.ServiceArea.destroy({ where: {} }));
 
     const setupBaseServiceArea = () => Promise.all([
-      models.ServiceArea.create({
-        postal_codes: servedArea1,
-        service_id: primaryLocation.Services[0].id,
+      aSpecificOffering1.createServiceArea({
+        postal_codes: servedArea1
       }),
-      models.ServiceArea.create({
+      aSpecificOffering1.createServiceArea({
         postal_codes: servedArea2,
-        service_id: primaryLocation.Services[0].id,
       }),
     ]);
 
