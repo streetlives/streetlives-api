@@ -53,11 +53,25 @@ describe('find locations', () => {
               }],
             },
             {
+              name: 'A specific offering',
+              description: 'Only this service is described this way',
+              Taxonomies: [{
+                name: 'Shelter',
+              }],
+            },
+            {
               name: 'A different kind of service',
               Taxonomies: [{
                 name: 'Food',
               }],
-            }
+            },
+            {
+              name: 'A specific offering',
+              description: 'Only this service is described this way',
+              Taxonomies: [{
+                name: 'Shelter',
+              }],
+            },
           ],
           Locations: [
             {
@@ -109,13 +123,13 @@ describe('find locations', () => {
       let locations = organization.Locations;
       [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
 
-      const [aSpecificOffering, aDifferentKindOfService] = organization.Services;
+      const [aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3] = organization.Services;
 
       // link locations to services
-      await primaryLocation.setServices([aSpecificOffering]);
-      await hiddenLocation.setServices([aSpecificOffering]);
+      await primaryLocation.setServices([aSpecificOffering1]);
+      await hiddenLocation.setServices([aSpecificOffering2]);
       await otherServiceLocation.setServices([aDifferentKindOfService]);
-      await farLocation.setServices([aSpecificOffering]);
+      await farLocation.setServices([aSpecificOffering3]);
 
       // this seems to be the best way to eager load thse guys
       [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all(locations.map(location => (
