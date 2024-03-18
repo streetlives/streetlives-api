@@ -568,13 +568,17 @@ describe('find locations', () => {
         await models.TaxonomySpecificAttribute.create({ name: 'clothesDemographic' });
 
       [service1] = primaryLocation.Services;
-      service2 = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
+      service2 = await organization.createService({
         name: 'Second service',
+        Taxonomies: [{
+          name: 'Other category',
+        }],
+      },
+      {
+        include: [{ model: models.Taxonomy }]
       });
-      await service2.createTaxonomy({
-        name: 'Other category',
-      });
+      primaryLocation.setServices([service1, service2])
+
     });
 
     afterAll(() => Promise.all([
