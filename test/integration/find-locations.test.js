@@ -745,13 +745,13 @@ describe('find locations', () => {
     afterAll(() => models.RegularSchedule.destroy({ where: {} }));
 
     const setupBaseSchedule = () => Promise.all([
-      models.RegularSchedule.create({
+      aSpecificOffering1.createRegularSchedule({
         weekday: 7,
         opens_at: '10:00',
         closes_at: '11:00',
         service_id: primaryLocation.Services[0].id,
       }),
-      models.RegularSchedule.create({
+      aSpecificOffering1.createRegularSchedule({
         weekday: 6,
         opens_at: '8:00',
         closes_at: '11:00',
