@@ -870,17 +870,15 @@ describe('find locations', () => {
 
       const setupHolidaySchedule = () => Promise.all([
         setupBaseSchedule(),
-        models.HolidaySchedule.create({
+        aSpecificOffering1.createHolidaySchedule({
           weekday: 7,
-          service_id: primaryLocation.Services[0].id,
           occasion: 'COVID-19',
           closed: true,
         }),
-        models.HolidaySchedule.create({
+        aSpecificOffering1.createHolidaySchedule({
           weekday: 6,
           opens_at: '8:00',
           closes_at: '10:00',
-          service_id: primaryLocation.Services[0].id,
           occasion: 'COVID-19',
           closed: false,
         }),
