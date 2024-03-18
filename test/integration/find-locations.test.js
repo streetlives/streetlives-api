@@ -749,13 +749,11 @@ describe('find locations', () => {
         weekday: 7,
         opens_at: '10:00',
         closes_at: '11:00',
-        service_id: primaryLocation.Services[0].id,
       }),
       aSpecificOffering1.createRegularSchedule({
         weekday: 6,
         opens_at: '8:00',
         closes_at: '11:00',
-        service_id: primaryLocation.Services[0].id,
       }),
     ]);
 
@@ -838,13 +836,19 @@ describe('find locations', () => {
     });
 
     it('should exclude locations with different services matching taxonomy and time', async () => {
-      const otherService = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
+
+      const otherService = await organization.createService({
         name: 'Second service',
+        Taxonomies: [{
+          name: 'Other category',
+        }],
+      },
+      {
+        include: [{ model: models.Taxonomy }]
       });
-      const otherTaxonomy = await otherService.createTaxonomy({
-        name: 'Other category',
-      });
+      primaryLocation.setServices([aSpecificOffering1, otherService])
+
+      const otherTaxonomy = otherService.Taxonomies[0];
 
       await setupBaseSchedule();
 
