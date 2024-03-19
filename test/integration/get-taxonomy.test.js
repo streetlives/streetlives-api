@@ -20,7 +20,7 @@ describe('get taxonomy', () => {
     return Object.keys(obj).reduce((currStrippedObj, key) => {
       const value = obj[key];
 
-      if (key.includes('_at')) {
+      if (key.endsWith('At')) {
         return currStrippedObj;
       }
 
