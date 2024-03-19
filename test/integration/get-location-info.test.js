@@ -62,7 +62,7 @@ describe('get location info', () => {
   const stripTimestampsAndIds = obj => Object.keys(obj).reduce((currStrippedObj, key) => {
     const value = obj[key];
 
-    if (key === 'id' || key.includes('_id') || key.includes('_at')) {
+    if (key === 'id' || key.endsWith('Id') || key.endsWith('_id') || key.endsWith('At')) {
       return currStrippedObj;
     }
 
