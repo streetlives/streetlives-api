@@ -9,51 +9,56 @@ import models from '../../src/models';
 describe('get location info', () => {
   let location;
 
-  const setupData = () => models.Organization.create({
-    name: 'The Test Org',
-    description: 'An organization meant for testing purposes.',
-    url: 'www.streetlives.com',
-    Services: [{
-      name: 'A specific offering',
-      additional_info: 'A service might have some other info as well.',
-      Taxonomies: [{
-        name: 'Shelter',
+  const setupData = () => models.Organization.create(
+    {
+      name: 'The Test Org',
+      description: 'An organization meant for testing purposes.',
+      url: 'www.streetlives.com',
+      Services: [{
+        name: 'A specific offering',
+        additional_info: 'A service might have some other info as well.',
+        Taxonomies: [{
+          name: 'Shelter',
+        }],
       }],
-    }],
-    Locations: [
-      {
-        name: 'Some kind of center',
-        description: 'This is how one would describe this shelter.',
-        additional_info: 'And some other, perhaps less standardized, information.',
-        hidden_from_search: true,
-        PhysicalAddresses: [{
-          address_1: '123 West 30th Street',
-          city: 'New York',
-          state_province: 'NY',
-          postal_code: '10001',
-          country: 'United States',
-        }],
-        Phones: [{
-          number: '212.121.0123',
-        }],
-        Comments: [{
-          content: 'Test comment',
-          posted_by: 'Test poster',
-        }],
-      }
-    ]
-  },
-  {
-    include: [
-      { model: models.Service, include: [{ model: models.Taxonomy }] },
-      { model: models.Location, include: [
-        { model: models.PhysicalAddress },
-        { model: models.Phone },
-        { model: models.Comment },
-      ] },
-    ],
-  }).then(organization => {
-    location = organization.Locations[0];
+      Locations: [
+        {
+          name: 'Some kind of center',
+          description: 'This is how one would describe this shelter.',
+          additional_info: 'And some other, perhaps less standardized, information.',
+          hidden_from_search: true,
+          PhysicalAddresses: [{
+            address_1: '123 West 30th Street',
+            city: 'New York',
+            state_province: 'NY',
+            postal_code: '10001',
+            country: 'United States',
+          }],
+          Phones: [{
+            number: '212.121.0123',
+          }],
+          Comments: [{
+            content: 'Test comment',
+            posted_by: 'Test poster',
+          }],
+        },
+      ],
+    },
+    {
+      include: [
+        { model: models.Service, include: [{ model: models.Taxonomy }] },
+        {
+          model: models.Location,
+          include: [
+            { model: models.PhysicalAddress },
+            { model: models.Phone },
+            { model: models.Comment },
+          ],
+        },
+      ],
+    },
+  ).then((organization) => {
+    [location] = organization.Locations;
     return location.setServices(organization.Services);
   });
 

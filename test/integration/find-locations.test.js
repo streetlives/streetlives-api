@@ -23,7 +23,10 @@ describe('find locations', () => {
   let hiddenLocation;
   let farLocation;
 
-  let aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3;
+  let aSpecificOffering1;
+  let aSpecificOffering2;
+  let aDifferentKindOfService;
+  let aSpecificOffering3;
 
   const clearData = async () => {
     await Promise.all([
@@ -42,111 +45,116 @@ describe('find locations', () => {
   const setupData = async () => {
     await clearData();
 
-    try {
-      organization = await models.Organization.create(
-        {
-          name: 'The Test Org',
-          description: 'An organization meant for testing purposes.',
-          Services: [
-            {
-              name: 'A specific offering',
-              description: 'Only this service is described this way',
-              Taxonomies: [{
-                name: 'Shelter',
-              }],
-            },
-            {
-              name: 'A specific offering',
-              description: 'Only this service is described this way',
-              Taxonomies: [{
-                name: 'Shelter',
-              }],
-            },
-            {
-              name: 'A different kind of service',
-              Taxonomies: [{
-                name: 'Food',
-              }],
-            },
-            {
-              name: 'A specific offering',
-              description: 'Only this service is described this way',
-              Taxonomies: [{
-                name: 'Shelter',
-              }],
-            },
-          ],
-          Locations: [
-            {
-              name: 'Nearby center',
-              position: pointNearOrigin,
-              PhysicalAddresses: [{
-                address_1: '123 W 50th St.',
-                city: 'New York',
-                state_province: 'NY',
-                postal_code: '10001',
-                country: 'US',
-              }],
-            },
-            {
-              name: 'Nearby center (volunteers)',
-              position: pointNearOrigin,
-              hidden_from_search: true,
-              PhysicalAddresses: [{
-                address_1: '222 E 75th St.',
-                city: 'New York',
-                state_province: 'NY',
-                postal_code: '10002',
-                country: 'US',
-              }],
-            },
-            {
-              name: 'Other nearby center',
-              position: pointSlightlyFurtherFromOrigin,
-            },
-            { name: 'Far-off center', position: pointFarFromOrigin },
-          ]
-        }, 
-        {
-          include : [
-            {
-              model: models.Service,
-              include: [{ model: models.Taxonomy }],
-            },
-            {
-              model: models.Location,
-              include: [
-                models.PhysicalAddress,
-              ],
-            }
-          ],
-        }
-      );
-
-      let locations = organization.Locations;
-      [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
-
-      [aSpecificOffering1, aSpecificOffering2, aDifferentKindOfService, aSpecificOffering3] = organization.Services;
-
-      // link locations to services
-      await primaryLocation.setServices([aSpecificOffering1]);
-      await hiddenLocation.setServices([aSpecificOffering2]);
-      await otherServiceLocation.setServices([aDifferentKindOfService]);
-      await farLocation.setServices([aSpecificOffering3]);
-
-      // this seems to be the best way to eager load thse guys
-      [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all(locations.map(location => (
-        models.Location.findByPk(location.id, {
-          include: {
+    organization = await models.Organization.create(
+      {
+        name: 'The Test Org',
+        description: 'An organization meant for testing purposes.',
+        Services: [
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+          {
+            name: 'A different kind of service',
+            Taxonomies: [{
+              name: 'Food',
+            }],
+          },
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+        ],
+        Locations: [
+          {
+            name: 'Nearby center',
+            position: pointNearOrigin,
+            PhysicalAddresses: [{
+              address_1: '123 W 50th St.',
+              city: 'New York',
+              state_province: 'NY',
+              postal_code: '10001',
+              country: 'US',
+            }],
+          },
+          {
+            name: 'Nearby center (volunteers)',
+            position: pointNearOrigin,
+            hidden_from_search: true,
+            PhysicalAddresses: [{
+              address_1: '222 E 75th St.',
+              city: 'New York',
+              state_province: 'NY',
+              postal_code: '10002',
+              country: 'US',
+            }],
+          },
+          {
+            name: 'Other nearby center',
+            position: pointSlightlyFurtherFromOrigin,
+          },
+          { name: 'Far-off center', position: pointFarFromOrigin },
+        ],
+      },
+      {
+        include: [
+          {
             model: models.Service,
-            include: models.Taxonomy
-          }
-        })
-      )));
-    } catch (e) {
-      console.error(e);
-      throw e; // rethrow
-    }
+            include: [{ model: models.Taxonomy }],
+          },
+          {
+            model: models.Location,
+            include: [
+              models.PhysicalAddress,
+            ],
+          },
+        ],
+      },
+    );
+
+    const locations = organization.Locations;
+    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
+
+    [
+      aSpecificOffering1,
+      aSpecificOffering2,
+      aDifferentKindOfService,
+      aSpecificOffering3,
+    ] = organization.Services;
+
+    // link locations to services
+    await primaryLocation.setServices([aSpecificOffering1]);
+    await hiddenLocation.setServices([aSpecificOffering2]);
+    await otherServiceLocation.setServices([aDifferentKindOfService]);
+    await farLocation.setServices([aSpecificOffering3]);
+
+    // this seems to be the best way to eager load thse guys
+    [
+      primaryLocation,
+      hiddenLocation,
+      otherServiceLocation,
+      farLocation,
+    ] = await Promise.all(locations.map(location => (
+      models.Location.findByPk(location.id, {
+        include: {
+          model: models.Service,
+          include: models.Taxonomy,
+        },
+      })
+    )));
   };
 
   const expectMatchNearbyLocations = (res) => {
@@ -405,11 +413,10 @@ describe('find locations', () => {
     it('should return no fewer locations even when some match on multiple services', async () => {
       const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
 
-      
       const otherMatchingService = await organization.createService({
         name: 'Other matching service',
       });
-      primaryLocation.setServices(primaryLocation.Services.concat(otherMatchingService))
+      primaryLocation.setServices(primaryLocation.Services.concat(otherMatchingService));
 
       await models.ServiceTaxonomy.create({
         service_id: otherMatchingService.id,
@@ -469,16 +476,18 @@ describe('find locations', () => {
       generalParam = await models.EligibilityParameter.create({ name: 'general' });
 
       [service1] = primaryLocation.Services;
-      service2 = await organization.createService({
-        name: 'Second service',
-        Taxonomies: [{
-          name: 'Other category',
-        }],
-      },
-      {
-        include: [{ model: models.Taxonomy }]
-      });
-      primaryLocation.setServices([service1, service2])
+      service2 = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([service1, service2]);
     });
 
     afterAll(() => Promise.all([
@@ -570,17 +579,18 @@ describe('find locations', () => {
         await models.TaxonomySpecificAttribute.create({ name: 'clothesDemographic' });
 
       [service1] = primaryLocation.Services;
-      service2 = await organization.createService({
-        name: 'Second service',
-        Taxonomies: [{
-          name: 'Other category',
-        }],
-      },
-      {
-        include: [{ model: models.Taxonomy }]
-      });
-      primaryLocation.setServices([service1, service2])
-
+      service2 = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([service1, service2]);
     });
 
     afterAll(() => Promise.all([
@@ -836,17 +846,18 @@ describe('find locations', () => {
     });
 
     it('should exclude locations with different services matching taxonomy and time', async () => {
-
-      const otherService = await organization.createService({
-        name: 'Second service',
-        Taxonomies: [{
-          name: 'Other category',
-        }],
-      },
-      {
-        include: [{ model: models.Taxonomy }]
-      });
-      primaryLocation.setServices([aSpecificOffering1, otherService])
+      const otherService = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([aSpecificOffering1, otherService]);
 
       const otherTaxonomy = otherService.Taxonomies[0];
 
@@ -947,7 +958,7 @@ describe('find locations', () => {
 
     const setupBaseServiceArea = () => Promise.all([
       aSpecificOffering1.createServiceArea({
-        postal_codes: servedArea1
+        postal_codes: servedArea1,
       }),
       aSpecificOffering1.createServiceArea({
         postal_codes: servedArea2,

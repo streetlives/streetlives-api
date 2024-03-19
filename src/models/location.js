@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     underscoredAll: true,
     hooks: {
       beforeFind: (options) => {
-        if(options && options.where){
+        if (options && options.where) {
           const isSearchingBySpecificId = options.where.id != null;
           if (!isSearchingBySpecificId) {
             // Mutating args is awful, but is how sequelize hooks officially work:
