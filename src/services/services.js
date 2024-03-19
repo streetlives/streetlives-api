@@ -349,7 +349,7 @@ export const createService = async (
 });
 
 export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
-  const service = await models.Service.findById(serviceId, { include: [models.Location] });
+  const service = await models.Service.findByPk(serviceId, { include: [models.Location] });
   if (!service) return;
 
   const destroyAssociation = model =>
