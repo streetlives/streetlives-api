@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import app from '../../src/app';
 import models from '../../src/models';
@@ -35,7 +39,7 @@ describe('add comments', () => {
         contactInfo,
       })
       .expect(201)
-      .then(() => models.Location.findById(location.id, { include: models.Comment }))
+      .then(() => models.Location.findByPk(location.id, { include: models.Comment }))
       .then((updatedLocation) => {
         expect(updatedLocation.Comments).toHaveLength(1);
 
@@ -52,7 +56,7 @@ describe('add comments', () => {
       .post('/comments')
       .send({ locationId: location.id, content })
       .expect(201)
-      .then(() => models.Location.findById(location.id, { include: models.Comment }))
+      .then(() => models.Location.findByPk(location.id, { include: models.Comment }))
       .then((updatedLocation) => {
         expect(updatedLocation.Comments).toHaveLength(1);
 
@@ -81,7 +85,7 @@ describe('add comments', () => {
           contactInfo,
         })
         .expect(201))
-      .then(() => models.Location.findById(location.id, { include: models.Comment }))
+      .then(() => models.Location.findByPk(location.id, { include: models.Comment }))
       .then((updatedLocation) => {
         expect(updatedLocation.Comments).toHaveLength(2);
 

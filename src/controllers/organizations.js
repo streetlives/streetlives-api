@@ -49,7 +49,7 @@ export default {
 
       const { organizationId } = req.params;
 
-      const organization = await models.Organization.findById(organizationId);
+      const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
         throw new NotFoundError('Organization not found');
       }
@@ -75,7 +75,7 @@ export default {
 
       const { organizationId } = req.params;
 
-      const organization = await models.Organization.findById(organizationId, {
+      const organization = await models.Organization.findByPk(organizationId, {
         include: [{
           model: models.Location,
           include: [

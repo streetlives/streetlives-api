@@ -132,7 +132,7 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
 
-      const location = await models.Location.findById(
+      const location = await models.Location.findByPk(
         req.params.locationId,
         {
           include: [
@@ -230,7 +230,7 @@ export default {
       } = req.body;
       const position = geometry.createPoint(longitude, latitude);
 
-      const organization = await models.Organization.findById(organizationId);
+      const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
         throw new NotFoundError('Organization not found');
       }
@@ -319,7 +319,7 @@ export default {
       const { locationId } = req.params;
       const { metadata } = req.body;
 
-      const location = await models.Location.findById(locationId, {
+      const location = await models.Location.findByPk(locationId, {
         include: models.PhysicalAddress,
       });
 
@@ -353,7 +353,7 @@ export default {
 
       const { locationId } = req.params;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findByPk(locationId);
       if (!location) {
         throw new NotFoundError('Location not found');
       }
@@ -387,7 +387,7 @@ export default {
 
       const { phoneId } = req.params;
 
-      const phone = await models.Phone.findById(phoneId);
+      const phone = await models.Phone.findByPk(phoneId);
       if (!phone) {
         throw new NotFoundError('Phone not found');
       }
@@ -408,7 +408,7 @@ export default {
 
       const { phoneId } = req.params;
 
-      const phone = await models.Phone.findById(phoneId);
+      const phone = await models.Phone.findByPk(phoneId);
       if (!phone) {
         throw new NotFoundError('Phone not found');
       }

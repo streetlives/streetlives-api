@@ -330,7 +330,7 @@ export const createService = async (
     description,
     url,
     additional_info: additionalInfo,
-    organization_id: location.organization_id,
+    organization_id: location.OrganizationId,
   }, { transaction: t, metadata });
 
   await createInstance(user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
@@ -349,7 +349,7 @@ export const createService = async (
 });
 
 export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
-  const service = await models.Service.findById(serviceId, { include: [models.Location] });
+  const service = await models.Service.findByPk(serviceId, { include: [models.Location] });
   if (!service) return;
 
   const destroyAssociation = model =>

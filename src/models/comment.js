@@ -1,4 +1,4 @@
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const Comment = sequelize.define('Comment', {
     id: {
       type: DataTypes.UUID,
@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
     where: {
       location_id: locationId,
       reply_to_id: null,
-      hidden: { [sequelize.Op.or]: [false, null] },
+      hidden: { [Op.or]: [false, null] },
     },
     attributes,
     order,
