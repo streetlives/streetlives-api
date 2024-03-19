@@ -330,7 +330,7 @@ export const createService = async (
     description,
     url,
     additional_info: additionalInfo,
-    organization_id: location.organization_id,
+    organization_id: location.OrganizationId,
   }, { transaction: t, metadata });
 
   await createInstance(user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {

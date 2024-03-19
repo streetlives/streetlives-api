@@ -11,7 +11,7 @@ export const getMetadataForLocation = async (location, address) => {
     eventInfoLatestUpdate,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(location.id),
-    models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
+    models.Metadata.getLastUpdateDatesForResourceFields(location.OrganizationId),
     models.Metadata.getLastUpdateDatesForResourceFields(address.id),
     models.Metadata.getLatestUpdateDateForResources(phoneIds),
     models.Metadata.getLatestUpdateDateForResources(eventRelatedInfoIds),
@@ -19,7 +19,7 @@ export const getMetadataForLocation = async (location, address) => {
 
   const sources = [...new Set(await models.Metadata.getSourcesForResources([
     location.id,
-    location.organization_id,
+    location.OrganizationId,
     address.id,
     ...phoneIds,
     ...eventRelatedInfoIds,
