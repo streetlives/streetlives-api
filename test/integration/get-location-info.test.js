@@ -13,46 +13,49 @@ describe('get location info', () => {
     name: 'The Test Org',
     description: 'An organization meant for testing purposes.',
     url: 'www.streetlives.com',
-  })
-    .then(organization => models.Location.create({
-      organization_id: organization.id,
-      name: 'Some kind of center',
-      description: 'This is how one would describe this shelter.',
-      additional_info: 'And some other, perhaps less standardized, information.',
-      hidden_from_search: true,
-      PhysicalAddresses: [{
-        address_1: '123 West 30th Street',
-        city: 'New York',
-        state_province: 'NY',
-        postal_code: '10001',
-        country: 'United States',
+    Services: [{
+      name: 'A specific offering',
+      additional_info: 'A service might have some other info as well.',
+      Taxonomies: [{
+        name: 'Shelter',
       }],
-      Phones: [{
-        number: '212.121.0123',
-      }],
-      Services: [{
-        organization_id: organization.id,
-        name: 'A specific offering',
-        additional_info: 'A service might have some other info as well.',
-        Taxonomies: [{
-          name: 'Shelter',
+    }],
+    Locations: [
+      {
+        name: 'Some kind of center',
+        description: 'This is how one would describe this shelter.',
+        additional_info: 'And some other, perhaps less standardized, information.',
+        hidden_from_search: true,
+        PhysicalAddresses: [{
+          address_1: '123 West 30th Street',
+          city: 'New York',
+          state_province: 'NY',
+          postal_code: '10001',
+          country: 'United States',
         }],
-      }],
-      Comments: [{
-        content: 'Test comment',
-        posted_by: 'Test poster',
-      }],
-    }, {
-      include: [
+        Phones: [{
+          number: '212.121.0123',
+        }],
+        Comments: [{
+          content: 'Test comment',
+          posted_by: 'Test poster',
+        }],
+      }
+    ]
+  },
+  {
+    include: [
+      { model: models.Service, include: [{ model: models.Taxonomy }] },
+      { model: models.Location, include: [
         { model: models.PhysicalAddress },
         { model: models.Phone },
         { model: models.Comment },
-        { model: models.Service, include: [{ model: models.Taxonomy }] },
-      ],
-    }))
-    .then((newLocation) => {
-      location = newLocation;
-    });
+      ] },
+    ],
+  }).then(organization => {
+    location = organization.Locations[0];
+    return location.setServices(organization.Services);
+  });
 
   beforeAll(setupData);
 
