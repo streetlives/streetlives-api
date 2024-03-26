@@ -136,8 +136,6 @@ module.exports = {
 
               select count(1) into location_slug_count from location_slugs where location_slugs.slug = '/locations/' || _slug;
 
-              RAISE NOTICE 'location_slug_count %, %', location_slug_count, _slug;
-
               -- check if the slug exists in the location_slugs table
               if location_slug_count > 0 then
                 -- if it does exist, then get the address and append it
@@ -169,6 +167,32 @@ module.exports = {
           END$$;
           `
         );
+      }).then(() => {
+        return queryInterface.sequelize.query(
+          `
+            create or replace function do_init_slug()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              insert into location_slugs (location_id, slug) values (NEW.id, get_slug(NEW.id));
+              return new;
+            end;
+            $$;
+          `
+        );
+      }).then(() => {
+        // populate the location_slugs table
+        return queryInterface.sequelize.query(
+          `
+          CREATE TRIGGER init_slug 
+             AFTER insert
+             ON locations
+             FOR EACH  ROW
+                 EXECUTE PROCEDURE do_init_slug();
+          `
+        );
       });
     });
   },
@@ -181,6 +205,8 @@ module.exports = {
         queryInterface.dropTable('nyc_neighborhoods', { transaction: t }),
         queryInterface.dropFunction('get_slug', [{type: Sequelize.DataTypes.UUID}], { transaction: t }),
         queryInterface.dropFunction('translate_slug_characters', [{type: 'varchar'}], { transaction: t }),
+        queryInterface.sequelize.query('drop trigger init_slug on locations', { transaction: t }),
+        queryInterface.dropFunction('do_init_slug', [], { transaction: t }),
       ]);
     });
   }
