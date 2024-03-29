@@ -23,7 +23,7 @@
     "invoke-lambda": "aws lambda invoke --function-name $npm_package_config_functionName --region $npm_package_config_region --payload file://api-gateway-event.json lambda-invoke-response.json && cat lambda-invoke-response.json",
     "create-bucket": "aws s3 mb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
     "delete-bucket": "aws s3 rb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
-    "package": "cp -r node_modules dist/; zip -r dist.zip dist/",
+    "package": "cp -r node_modules dist/; cd dist && zip -r ../dist.zip *",
     "clean": "rm -rf dist/ dist.zip",
     "deploy": "aws lambda update-function-code --function-name $npm_package_config_functionName --zip-file fileb://./dist.zip --publish",
     "package-deploy": "npm run package && npm run deploy",
