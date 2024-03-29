@@ -196,7 +196,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationIds = async (filterParameters, additionalConditions, queryProps) => {
+  Location.findUniqueLocationIds = async (filterParameters,
+    additionalConditions,
+    queryProps = {}) => {
     const {
       searchString,
       organizationName,
@@ -252,6 +254,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       ...queryProps,
       where: sequelize.and(...whereConditions, ...additionalConditions),
       attributes: [
+        // [sequelize.fn('COUNT', sequelize.col('Location.id')), 'n_locations'],
         sequelize.fn('DISTINCT', sequelize.col('Location.id')),
         // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
         ...(queryProps.order || []),
@@ -312,9 +315,15 @@ module.exports = (sequelize, DataTypes, Op) => {
     maxResults,
     filterParameters,
     locationFieldsOnly,
+    pageNumber,
+    pageSize,
   }) => {
     let locationIds;
     let distance;
+    let totalNumLocations;
+
+    const offset = pageNumber !== undefined && pageSize !== undefined ?
+      pageNumber * pageSize : undefined;
 
     if (position && radius) {
       distance = sequelize.fn(
@@ -325,11 +334,17 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
+      totalNumLocations = (await Location.findUniqueLocationIds(
+        filterParameters,
+        [distanceCondition],
+      )).length;
+
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition], {
           order: [[distance, 'ASC']],
-          limit: maxResults,
+          limit: pageSize || maxResults,
+          offset,
         },
       );
 
@@ -340,14 +355,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       // aren't natively supported by sequelize and would require a raw query.
       // For now, the simplicity and security of sequelize seems worth the slight performance hit.
       if (minResults && locationIds.length < minResults) {
+        totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
           order: distance ? [[distance, 'ASC']] : null,
           limit: minResults,
+          offset,
         });
       }
     } else {
+      totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-        limit: maxResults,
+        limit: pageSize || maxResults,
+        offset,
       });
     }
 
@@ -379,7 +398,10 @@ module.exports = (sequelize, DataTypes, Op) => {
       include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
-    return locationsWithAssociations;
+    return {
+      locationsWithAssociations,
+      totalNumLocations,
+    };
   };
 
   return Location;

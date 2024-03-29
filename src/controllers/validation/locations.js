@@ -30,6 +30,8 @@ export default {
       gender: Joi.string(),
       servesZipcode: Joi.string().length(5).regex(/\d+/),
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
+      pageNumber: Joi.number(),
+      pageSize: Joi.number(),
     })
       .and('radius', 'latitude', 'longitude')
       .required(),
