@@ -126,19 +126,29 @@ module.exports = {
             $$;
           `))
       .then(() =>
-        // populate the location_slugs table
+        // populate the locations.slug table
         queryInterface.sequelize.query(`
-          DO $$DECLARE temprow record;
+          DO $$
+          DECLARE location_to_update record;
           BEGIN
-            FOR temprow IN
+            FOR location_to_update IN
                     SELECT id FROM locations 
                 LOOP
-                    update locations set slug = get_slug(temprow.id)
-                    where id = temprow.id;
+                    update locations set slug = get_slug(location_to_update.id)
+                    where id = location_to_update.id;
                     commit;
                 END LOOP;
           END$$;
           `))
+      .then(() =>
+        // then make the slug unique and not null
+        queryInterface.changeColumn('locations', 'slug', {
+          type: Sequelize.DataTypes.STRING,
+          allowNull: false,
+          unique: true,
+        }))
+
+      // setup triggers
       .then(() => queryInterface.sequelize.query(`
             create or replace function do_init_slug_on_location_insert()
                returns trigger
@@ -152,21 +162,101 @@ module.exports = {
             $$;
           `))
       .then(() =>
-        // populate the location_slugs table
         queryInterface.sequelize.query(`
           CREATE TRIGGER init_slug_on_location_insert 
-             AFTER insert
+             BEFORE insert
              ON locations
              FOR EACH  ROW
                  EXECUTE PROCEDURE do_init_slug_on_location_insert();
           `))
+      // update organization trigger
+      .then(() => queryInterface.sequelize.query(`
+            create or replace function do_init_slug_on_organization_update()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            DECLARE location_to_update record;
+            begin
+              -- look up all of the locations, and for each one, update the slug
+              FOR location_to_update IN
+                      SELECT id, slug FROM locations l where l.organization_id = NEW.id
+                  LOOP
+                      -- populate location_slug_redirects table with the old value
+                      insert into location_slug_redirects (slug, location_id)
+                        values (slug, location_to_update.id);
+
+                      -- update locations.slug column
+                      update locations set slug = get_slug(location_to_update.id)
+                      where id = location_to_update.id;
+
+                      commit;
+                  END LOOP;
+              RETURN NEW;
+            end;
+            $$;
+          `))
       .then(() =>
-        // then make the slug unique and not null
-        queryInterface.changeColumn('locations', 'slug', {
-          type: Sequelize.DataTypes.STRING,
-          allowNull: false,
-          unique: true,
-        })));
+        queryInterface.sequelize.query(`
+          CREATE TRIGGER init_slug_on_organization_update 
+             AFTER update
+             ON organizations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE do_init_slug_on_organization_update();
+          `))
+      // update physical_addresses trigger
+      .then(() => queryInterface.sequelize.query(`
+            create or replace function do_init_slug_on_physical_addresses_update()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            DECLARE original_slug varchar;
+            begin
+
+              select slug into original_slug from locations where locations.id = NEW.location_id;
+
+              -- populate location_slug_redirects table with the old value
+              insert into location_slug_redirects (slug, location_id)
+                values (original_slug, NEW.location_id);
+
+              -- update locations.slug column
+              update locations set slug = get_slug(NEW.location_id)
+              where id = NEW.location_id;
+              RETURN NEW;
+            end;
+            $$;
+          `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+          CREATE TRIGGER init_slug_on_physical_addresses_update 
+             AFTER update
+             ON physical_addresses
+             FOR EACH ROW
+                 EXECUTE PROCEDURE do_init_slug_on_physical_addresses_update();
+          `))
+
+      // delete trigger
+      .then(() => queryInterface.sequelize.query(`
+            create or replace function do_delete_slug_on_location_delete()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              delete from location_slug_redirects where location_id = OLD.id;
+              return OLD;
+            end;
+            $$;
+          `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+          CREATE TRIGGER delete_slug_on_location_delete 
+             AFTER delete
+             ON locations
+             FOR EACH  ROW
+                 EXECUTE PROCEDURE do_delete_slug_on_location_delete();
+          `)));
   },
 
   async down(queryInterface, Sequelize) {
@@ -189,6 +279,25 @@ module.exports = {
         { transaction: t },
       ),
       queryInterface.dropFunction('do_init_slug_on_location_insert', [], { transaction: t }),
+      queryInterface.sequelize.query(
+        'drop trigger init_slug_on_organization_update on organizations',
+        { transaction: t },
+      ),
+      queryInterface.dropFunction('do_init_slug_on_organization_update', [], { transaction: t }),
+      queryInterface.sequelize.query(
+        'drop trigger init_slug_on_physical_addresses_update on physical_addresses',
+        { transaction: t },
+      ),
+      queryInterface.dropFunction(
+        'do_init_slug_on_physical_addresses_update',
+        [],
+        { transaction: t },
+      ),
+      queryInterface.sequelize.query(
+        'drop trigger delete_slug_on_location_delete on locations',
+        { transaction: t },
+      ),
+      queryInterface.dropFunction('do_delete_slug_on_location_delete', [], { transaction: t }),
     ]));
   },
 };
