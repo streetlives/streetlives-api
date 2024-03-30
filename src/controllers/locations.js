@@ -103,7 +103,7 @@ export default {
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
       const {
-        locationsWithAssociations,
+        locations,
         totalNumLocations,
       } = await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
@@ -115,11 +115,11 @@ export default {
         pageNumber,
         pageSize,
       });
-      const locations = await locationsWithAssociations
+      const plainLocations = await locations
         .map(location => location.get({ plain: true }));
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
-      const formattedLocations = locations.map((location) => {
+      const formattedLocations = plainLocations.map((location) => {
         const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
         const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
 

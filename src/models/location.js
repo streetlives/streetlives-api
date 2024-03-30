@@ -398,7 +398,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       order: distance ? [[distance, 'ASC']] : null,
     });
     return {
-      locationsWithAssociations,
+      locations: locationsWithAssociations,
       totalNumLocations,
     };
   };
