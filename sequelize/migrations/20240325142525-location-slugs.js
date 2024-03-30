@@ -68,19 +68,14 @@ module.exports = {
             return lower(
               regexp_replace(
                 regexp_replace(
-                  regexp_replace(
-                    trim(
-                      both ' ' from slug
-                    ),
-                    '[^A-Za-z0-9 -]',
-                    '',
-                    'g'
+                  trim(
+                    both ' ' from slug
                   ),
-                  ' +',
-                  '-',
+                  '[^A-Za-z0-9 -]',
+                  '',
                   'g'
                 ),
-                '-+',
+                '[ -]+',
                 '-',
                 'g'
               )
