@@ -102,6 +102,11 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
+      const limit = pageSize || maxResults;
+
+      const offset = pageNumber !== undefined && pageSize !== undefined ?
+        pageNumber * pageSize : undefined;
+
       const {
         locations,
         totalNumLocations,
@@ -109,11 +114,10 @@ export default {
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
-        maxResults,
         filterParameters,
         locationFieldsOnly,
-        pageNumber,
-        pageSize,
+        limit,
+        offset,
       });
       const plainLocations = await locations
         .map(location => location.get({ plain: true }));

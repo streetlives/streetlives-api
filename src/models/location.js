@@ -311,18 +311,14 @@ module.exports = (sequelize, DataTypes, Op) => {
     position,
     radius,
     minResults,
-    maxResults,
     filterParameters,
     locationFieldsOnly,
-    pageNumber,
-    pageSize,
+    limit,
+    offset,
   }) => {
     let locationIds;
     let distance;
     let totalNumLocations;
-
-    const offset = pageNumber !== undefined && pageSize !== undefined ?
-      pageNumber * pageSize : undefined;
 
     if (position && radius) {
       distance = sequelize.fn(
@@ -342,7 +338,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         filterParameters,
         [distanceCondition], {
           order: [[distance, 'ASC']],
-          limit: pageSize || maxResults,
+          limit,
           offset,
         },
       );
@@ -364,7 +360,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-        limit: pageSize || maxResults,
+        limit,
         offset,
       });
     }
