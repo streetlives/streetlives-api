@@ -254,7 +254,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       ...queryProps,
       where: sequelize.and(...whereConditions, ...additionalConditions),
       attributes: [
-        // [sequelize.fn('COUNT', sequelize.col('Location.id')), 'n_locations'],
         sequelize.fn('DISTINCT', sequelize.col('Location.id')),
         // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
         ...(queryProps.order || []),
