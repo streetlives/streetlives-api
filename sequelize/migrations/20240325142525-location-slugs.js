@@ -5,21 +5,10 @@ const nycNeighborhoods = require("./Information Architecture - YourPeer - June '
 module.exports = {
   async up(queryInterface, Sequelize) {
     return queryInterface.sequelize.transaction(t => Promise.all([
-      queryInterface.createTable('location_slugs', {
-        slug: {
-          type: Sequelize.DataTypes.STRING,
-          primaryKey: true,
-        },
-        location_id: {
-          type: Sequelize.DataTypes.UUID,
-          references: {
-            model: {
-              tableName: 'locations',
-            },
-            key: 'id',
-          },
-        },
+      queryInterface.addColumn('locations', 'slug', {
+        type: Sequelize.DataTypes.STRING,
       }),
+      queryInterface.addIndex('locations', ['slug']),
       queryInterface.createTable('location_slug_redirects', {
         slug: {
           type: Sequelize.DataTypes.STRING,
@@ -119,7 +108,7 @@ module.exports = {
               _slug := translate_slug_characters(_slug);
 
               select count(1) into location_slug_count 
-                from location_slugs where location_slugs.slug = '/locations/' || _slug;
+                from locations where locations.slug = '/locations/' || _slug;
 
               -- check if the slug exists in the location_slugs table
               if location_slug_count > 0 then
@@ -144,38 +133,38 @@ module.exports = {
             FOR temprow IN
                     SELECT id FROM locations 
                 LOOP
-                    INSERT INTO location_slugs(slug, location_id) 
-                      VALUES (get_slug(temprow.id), temprow.id);
+                    update locations set slug = get_slug(temprow.id)
+                    where id = temprow.id;
                     commit;
                 END LOOP;
           END$$;
           `))
       .then(() => queryInterface.sequelize.query(`
-            create or replace function do_init_slug()
+            create or replace function do_init_slug_on_location_insert()
                returns trigger
                language plpgsql
               as
             $$
             begin
-              insert into location_slugs (location_id, slug) values (NEW.id, get_slug(NEW.id));
-              return new;
+              NEW.slug := get_slug(NEW.id);
+              return NEW;
             end;
             $$;
           `))
       .then(() =>
         // populate the location_slugs table
         queryInterface.sequelize.query(`
-          CREATE TRIGGER init_slug 
+          CREATE TRIGGER init_slug_on_location_insert 
              AFTER insert
              ON locations
              FOR EACH  ROW
-                 EXECUTE PROCEDURE do_init_slug();
+                 EXECUTE PROCEDURE do_init_slug_on_location_insert();
           `)));
   },
 
   async down(queryInterface, Sequelize) {
     return queryInterface.sequelize.transaction(t => Promise.all([
-      queryInterface.dropTable('location_slugs', { transaction: t }),
+      queryInterface.dropColumn('locations', 'slug', { transaction: t }),
       queryInterface.dropTable('location_slug_redirects', { transaction: t }),
       queryInterface.dropTable('nyc_neighborhoods', { transaction: t }),
       queryInterface.dropFunction(
@@ -189,10 +178,10 @@ module.exports = {
         { transaction: t },
       ),
       queryInterface.sequelize.query(
-        'drop trigger init_slug on locations',
+        'drop trigger init_slug_on_location_insert on locations',
         { transaction: t },
       ),
-      queryInterface.dropFunction('do_init_slug', [], { transaction: t }),
+      queryInterface.dropFunction('do_init_slug_on_location_insert', [], { transaction: t }),
     ]));
   },
 };
