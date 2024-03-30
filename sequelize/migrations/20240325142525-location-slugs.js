@@ -159,12 +159,19 @@ module.exports = {
              ON locations
              FOR EACH  ROW
                  EXECUTE PROCEDURE do_init_slug_on_location_insert();
-          `)));
+          `)))
+      .then(() =>
+        // then make the slug unique and not null
+        queryInterface.changeColumn('locations', 'slug', {
+          type: Sequelize.DataTypes.STRING,
+          allowNull: false,
+          unique: true,
+        }));
   },
 
   async down(queryInterface, Sequelize) {
     return queryInterface.sequelize.transaction(t => Promise.all([
-      queryInterface.dropColumn('locations', 'slug', { transaction: t }),
+      queryInterface.removeColumn('locations', 'slug', { transaction: t }),
       queryInterface.dropTable('location_slug_redirects', { transaction: t }),
       queryInterface.dropTable('nyc_neighborhoods', { transaction: t }),
       queryInterface.dropFunction(
