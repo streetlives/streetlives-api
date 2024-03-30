@@ -47,7 +47,12 @@ export default {
         servesZipcode,
         taxonomySpecificAttributes,
         locationFieldsOnly,
+        pageNumber: _pageNumber,
+        pageSize: _pageSize,
       } = req.query;
+
+      const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
+      const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -97,16 +102,28 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-      const locations = (await models.Location.search({
+      const limit = pageSize || maxResults;
+
+      const offset = pageNumber !== undefined && pageSize !== undefined ?
+        pageNumber * pageSize : undefined;
+
+      const {
+        locations,
+        totalNumLocations,
+      } = await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
-        maxResults,
         filterParameters,
         locationFieldsOnly,
-      })).map(location => location.get({ plain: true }));
+        limit,
+        offset,
+      });
+      const plainLocations = await locations
+        .map(location => location.get({ plain: true }));
+      const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
-      const formattedLocations = locations.map((location) => {
+      const formattedLocations = plainLocations.map((location) => {
         const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
         const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
 
@@ -122,6 +139,10 @@ export default {
           closed,
         };
       });
+      if (pageNumber !== undefined && pageSize !== undefined) {
+        res.setHeader('Pagination-Count', paginationCount);
+        res.setHeader('Total-Count', totalNumLocations);
+      }
       res.send(formattedLocations);
     } catch (err) {
       next(err);
