@@ -74,6 +74,7 @@ Object {
   },
   "name": "Some kind of center",
   "position": null,
+  "slug": null,
   "transportation": null,
 }
 `;

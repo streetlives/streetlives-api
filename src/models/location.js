@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     position: DataTypes.GEOMETRY,
     additional_info: DataTypes.TEXT,
     hidden_from_search: DataTypes.BOOLEAN,
+    slug: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
