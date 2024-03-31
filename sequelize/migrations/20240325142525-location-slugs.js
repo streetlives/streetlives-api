@@ -324,15 +324,16 @@ module.exports = {
               as
             $$
             DECLARE 
-              original_slug varchar;
+              old_slug varchar;
               new_slug varchar;
             begin
               RAISE LOG 'init_slug_on_physical_addresses_update: %', NEW.id;
 
               -- only do update if the address field changes
-              IF NEW.address_1 <> OLD.address_1 THEN
+              IF NEW.address_1 <> OLD.address_1 OR 
+                  NEW.postal_code <> OLD.postal_code THEN
 
-                select slug into original_slug from locations where locations.id = NEW.location_id;
+                select slug into old_slug from locations where locations.id = NEW.location_id;
 
                 -- update locations.slug column
                 new_slug := get_slug(NEW.location_id);
@@ -341,7 +342,7 @@ module.exports = {
 
                   -- populate location_slug_redirects table with the old value
                   -- insert into location_slug_redirects (slug, location_id)
-                  --  values (original_slug, NEW.location_id);
+                  --  values (old_slug, NEW.location_id);
 
                   PERFORM update_slug_on_location(new_slug, NEW.location_id);
                 END IF;
@@ -369,20 +370,20 @@ module.exports = {
               as
             $$
             DECLARE 
-              original_slug varchar;
+              old_slug varchar;
               new_slug varchar;
             begin
               RAISE LOG 'init_slug_on_physical_addresses_insert: %', NEW.id;
 
-              select slug into original_slug from locations where locations.id = NEW.location_id;
+              select slug into old_slug from locations where locations.id = NEW.location_id;
 
               new_slug := get_slug(NEW.location_id);
 
-              IF (original_slug is null) or (new_slug <> original_slug) THEN
+              IF (old_slug is null) or (new_slug <> old_slug) THEN
 
                 -- populate location_slug_redirects table with the old value
                 -- insert into location_slug_redirects (slug, location_id)
-                --  values (original_slug, NEW.location_id);
+                --  values (old_slug, NEW.location_id);
 
                 -- update locations.slug column
                 PERFORM update_slug_on_location(new_slug, NEW.location_id);
