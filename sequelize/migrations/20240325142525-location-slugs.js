@@ -108,6 +108,20 @@ module.exports = {
           $$;
           `)
         .then(() => queryInterface.sequelize.query(`
+          create or replace function update_slug_on_location(_slug varchar, loc_id uuid)
+             returns void
+             language plpgsql
+            as
+          $$
+          begin
+            if _slug is not null then
+              RAISE LOG 'updating location % slug to %', _slug, loc_id;
+              update locations set slug = _slug where id = loc_id;
+            end if;
+          end;
+          $$;
+          `))
+        .then(() => queryInterface.sequelize.query(`
             create or replace function get_slug(loc_id uuid)
                returns varchar
                language plpgsql
@@ -124,6 +138,15 @@ module.exports = {
               address_1 varchar;
               suffix_count int = 2;
             begin
+              -- first check if he has a physical_address associated with him.
+              -- if he does not, then return null
+              if not exists (select * from physical_addresses where location_id = loc_id) then
+                RAISE LOG
+                  'location % does not yet have a physical address initialized. skipping...',
+                  loc_id;
+                return null;
+              end if;
+
               -- get the organization name
               select o.name into org_name from organizations o
               inner join locations l on l.organization_id = o.id
@@ -211,10 +234,12 @@ module.exports = {
           DECLARE location_to_update record;
           BEGIN
             FOR location_to_update IN
-                    SELECT id FROM locations 
+                    SELECT id FROM locations
                 LOOP
-                    update locations set slug = get_slug(location_to_update.id)
-                    where id = location_to_update.id;
+                    PERFORM update_slug_on_location(
+                      get_slug(location_to_update.id), 
+                      location_to_update.id
+                    );
                     commit;
                 END LOOP;
           END$$;
@@ -230,8 +255,7 @@ module.exports = {
             begin
               RAISE LOG 'init_slug_on_location_insert: %', NEW.id;
               NEW.slug := get_slug(NEW.id);
-              update locations set slug = NEW.slug
-              where locations.id = NEW.id;
+              PERFORM update_slug_on_location(NEW.slug, NEW.id);
               return NEW;
             end;
             $$;
@@ -267,15 +291,14 @@ module.exports = {
 
                         new_slug := get_slug(NEW.location_to_update.id);
 
-                        IF new_slug <> old_slug THEN
+                        IF (old_slug is null) or (new_slug <> old_slug)  THEN
 
                           -- TODO: populate location_slug_redirects table with the old value
                           -- insert into location_slug_redirects (slug, location_id)
                           --  values (slug, location_to_update.id);
 
                           -- update locations.slug column
-                          update locations set slug = new_slug
-                          where id = location_to_update.id;
+                          PERFORM update_slug_on_location(new_slug, location_to_update.id);
 
                           commit;
                         END IF;
@@ -314,14 +337,13 @@ module.exports = {
                 -- update locations.slug column
                 new_slug := get_slug(NEW.location_id);
 
-                IF new_slug <> old_slug THEN
+                IF (old_slug is null) or (new_slug <> old_slug) THEN
 
                   -- populate location_slug_redirects table with the old value
                   -- insert into location_slug_redirects (slug, location_id)
                   --  values (original_slug, NEW.location_id);
 
-                  update locations set slug = new_slug
-                  where id = NEW.location_id;
+                  PERFORM update_slug_on_location(new_slug, NEW.location_id);
                 END IF;
 
               END IF;
@@ -356,15 +378,14 @@ module.exports = {
 
               new_slug := get_slug(NEW.location_id);
 
-              IF new_slug <> original_slug THEN
+              IF (original_slug is null) or (new_slug <> original_slug) THEN
 
                 -- populate location_slug_redirects table with the old value
                 -- insert into location_slug_redirects (slug, location_id)
                 --  values (original_slug, NEW.location_id);
 
                 -- update locations.slug column
-                update locations set slug = get_slug(NEW.location_id)
-                where id = NEW.location_id;
+                PERFORM update_slug_on_location(new_slug, NEW.location_id);
 
               END IF;
 
@@ -426,6 +447,15 @@ module.exports = {
         [{ type: 'varchar' }],
         { transaction: t },
       ),
+      queryInterface.dropFunction(
+        'update_slug_on_location',
+        [
+          { type: 'varchar' },
+          { type: 'uuid' },
+        ],
+        { transaction: t },
+      ),
+
       queryInterface.sequelize.query(
         'drop trigger init_slug_on_location_insert on locations',
         { transaction: t },
