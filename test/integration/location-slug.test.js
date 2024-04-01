@@ -10,8 +10,8 @@ import geometry from '../../src/utils/geometry';
 describe('get location info', () => {
   let organization;
   let primaryLocation;
-  let otherServiceLocation;
   let hiddenLocation;
+  let otherServiceLocation;
   let farLocation;
   const pointNearOrigin = geometry.createPoint(-73.991303, 40.751908);
   const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
@@ -84,7 +84,7 @@ describe('get location info', () => {
 
   beforeAll(setupData);
 
-  it('test slug generation at location 1', () =>
+  it('should generate slug at location 1', () =>
     request(app)
       .get(`/locations/${primaryLocation.id}`)
       .expect(200)
@@ -92,7 +92,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual('the-test-org-chelsea');
       }));
 
-  it('test slug generation at location 2', () =>
+  it('should generate slug at location 2', () =>
     request(app)
       .get(`/locations/${hiddenLocation.id}`)
       .expect(200)
@@ -101,18 +101,18 @@ describe('get location info', () => {
       }));
 
   // these locations  do not have addresses
-  it('test slug generation at location 3', () =>
+  it('should generate slug at location 3', () =>
     request(app)
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(500));
 
-  it('test slug generation at location 4', () =>
+  it('should generate slug at location 4', () =>
     request(app)
       .get(`/locations/${farLocation.id}`)
       .expect(500));
 
   // add a physcial_address to first one - should have an address suffix
-  it('test slug generation at location 3 after adding physical address', async () => {
+  it('should generate slug at location 3 after adding physical address', async () => {
     await otherServiceLocation.createPhysicalAddress(physicalAddress1);
     await request(app)
       .get(`/locations/${otherServiceLocation.id}`)
@@ -123,7 +123,7 @@ describe('get location info', () => {
   });
 
   // add a physcial_address to second one - should have an address suffix, plus a count suffix
-  it('test slug generation at location 4 after adding physical address', async () => {
+  it('should generate slug at location 4 after adding physical address', async () => {
     await farLocation.createPhysicalAddress(physicalAddress1);
     await request(app)
       .get(`/locations/${farLocation.id}`)
@@ -135,7 +135,7 @@ describe('get location info', () => {
 
   // update the address at the first location
   // it should have an address suffix to avoid conflict with location 2
-  it('test slug generation at location 1 after updating physical address', async () => {
+  it('should generate slug at location 1 after updating physical address', async () => {
     const address = primaryLocation.PhysicalAddresses[0];
     address.set('address_1', physicalAddress2.address_1);
     address.set('postal_code', physicalAddress2.postal_code);
@@ -150,7 +150,7 @@ describe('get location info', () => {
 
   // update the address at the third location
   // it should have an address suffix AND a count suffix to avoid conflict with locations 1 and 2
-  it('test slug generation at location 3 after updating physical address', async () => {
+  it('should generate slug at location 3 after updating physical address', async () => {
     const otherServiceLocationReloaded = await models.Location.findByPk(otherServiceLocation.id, {
       include: {
         model: models.PhysicalAddress,
@@ -170,7 +170,7 @@ describe('get location info', () => {
 
   // update the address at the third location
   // it should have an address suffix AND a count suffix to avoid conflict with locations 1, 2 and 3
-  it('test slug generation at location 4 after updating physical address', async () => {
+  it('should generate slug at location 4 after updating physical address', async () => {
     const farLocationReloaded = await models.Location.findByPk(farLocation.id, {
       include: {
         model: models.PhysicalAddress,
@@ -189,5 +189,33 @@ describe('get location info', () => {
   });
 
   // update organization name - should update both location slugs
+  it('should generate slugs at all four locations after updating organization name', async () => {
+    organization.set('name', 'The New Test Org');
+    await organization.save();
+    await request(app)
+      .get(`/locations/${primaryLocation.id}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side');
+      });
+    await request(app)
+      .get(`/locations/${hiddenLocation.id}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st');
+      });
+    await request(app)
+      .get(`/locations/${otherServiceLocation.id}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-2');
+      });
+    await request(app)
+      .get(`/locations/${farLocation.id}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-3');
+      });
+  });
 });
 

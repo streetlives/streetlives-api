@@ -96,14 +96,11 @@ module.exports = {
                    loc.slug <> _slug;
                 END LOOP;
 
-              select count(1) into location_slug_count 
+              return exists(
+                select * 
                 from locations where locations.slug = _slug 
-                and locations.id <> loc_id;
-
-              RAISE LOG 'location_slug_count: %', location_slug_count;
-
-              -- check if the slug exists in the location_slugs table
-              return location_slug_count > 0;
+                and locations.id <> loc_id
+              );
           end;
           $$;
           `)
@@ -277,7 +274,8 @@ module.exports = {
             $$
             DECLARE 
               location_to_update record;
-              new_slug uuid;
+              new_slug varchar;
+              old_slug varchar;
             begin
 
               RAISE LOG 'init_slug_on_organization_update: %', NEW.id;
@@ -286,21 +284,16 @@ module.exports = {
               IF NEW.name <> OLD.name THEN
                 -- look up all of the locations, and for each one, update the slug
                 FOR location_to_update IN
-                        SELECT id, slug FROM locations l where l.organization_id = NEW.id
+                        SELECT id, slug FROM locations l 
+                        where l.organization_id = NEW.id
+                        order by l.created_at ASC
                     LOOP
 
-                        new_slug := get_slug(NEW.location_to_update.id);
+                        new_slug := get_slug(location_to_update.id);
+                        old_slug := location_to_update.slug;
 
                         IF (old_slug is null) or (new_slug <> old_slug)  THEN
-
-                          -- TODO: populate location_slug_redirects table with the old value
-                          -- insert into location_slug_redirects (slug, location_id)
-                          --  values (slug, location_to_update.id);
-
-                          -- update locations.slug column
                           PERFORM update_slug_on_location(new_slug, location_to_update.id);
-
-                          commit;
                         END IF;
                     END LOOP;
                 END IF;
@@ -340,11 +333,8 @@ module.exports = {
 
                 IF (old_slug is null) or (new_slug <> old_slug) THEN
 
-                  -- populate location_slug_redirects table with the old value
-                  -- insert into location_slug_redirects (slug, location_id)
-                  --  values (old_slug, NEW.location_id);
-
                   PERFORM update_slug_on_location(new_slug, NEW.location_id);
+
                 END IF;
 
               END IF;
@@ -380,10 +370,6 @@ module.exports = {
               new_slug := get_slug(NEW.location_id);
 
               IF (old_slug is null) or (new_slug <> old_slug) THEN
-
-                -- populate location_slug_redirects table with the old value
-                -- insert into location_slug_redirects (slug, location_id)
-                --  values (old_slug, NEW.location_id);
 
                 -- update locations.slug column
                 PERFORM update_slug_on_location(new_slug, NEW.location_id);
