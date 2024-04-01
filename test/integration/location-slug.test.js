@@ -217,5 +217,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-3');
       });
   });
+
+  // TODO: test delete on location
 });
 

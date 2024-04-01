@@ -411,7 +411,32 @@ module.exports = {
              ON locations
              FOR EACH  ROW
                  EXECUTE PROCEDURE do_delete_slug_on_location_delete();
-          `))));
+          `)))
+      .then(() => queryInterface.sequelize.query(`
+            create or replace function do_insert_into_location_slug_redirects_on_locations_update()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+
+              IF OLD.slug is not null and NEW.slug is not null and OLD.slug <> NEW.slug
+                AND NOT EXISTS(select * from location_slug_redirects where slug = OLD.slug) THEN
+
+                insert into location_slug_redirects(slug, location_id) values (OLD.slug, NEW.id);
+              END IF;
+              RETURN NEW;
+            end;
+            $$;
+          `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+          CREATE TRIGGER insert_into_location_slug_redirects_on_locations_update
+             AFTER update
+             ON locations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE do_insert_into_location_slug_redirects_on_locations_update();
+          `)));
   },
 
   async down(queryInterface, Sequelize) {
@@ -467,6 +492,15 @@ module.exports = {
         { transaction: t },
       ),
       queryInterface.dropFunction('do_delete_slug_on_location_delete', [], { transaction: t }),
+      queryInterface.sequelize.query(
+        'drop trigger insert_into_location_slug_redirects_on_locations_update on locations',
+        { transaction: t },
+      ),
+      queryInterface.dropFunction(
+        'do_insert_into_location_slug_redirects_on_locations_update',
+        [],
+        { transaction: t },
+      ),
     ]));
   },
 };
