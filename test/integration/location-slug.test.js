@@ -302,7 +302,7 @@ describe('get location info', () => {
       .get(`/locations/${hiddenLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st');
+        expect(res.body.slug).toEqual(hiddenLocationNewSlug);
       });
     await request(app)
       .get(`/locations-slug-redirects/${hiddenLocationOldSlug}`)
@@ -316,7 +316,7 @@ describe('get location info', () => {
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-2');
+        expect(res.body.slug).toEqual(otherServiceLocationNewSlug);
       });
     await request(app)
       .get(`/locations-slug-redirects/${otherServiceLocationOldSlug}`)
@@ -330,7 +330,7 @@ describe('get location info', () => {
       .get(`/locations/${farLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-3');
+        expect(res.body.slug).toEqual(farLocationNewSlug);
       });
     await request(app)
       .get(`/locations-slug-redirects/${farLocationOldSlug}`)
