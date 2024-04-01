@@ -270,14 +270,34 @@ describe('get location info', () => {
 
   // update organization name - should update both location slugs
   it('should generate slugs at all four locations after updating organization name', async () => {
+    const { slug: primaryLocationOldSlug } = await models.Location.findByPk(primaryLocation.id);
+    const { slug: hiddenLocationOldSlug } = await models.Location.findByPk(hiddenLocation.id);
+    const { slug: otherServiceLocationOldSlug } =
+      await models.Location.findByPk(otherServiceLocation.id);
+    const { slug: farLocationOldSlug } = await models.Location.findByPk(farLocation.id);
+
+    const primaryLocationNewSlug = 'the-new-test-org-lower-east-side';
+    const hiddenLocationNewSlug = 'the-new-test-org-lower-east-side-222-e-75th-st';
+    const otherServiceLocationNewSlug = 'the-new-test-org-lower-east-side-222-e-75th-st-2';
+    const farLocationNewSlug = 'the-new-test-org-lower-east-side-222-e-75th-st-3';
+
     organization.set('name', 'The New Test Org');
     await organization.save();
+
     await request(app)
       .get(`/locations/${primaryLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-new-test-org-lower-east-side');
+        expect(res.body.slug).toEqual(primaryLocationNewSlug);
       });
+    await request(app)
+      .get(`/locations-slug-redirects/${primaryLocationOldSlug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(primaryLocation.id);
+        expect(res.body.slug).toEqual(primaryLocationNewSlug);
+      });
+
     await request(app)
       .get(`/locations/${hiddenLocation.id}`)
       .expect(200)
@@ -285,16 +305,39 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st');
       });
     await request(app)
+      .get(`/locations-slug-redirects/${hiddenLocationOldSlug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(hiddenLocation.id);
+        expect(res.body.slug).toEqual(hiddenLocationNewSlug);
+      });
+
+    await request(app)
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(200)
       .then((res) => {
         expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-2');
       });
     await request(app)
+      .get(`/locations-slug-redirects/${otherServiceLocationOldSlug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(otherServiceLocation.id);
+        expect(res.body.slug).toEqual(otherServiceLocationNewSlug);
+      });
+
+    await request(app)
       .get(`/locations/${farLocation.id}`)
       .expect(200)
       .then((res) => {
         expect(res.body.slug).toEqual('the-new-test-org-lower-east-side-222-e-75th-st-3');
+      });
+    await request(app)
+      .get(`/locations-slug-redirects/${farLocationOldSlug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(farLocation.id);
+        expect(res.body.slug).toEqual(farLocationNewSlug);
       });
   });
 
