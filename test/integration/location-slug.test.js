@@ -206,7 +206,7 @@ describe('get location info', () => {
         expect(res.body.id).toEqual(primaryLocation.id);
       });
     await request(app)
-      .get(`/locations-slug-redirects/${oldSlug}`)
+      .get(`/location-slug-redirects/${oldSlug}`)
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(primaryLocation.id);
@@ -291,7 +291,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual(primaryLocationNewSlug);
       });
     await request(app)
-      .get(`/locations-slug-redirects/${primaryLocationOldSlug}`)
+      .get(`/location-slug-redirects/${primaryLocationOldSlug}`)
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(primaryLocation.id);
@@ -305,7 +305,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual(hiddenLocationNewSlug);
       });
     await request(app)
-      .get(`/locations-slug-redirects/${hiddenLocationOldSlug}`)
+      .get(`/location-slug-redirects/${hiddenLocationOldSlug}`)
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(hiddenLocation.id);
@@ -319,7 +319,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual(otherServiceLocationNewSlug);
       });
     await request(app)
-      .get(`/locations-slug-redirects/${otherServiceLocationOldSlug}`)
+      .get(`/location-slug-redirects/${otherServiceLocationOldSlug}`)
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(otherServiceLocation.id);
@@ -333,7 +333,7 @@ describe('get location info', () => {
         expect(res.body.slug).toEqual(farLocationNewSlug);
       });
     await request(app)
-      .get(`/locations-slug-redirects/${farLocationOldSlug}`)
+      .get(`/location-slug-redirects/${farLocationOldSlug}`)
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(farLocation.id);
@@ -347,7 +347,7 @@ describe('get location info', () => {
       const { slug: primaryLocationOldSlug } = await models.Location.findByPk(primaryLocation.id);
       await primaryLocation.destroy();
       await request(app)
-        .get(`/locations-slug-redirects/${primaryLocationOldSlug}`)
+        .get(`/location-slug-redirects/${primaryLocationOldSlug}`)
         .expect(404);
     },
   );

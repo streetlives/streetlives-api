@@ -29,7 +29,7 @@ export default (app) => {
   app.patch('/locations/:locationId', getUser, dataEntryAuth, locations.update);
 
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
-  app.get('/locations-slug-redirects/:slug', locations.getRedirectBySlug);
+  app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.post('/locations/:locationId/phones', getUser, dataEntryAuth, locations.addPhone);
   app.patch('/phones/:phoneId', getUser, dataEntryAuth, locations.updatePhone);
