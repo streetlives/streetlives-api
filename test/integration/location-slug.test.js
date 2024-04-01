@@ -341,6 +341,15 @@ describe('get location info', () => {
       });
   });
 
-  // TODO: test delete on location
+  it(
+    'should remove the row from the location_slug_redirects table when the location is deleted',
+    async () => {
+      const { slug: primaryLocationOldSlug } = await models.Location.findByPk(primaryLocation.id);
+      await primaryLocation.destroy();
+      await request(app)
+        .get(`/locations-slug-redirects/${primaryLocationOldSlug}`)
+        .expect(404);
+    },
+  );
 });
 

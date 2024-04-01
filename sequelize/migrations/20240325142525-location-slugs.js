@@ -404,8 +404,7 @@ module.exports = {
             $$
             begin
               RAISE LOG 'delete location: %', OLD.id;
-              -- TODO
-              -- delete from location_slug_redirects where location_id = OLD.id;
+              delete from location_slug_redirects where location_id = OLD.id;
               return OLD;
             end;
             $$;
