@@ -138,12 +138,12 @@ describe('get location info', () => {
   });
 
   // these locations  do not have addresses
-  it('should generate slug at location 3', () =>
+  it('should fail to lookup location 3 because it lacks a physical address', () =>
     request(app)
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(500));
 
-  it('should generate slug at location 4', () =>
+  it('should fail to lookup location 4 because it lacks a physical address', () =>
     request(app)
       .get(`/locations/${farLocation.id}`)
       .expect(500));
