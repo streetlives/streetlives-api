@@ -264,17 +264,26 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      const location = await models.Location.find(
-        {
-          where: {
-            slug: req.params.slug,
-          },
+      const locations = await models.LocationSlugRedirects.findAll({
+        where: {
+          slug: req.params.slug,
         },
-        getInfoAssociations,
-      );
+        include: [
+          {
+            model: models.Location,
+          },
+        ],
+      });
 
-      const getInfoResponse = await handleGetInfoResponse(location);
-      res.send(getInfoResponse);
+      if (locations.length) {
+        const location = locations[0];
+        res.send({
+          id: location.dataValues.LocationId,
+          slug: location.Location.slug,
+        });
+      } else {
+        res.send(404);
+      }
     } catch (err) {
       next(err);
     }

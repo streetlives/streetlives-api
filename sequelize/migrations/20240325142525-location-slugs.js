@@ -27,6 +27,12 @@ module.exports = {
             key: 'id',
           },
         },
+        created_at: {
+          type: Sequelize.DataTypes.DATE,
+        },
+        updated_at: {
+          type: Sequelize.DataTypes.DATE,
+        },
       }),
       queryInterface.createTable('nyc_neighborhoods', {
         zip_code: {
@@ -423,7 +429,8 @@ module.exports = {
               IF OLD.slug is not null and NEW.slug is not null and OLD.slug <> NEW.slug
                 AND NOT EXISTS(select * from location_slug_redirects where slug = OLD.slug) THEN
 
-                insert into location_slug_redirects(slug, location_id) values (OLD.slug, NEW.id);
+                insert into location_slug_redirects(slug, location_id, created_at, updated_at) 
+                  values (OLD.slug, NEW.id, NOW(), NOW());
               END IF;
               RETURN NEW;
             end;

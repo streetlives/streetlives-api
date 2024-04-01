@@ -33,53 +33,74 @@ describe('get location info', () => {
     country: 'US',
   };
 
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
   const setupData = async () => {
-    organization = await models.Organization.create(
+    organization = await models.Organization.create({
+      name: 'The Test Org',
+      description: 'An organization meant for testing purposes.',
+    });
+
+    primaryLocation = await organization.createLocation(
       {
-        name: 'The Test Org',
-        description: 'An organization meant for testing purposes.',
-        Locations: [
-          {
-            name: 'Nearby center',
-            position: pointNearOrigin,
-            PhysicalAddresses: [physicalAddress1],
-          },
-          {
-            name: 'Nearby center (volunteers)',
-            position: pointNearOrigin,
-            PhysicalAddresses: [{
-              address_1: '222 E 75th St.',
-              city: 'New York',
-              state_province: 'NY',
-              postal_code: '10002',
-              country: 'US',
-            }],
-          },
-          {
-            name: 'Other nearby center',
-            position: pointSlightlyFurtherFromOrigin,
-          },
-          { name: 'Far-off center', position: pointFarFromOrigin },
-        ],
+        name: 'Nearby center',
+        position: pointNearOrigin,
+        PhysicalAddresses: [physicalAddress1],
       },
       {
         include: [
-          {
-            model: models.Service,
-            include: [{ model: models.Taxonomy }],
-          },
-          {
-            model: models.Location,
-            include: [
-              models.PhysicalAddress,
-            ],
-          },
+          models.PhysicalAddress,
         ],
       },
     );
 
-    const locations = organization.Locations;
-    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
+    // we introduce some delays so that the subsequent sort of locations
+    // while updating the organization name works deterministically
+    await delay(100);
+
+    hiddenLocation = await organization.createLocation(
+      {
+        name: 'Nearby center (volunteers)',
+        position: pointNearOrigin,
+        PhysicalAddresses: [{
+          address_1: '222 E 75th St.',
+          city: 'New York',
+          state_province: 'NY',
+          postal_code: '10002',
+          country: 'US',
+        }],
+      },
+      {
+        include: [
+          models.PhysicalAddress,
+        ],
+      },
+    );
+
+    await delay(100);
+
+    otherServiceLocation = await organization.createLocation(
+      {
+        name: 'Other nearby center',
+        position: pointSlightlyFurtherFromOrigin,
+      },
+      {
+        include: [
+          models.PhysicalAddress,
+        ],
+      },
+    );
+
+    await delay(100);
+
+    farLocation = await organization.createLocation(
+      { name: 'Far-off center', position: pointFarFromOrigin },
+      {
+        include: [
+          models.PhysicalAddress,
+        ],
+      },
+    );
   };
 
   beforeAll(setupData);
@@ -166,6 +187,7 @@ describe('get location info', () => {
   // update the address at the first location
   // it should have an address suffix to avoid conflict with location 2
   it('should generate slug at location 1 after updating physical address', async () => {
+    const { slug: oldSlug } = await models.Location.findByPk(primaryLocation.id);
     const slug = 'the-test-org-lower-east-side-222-e-75th-st';
     const address = primaryLocation.PhysicalAddresses[0];
     address.set('address_1', physicalAddress2.address_1);
@@ -182,6 +204,13 @@ describe('get location info', () => {
       .expect(200)
       .then((res) => {
         expect(res.body.id).toEqual(primaryLocation.id);
+      });
+    await request(app)
+      .get(`/locations-slug-redirects/${oldSlug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(primaryLocation.id);
+        expect(res.body.slug).toEqual(slug);
       });
   });
 
