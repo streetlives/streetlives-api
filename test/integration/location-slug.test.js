@@ -84,21 +84,37 @@ describe('get location info', () => {
 
   beforeAll(setupData);
 
-  it('should generate slug at location 1', () =>
-    request(app)
+  it('should generate slug at location 1', async () => {
+    const slug = 'the-test-org-chelsea';
+    await request(app)
       .get(`/locations/${primaryLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-chelsea');
-      }));
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(primaryLocation.id);
+      });
+  });
 
-  it('should generate slug at location 2', () =>
-    request(app)
+  it('should generate slug at location 2', async () => {
+    const slug = 'the-test-org-lower-east-side';
+    await request(app)
       .get(`/locations/${hiddenLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-lower-east-side');
-      }));
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(hiddenLocation.id);
+      });
+  });
 
   // these locations  do not have addresses
   it('should generate slug at location 3', () =>
@@ -113,29 +129,44 @@ describe('get location info', () => {
 
   // add a physcial_address to first one - should have an address suffix
   it('should generate slug at location 3 after adding physical address', async () => {
+    const slug = 'the-test-org-chelsea-123-w-50th-st';
     await otherServiceLocation.createPhysicalAddress(physicalAddress1);
     await request(app)
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-chelsea-123-w-50th-st');
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(otherServiceLocation.id);
       });
   });
 
   // add a physcial_address to second one - should have an address suffix, plus a count suffix
   it('should generate slug at location 4 after adding physical address', async () => {
+    const slug = 'the-test-org-chelsea-123-w-50th-st-2';
     await farLocation.createPhysicalAddress(physicalAddress1);
     await request(app)
       .get(`/locations/${farLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-chelsea-123-w-50th-st-2');
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(farLocation.id);
       });
   });
 
   // update the address at the first location
   // it should have an address suffix to avoid conflict with location 2
   it('should generate slug at location 1 after updating physical address', async () => {
+    const slug = 'the-test-org-lower-east-side-222-e-75th-st';
     const address = primaryLocation.PhysicalAddresses[0];
     address.set('address_1', physicalAddress2.address_1);
     address.set('postal_code', physicalAddress2.postal_code);
@@ -144,13 +175,20 @@ describe('get location info', () => {
       .get(`/locations/${primaryLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-lower-east-side-222-e-75th-st');
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(primaryLocation.id);
       });
   });
 
   // update the address at the third location
   // it should have an address suffix AND a count suffix to avoid conflict with locations 1 and 2
   it('should generate slug at location 3 after updating physical address', async () => {
+    const slug = 'the-test-org-lower-east-side-222-e-75th-st-2';
     const otherServiceLocationReloaded = await models.Location.findByPk(otherServiceLocation.id, {
       include: {
         model: models.PhysicalAddress,
@@ -164,13 +202,20 @@ describe('get location info', () => {
       .get(`/locations/${otherServiceLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-lower-east-side-222-e-75th-st-2');
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(otherServiceLocation.id);
       });
   });
 
   // update the address at the third location
   // it should have an address suffix AND a count suffix to avoid conflict with locations 1, 2 and 3
   it('should generate slug at location 4 after updating physical address', async () => {
+    const slug = 'the-test-org-lower-east-side-222-e-75th-st-3';
     const farLocationReloaded = await models.Location.findByPk(farLocation.id, {
       include: {
         model: models.PhysicalAddress,
@@ -184,7 +229,13 @@ describe('get location info', () => {
       .get(`/locations/${farLocation.id}`)
       .expect(200)
       .then((res) => {
-        expect(res.body.slug).toEqual('the-test-org-lower-east-side-222-e-75th-st-3');
+        expect(res.body.slug).toEqual(slug);
+      });
+    await request(app)
+      .get(`/locations-by-slug/${slug}`)
+      .expect(200)
+      .then((res) => {
+        expect(res.body.id).toEqual(farLocation.id);
       });
   });
 

@@ -43,6 +43,12 @@ export default {
     }).required(),
   },
 
+  getInfoBySlug: {
+    params: Joi.object().keys({
+      slug: Joi.string().required(),
+    }).required(),
+  },
+
   create: {
     body: Joi.object().keys({
       name: Joi.string(),

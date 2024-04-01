@@ -23,6 +23,83 @@ const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
 };
 
+const getInfoAssociations = {
+  include: [
+    {
+      model: models.Service,
+      include: [
+        {
+          model: models.Eligibility,
+          include: [models.EligibilityParameter],
+        },
+        {
+          model: models.ServiceTaxonomySpecificAttribute,
+          include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
+        },
+        models.Taxonomy,
+        models.RegularSchedule,
+        models.HolidaySchedule,
+        models.Language,
+        models.RequiredDocument,
+        models.DocumentsInfo,
+        models.Phone,
+        models.EventRelatedInfo,
+        models.ServiceArea,
+      ],
+    },
+    {
+      model: models.Organization,
+      include: [models.Phone],
+    },
+    models.Phone,
+    models.PhysicalAddress,
+    models.AccessibilityForDisabilities,
+    models.EventRelatedInfo,
+  ],
+};
+
+async function handleGetInfoResponse(location) {
+  if (!location) {
+    throw new NotFoundError('Location not found');
+  }
+
+  const {
+    PhysicalAddresses: addresses,
+    Services: services,
+    additional_info: additionalInfo,
+    ...unchangedProps
+  } = location.get({ plain: true });
+
+  if (!addresses || addresses.length !== 1) {
+    throw new Error('Location does not have a valid address');
+  }
+
+  const address = addresses[0];
+
+  const locationMetadata = await getMetadataForLocation(location, address);
+  const servicesWithMetadata = await Promise.all(services.map(async service => ({
+    ...service,
+    metadata: await getMetadataForService(service),
+  })));
+
+  const responseData = {
+    ...unchangedProps,
+    Services: servicesWithMetadata,
+    additionalInfo,
+    address: {
+      street: address.address_1,
+      city: address.city,
+      region: address.region,
+      state: address.state_province,
+      postalCode: address.postal_code,
+      country: address.country,
+    },
+    metadata: locationMetadata,
+  };
+
+  return responseData;
+}
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -155,81 +232,49 @@ export default {
 
       const location = await models.Location.findByPk(
         req.params.locationId,
-        {
-          include: [
-            {
-              model: models.Service,
-              include: [
-                {
-                  model: models.Eligibility,
-                  include: [models.EligibilityParameter],
-                },
-                {
-                  model: models.ServiceTaxonomySpecificAttribute,
-                  include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
-                },
-                models.Taxonomy,
-                models.RegularSchedule,
-                models.HolidaySchedule,
-                models.Language,
-                models.RequiredDocument,
-                models.DocumentsInfo,
-                models.Phone,
-                models.EventRelatedInfo,
-                models.ServiceArea,
-              ],
-            },
-            {
-              model: models.Organization,
-              include: [models.Phone],
-            },
-            models.Phone,
-            models.PhysicalAddress,
-            models.AccessibilityForDisabilities,
-            models.EventRelatedInfo,
-          ],
-        },
+        getInfoAssociations,
       );
 
-      if (!location) {
-        throw new NotFoundError('Location not found');
-      }
+      const getInfoResponse = await handleGetInfoResponse(location);
+      res.send(getInfoResponse);
+    } catch (err) {
+      next(err);
+    }
+  },
 
-      const {
-        PhysicalAddresses: addresses,
-        Services: services,
-        additional_info: additionalInfo,
-        ...unchangedProps
-      } = location.get({ plain: true });
+  getInfoBySlug: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      if (!addresses || addresses.length !== 1) {
-        throw new Error('Location does not have a valid address');
-      }
-
-      const address = addresses[0];
-
-      const locationMetadata = await getMetadataForLocation(location, address);
-      const servicesWithMetadata = await Promise.all(services.map(async service => ({
-        ...service,
-        metadata: await getMetadataForService(service),
-      })));
-
-      const responseData = {
-        ...unchangedProps,
-        Services: servicesWithMetadata,
-        additionalInfo,
-        address: {
-          street: address.address_1,
-          city: address.city,
-          region: address.region,
-          state: address.state_province,
-          postalCode: address.postal_code,
-          country: address.country,
+      const locations = await models.Location.findAll({
+        where: {
+          slug: req.params.slug,
         },
-        metadata: locationMetadata,
-      };
+        include: getInfoAssociations.include,
+      });
 
-      res.send(responseData);
+      const getInfoResponse = locations.length ? await handleGetInfoResponse(locations[0]) : null;
+      res.send(getInfoResponse);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getRedirectBySlug: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
+
+      const location = await models.Location.find(
+        {
+          where: {
+            slug: req.params.slug,
+          },
+        },
+        getInfoAssociations,
+      );
+
+      const getInfoResponse = await handleGetInfoResponse(location);
+      res.send(getInfoResponse);
     } catch (err) {
       next(err);
     }
