@@ -52,11 +52,8 @@ module.exports = {
             bind: [zipCode, neighborhoodName],
             type: Sequelize.QueryTypes.INSERT,
           },
-        )))))).then(() => (!isTesting ?
-      queryInterface.sequelize.query(`
-          insert into location_slug_redirects 
-            select slug, location_id, NOW(), NOW() from website_data`) :
-      new Promise(resolve => resolve()))).then(() => queryInterface.sequelize.query(`
+        ))))))
+      .then(() => queryInterface.sequelize.query(`
           create or replace function translate_slug_characters(slug varchar)
              returns varchar
              language plpgsql
@@ -248,7 +245,27 @@ module.exports = {
                 END LOOP;
           END$$;
           `))
-
+        .then(() => (!isTesting ?
+          queryInterface.sequelize.query(`
+              DO $$
+              DECLARE 
+                _slug varchar;
+                data record;
+              BEGIN
+                FOR data IN SELECT slug, location_id FROM website_data
+                  LOOP
+                    _slug := (string_to_array(data.slug,'/'))[3];
+                    if not exists(select slug from locations where slug = _slug) then
+                      insert into location_slug_redirects values (
+                        _slug, 
+                        data.location_id, 
+                        now(), 
+                        now());
+                      end if;
+                  END LOOP;
+              END$$;
+          `) :
+          new Promise(resolve => resolve())))
         // setup triggers
         .then(() => queryInterface.sequelize.query(`
             create or replace function do_init_slug_on_location_insert()
@@ -453,12 +470,15 @@ module.exports = {
       queryInterface.dropTable('nyc_neighborhoods', { transaction: t }),
       queryInterface.dropFunction(
         'slug_exists',
-        [{ type: Sequelize.DataTypes.STRING }],
+        [
+          { type: 'varchar' },
+          { type: 'uuid' },
+        ],
         { transaction: t },
       ),
       queryInterface.dropFunction(
         'get_slug',
-        [{ type: Sequelize.DataTypes.UUID }],
+        [{ type: 'uuid' }],
         { transaction: t },
       ),
       queryInterface.dropFunction(
@@ -505,6 +525,21 @@ module.exports = {
       ),
       queryInterface.dropFunction(
         'do_insert_into_location_slug_redirects_on_locations_update',
+        [],
+        { transaction: t },
+      ),
+      queryInterface.dropFunction(
+        'do_insert_into_location_slug_redirects_on_locations_update',
+        [],
+        { transaction: t },
+      ),
+      queryInterface.dropFunction(
+        'drop trigger init_slug_on_physical_addresses_insert on physical_addresses',
+        [],
+        { transaction: t },
+      ),
+      queryInterface.dropFunction(
+        'init_slug_on_physical_addresses_insert',
         [],
         { transaction: t },
       ),
