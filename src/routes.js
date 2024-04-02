@@ -23,13 +23,12 @@ export default (app) => {
   app.get('/locations', locations.find);
 
   app.post('/locations/suggestions', locations.suggestNew);
+  app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
+  app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations', getUser, dataEntryAuth, locations.create);
   app.patch('/locations/:locationId', getUser, dataEntryAuth, locations.update);
-
-  app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
-  app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.post('/locations/:locationId/phones', getUser, dataEntryAuth, locations.addPhone);
   app.patch('/phones/:phoneId', getUser, dataEntryAuth, locations.updatePhone);

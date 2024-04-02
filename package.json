@@ -26,10 +26,10 @@
     "delete-bucket": "aws s3 rb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
     "package": "cp -r node_modules dist/; cd dist && zip -r ../dist.zip *",
     "clean": "rm -rf dist/ dist.zip",
-    "deploy": "aws lambda update-function-code --function-name $npm_package_config_functionName --zip-file fileb://./dist.zip --publish",
+    "deploy:dev": "aws lambda update-function-code --function-name $npm_package_config_functionName --zip-file fileb://./dist.zip --publish",
     "deploy:prod": "aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --zip-file fileb://./dist.zip --publish",
-    "package-deploy": "npm run package && npm run deploy",
-    "package-deploy:prod": "npm run package && npm run deploy:prod",
+    "package-deploy:dev": "npm run clean && npm run build && npm run package && npm run deploy:dev",
+    "package-deploy:prod": "npm run clean && npm run build && npm run package && npm run deploy:prod",
     "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy"
   },
   "author": "",
