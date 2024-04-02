@@ -54,7 +54,8 @@ module.exports = {
           },
         )))))).then(() => (!isTesting ?
       queryInterface.sequelize.query(`
-            insert into location_slug_redirects select slug, location_id from website_data`) :
+          insert into location_slug_redirects 
+            select slug, location_id, NOW(), NOW() from website_data`) :
       new Promise(resolve => resolve()))).then(() => queryInterface.sequelize.query(`
           create or replace function translate_slug_characters(slug varchar)
              returns varchar

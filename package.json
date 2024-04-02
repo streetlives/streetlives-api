@@ -6,7 +6,8 @@
   "config": {
     "s3BucketName": "streetlives",
     "region": "us-east-1",
-    "functionName": "StreetlivesApiServerlessS-StreetlivesApiTestFuncti-O15R8ZABRT1P"
+    "functionName": "StreetlivesApiServerlessS-StreetlivesApiTestFuncti-O15R8ZABRT1P",
+    "prodFunctionName": "StreetlivesApiProdFunction"
   },
   "scripts": {
     "dev": "NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
@@ -26,7 +27,9 @@
     "package": "cp -r node_modules dist/; cd dist && zip -r ../dist.zip *",
     "clean": "rm -rf dist/ dist.zip",
     "deploy": "aws lambda update-function-code --function-name $npm_package_config_functionName --zip-file fileb://./dist.zip --publish",
+    "deploy:prod": "aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --zip-file fileb://./dist.zip --publish",
     "package-deploy": "npm run package && npm run deploy",
+    "package-deploy:prod": "npm run package && npm run deploy:prod",
     "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy"
   },
   "author": "",
