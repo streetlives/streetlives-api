@@ -28,9 +28,21 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
     });
-    Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
-    Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
-    Service.belongsToMany(models.Language, { through: models.ServiceLanguages });
+    Service.belongsToMany(models.Location, {
+      through: models.ServiceAtLocation,
+      foreignKey: 'service_id',
+      otherKey: 'location_id',
+    });
+    Service.belongsToMany(models.Taxonomy, {
+      through: models.ServiceTaxonomy,
+      foreignKey: 'service_id',
+      otherKey: 'taxonomy_id',
+    });
+    Service.belongsToMany(models.Language, {
+      through: models.ServiceLanguages,
+      foreignKey: 'service_id',
+      otherKey: 'language_id',
+    });
     Service.hasMany(models.Phone, { foreignKey: 'service_id' });
     Service.hasMany(models.PaymentAccepted, { foreignKey: 'service_id' });
     Service.hasMany(models.RegularSchedule, { foreignKey: 'service_id' });

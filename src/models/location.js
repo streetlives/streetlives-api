@@ -34,8 +34,16 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   Location.associate = (models) => {
     Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
-    Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
-    Location.belongsToMany(models.Language, { through: models.LocationLanguages });
+    Location.belongsToMany(models.Service, {
+      through: models.ServiceAtLocation,
+      foreignKey: 'location_id',
+      otherKey: 'service_id',
+    });
+    Location.belongsToMany(models.Language, {
+      through: models.LocationLanguages,
+      foreignKey: 'location_id',
+      otherKey: 'language_id',
+    });
     Location.hasMany(models.PhysicalAddress, { foreignKey: 'location_id' });
     Location.hasMany(models.Phone, { foreignKey: 'location_id' });
     Location.hasMany(models.RegularSchedule, { foreignKey: 'location_id' });
