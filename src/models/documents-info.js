@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   DocumentsInfo.associate = (models) => {
-    DocumentsInfo.belongsTo(models.Service);
+    DocumentsInfo.belongsTo(models.Service, { foreignKey: 'service_id' });
   };
 
   return DocumentsInfo;

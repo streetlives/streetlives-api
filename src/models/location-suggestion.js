@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   LocationSuggestion.associate = (models) => {
-    LocationSuggestion.hasMany(models.PhysicalAddress);
+    LocationSuggestion.hasMany(models.PhysicalAddress, { foreignKey: 'location_sugestion_id' });
   };
 
   return LocationSuggestion;

@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   AccessibilityForDisabilities.associate = (models) => {
-    AccessibilityForDisabilities.belongsTo(models.Location);
+    AccessibilityForDisabilities.belongsTo(models.Location, { foreignKey: 'location_id' });
   };
 
   return AccessibilityForDisabilities;

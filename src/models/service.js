@@ -23,21 +23,24 @@ module.exports = (sequelize, DataTypes) => {
   Service.associate = (models) => {
     Service.belongsTo(models.Organization, {
       onDelete: 'CASCADE',
-      foreignKey: { allowNull: false },
+      foreignKey: {
+        name: 'organization_id',
+        allowNull: false,
+      },
     });
     Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
     Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
     Service.belongsToMany(models.Language, { through: models.ServiceLanguages });
-    Service.hasMany(models.Phone);
-    Service.hasMany(models.PaymentAccepted);
-    Service.hasMany(models.RegularSchedule);
-    Service.hasMany(models.HolidaySchedule);
-    Service.hasMany(models.ServiceArea);
-    Service.hasMany(models.Eligibility);
-    Service.hasMany(models.ServiceTaxonomySpecificAttribute);
-    Service.hasMany(models.EventRelatedInfo);
-    Service.hasMany(models.RequiredDocument);
-    Service.hasOne(models.DocumentsInfo);
+    Service.hasMany(models.Phone, { foreignKey: 'service_id' });
+    Service.hasMany(models.PaymentAccepted, { foreignKey: 'service_id' });
+    Service.hasMany(models.RegularSchedule, { foreignKey: 'service_id' });
+    Service.hasMany(models.HolidaySchedule, { foreignKey: 'service_id' });
+    Service.hasMany(models.ServiceArea, { foreignKey: 'service_id' });
+    Service.hasMany(models.Eligibility, { foreignKey: 'service_id' });
+    Service.hasMany(models.ServiceTaxonomySpecificAttribute, { foreignKey: 'service_id' });
+    Service.hasMany(models.EventRelatedInfo, { foreignKey: 'service_id' });
+    Service.hasMany(models.RequiredDocument, { foreignKey: 'service_id' });
+    Service.hasOne(models.DocumentsInfo, { foreignKey: 'service_id' });
   };
 
   return Service;
