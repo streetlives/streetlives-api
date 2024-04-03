@@ -34,17 +34,25 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   Location.associate = (models) => {
-    Location.belongsTo(models.Organization);
-    Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
-    Location.belongsToMany(models.Language, { through: models.LocationLanguages });
-    Location.hasMany(models.PhysicalAddress);
-    Location.hasMany(models.Phone);
-    Location.hasMany(models.RegularSchedule);
-    Location.hasMany(models.HolidaySchedule);
-    Location.hasMany(models.AccessibilityForDisabilities);
-    Location.hasMany(models.EventRelatedInfo);
-    Location.hasMany(models.Comment);
-    Location.hasMany(models.ErrorReport);
+    Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
+    Location.belongsToMany(models.Service, {
+      through: models.ServiceAtLocation,
+      foreignKey: 'location_id',
+      otherKey: 'service_id',
+    });
+    Location.belongsToMany(models.Language, {
+      through: models.LocationLanguages,
+      foreignKey: 'location_id',
+      otherKey: 'language_id',
+    });
+    Location.hasMany(models.PhysicalAddress, { foreignKey: 'location_id' });
+    Location.hasMany(models.Phone, { foreignKey: 'location_id' });
+    Location.hasMany(models.RegularSchedule, { foreignKey: 'location_id' });
+    Location.hasMany(models.HolidaySchedule, { foreignKey: 'location_id' });
+    Location.hasMany(models.AccessibilityForDisabilities, { foreignKey: 'location_id' });
+    Location.hasMany(models.EventRelatedInfo, { foreignKey: 'location_id' });
+    Location.hasMany(models.Comment, { foreignKey: 'location_id' });
+    Location.hasMany(models.ErrorReport, { foreignKey: 'location_id' });
 
     // Can't just set defaultScope on the initial model definition:
     // https://github.com/sequelize/sequelize/issues/6245.

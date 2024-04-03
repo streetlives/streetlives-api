@@ -20,10 +20,13 @@ module.exports = (sequelize, DataTypes, Op) => {
   Organization.associate = (models) => {
     Organization.hasMany(models.Service, {
       onDelete: 'CASCADE',
-      foreignKey: { allowNull: false },
+      foreignKey: {
+        name: 'organization_id',
+        allowNull: false,
+      },
     });
-    Organization.hasMany(models.Location);
-    Organization.hasMany(models.Phone);
+    Organization.hasMany(models.Location, { foreignKey: 'organization_id' });
+    Organization.hasMany(models.Phone, { foreignKey: 'organization_id' });
   };
 
   Organization.findMatching = (filterParameters, limit = 10) => {

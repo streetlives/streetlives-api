@@ -32,8 +32,8 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   PhysicalAddress.associate = (models) => {
-    PhysicalAddress.belongsTo(models.Location);
-    PhysicalAddress.belongsTo(models.LocationSuggestion);
+    PhysicalAddress.belongsTo(models.Location, { foreignKey: 'location_id' });
+    PhysicalAddress.belongsTo(models.LocationSuggestion, { foreignKey: 'location_suggestion_id' });
   };
 
   return PhysicalAddress;
