@@ -2,7 +2,11 @@ import Joi from 'joi';
 import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
-import { getMetadataForLocation, getMetadataForService } from '../services/last-updates';
+import {
+  getMetadataForLocation,
+  getMetadataForService,
+  getLastValidatedDateForLocation,
+} from '../services/last-updates';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
@@ -58,7 +62,7 @@ const getInfoAssociations = {
   ],
 };
 
-async function handleGetInfoResponse(location) {
+async function handleGetInfoResponse(location, excludeMetadata) {
   if (!location) {
     throw new NotFoundError('Location not found');
   }
@@ -76,15 +80,8 @@ async function handleGetInfoResponse(location) {
 
   const address = addresses[0];
 
-  const locationMetadata = await getMetadataForLocation(location, address);
-  const servicesWithMetadata = await Promise.all(services.map(async service => ({
-    ...service,
-    metadata: await getMetadataForService(service),
-  })));
-
   const responseData = {
     ...unchangedProps,
-    Services: servicesWithMetadata,
     additionalInfo,
     address: {
       street: address.address_1,
@@ -94,10 +91,26 @@ async function handleGetInfoResponse(location) {
       postalCode: address.postal_code,
       country: address.country,
     },
-    metadata: locationMetadata,
   };
 
-  return responseData;
+  if (excludeMetadata) {
+    const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
+    return {
+      ...responseData,
+      Services: services,
+      lastValidatedDateForLocation,
+    };
+  }
+  const locationMetadata = await getMetadataForLocation(location, address);
+  const servicesWithMetadata = await Promise.all(services.map(async service => ({
+    ...service,
+    metadata: await getMetadataForService(service),
+  })));
+  return {
+    ...responseData,
+    Services: servicesWithMetadata,
+    metadata: locationMetadata,
+  };
 }
 
 export default {
@@ -235,7 +248,7 @@ export default {
         getInfoAssociations,
       );
 
-      const getInfoResponse = await handleGetInfoResponse(location);
+      const getInfoResponse = await handleGetInfoResponse(location, false);
       res.send(getInfoResponse);
     } catch (err) {
       next(err);
@@ -253,7 +266,9 @@ export default {
         include: getInfoAssociations.include,
       });
 
-      const getInfoResponse = locations.length ? await handleGetInfoResponse(locations[0]) : null;
+      const getInfoResponse = locations.length ?
+        await handleGetInfoResponse(locations[0], true) :
+        null;
       res.send(getInfoResponse);
     } catch (err) {
       next(err);

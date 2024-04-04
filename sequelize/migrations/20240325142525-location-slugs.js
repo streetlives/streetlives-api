@@ -460,6 +460,14 @@ module.exports = {
              ON locations
              FOR EACH ROW
                  EXECUTE PROCEDURE do_insert_into_location_slug_redirects_on_locations_update();
+          `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+          create index metadata_resource_id on metadata(resource_id)
+          `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+          create index metadata_resource_table on metadata(resource_table);
           `)));
   },
 
@@ -528,21 +536,14 @@ module.exports = {
         [],
         { transaction: t },
       ),
-      queryInterface.dropFunction(
-        'do_insert_into_location_slug_redirects_on_locations_update',
-        [],
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
+      queryInterface.sequelize.query(
         'drop trigger init_slug_on_physical_addresses_insert on physical_addresses',
         [],
         { transaction: t },
       ),
-      queryInterface.dropFunction(
-        'init_slug_on_physical_addresses_insert',
-        [],
-        { transaction: t },
-      ),
-    ]));
+    ])).then(() => queryInterface.dropFunction(
+      'do_init_slug_on_physical_addresses_insert',
+      [],
+    ));
   },
 };
