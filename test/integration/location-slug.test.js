@@ -205,6 +205,7 @@ describe('get location info', () => {
       .then((res) => {
         expect(res.body.id).toEqual(primaryLocation.id);
       });
+
     await request(app)
       .get(`/location-slug-redirects/${oldSlug}`)
       .expect(200)

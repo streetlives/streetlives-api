@@ -279,7 +279,7 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      const locations = await models.LocationSlugRedirects.findAll({
+      const locationSlugs = await models.LocationSlugRedirects.findAll({
         where: {
           slug: req.params.slug,
         },
@@ -290,11 +290,11 @@ export default {
         ],
       });
 
-      if (locations.length) {
-        const location = locations[0];
+      if (locationSlugs.length) {
+        const locationSlug = locationSlugs[0];
         res.send({
-          id: location.dataValues.LocationId,
-          slug: location.Location.slug,
+          id: locationSlug.location_id,
+          slug: locationSlug.Location.slug,
         });
       } else {
         res.send(404);
