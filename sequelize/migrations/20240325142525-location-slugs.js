@@ -472,78 +472,28 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    return queryInterface.sequelize.transaction(t => Promise.all([
-      queryInterface.removeColumn('locations', 'slug', { transaction: t }),
-      queryInterface.dropTable('location_slug_redirects', { transaction: t }),
-      queryInterface.dropTable('nyc_neighborhoods', { transaction: t }),
-      queryInterface.dropFunction(
-        'slug_exists',
-        [
-          { type: 'varchar' },
-          { type: 'uuid' },
-        ],
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
-        'get_slug',
-        [{ type: 'uuid' }],
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
-        'translate_slug_characters',
-        [{ type: 'varchar' }],
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
-        'update_slug_on_location',
-        [
-          { type: 'varchar' },
-          { type: 'uuid' },
-        ],
-        { transaction: t },
-      ),
-
-      queryInterface.sequelize.query(
-        'drop trigger init_slug_on_location_insert on locations',
-        { transaction: t },
-      ),
-      queryInterface.dropFunction('do_init_slug_on_location_insert', [], { transaction: t }),
-      queryInterface.sequelize.query(
-        'drop trigger init_slug_on_organization_update on organizations',
-        { transaction: t },
-      ),
-      queryInterface.dropFunction('do_init_slug_on_organization_update', [], { transaction: t }),
-      queryInterface.sequelize.query(
-        'drop trigger init_slug_on_physical_addresses_update on physical_addresses',
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
-        'do_init_slug_on_physical_addresses_update',
-        [],
-        { transaction: t },
-      ),
-      queryInterface.sequelize.query(
-        'drop trigger delete_slug_on_location_delete on locations',
-        { transaction: t },
-      ),
-      queryInterface.dropFunction('do_delete_slug_on_location_delete', [], { transaction: t }),
-      queryInterface.sequelize.query(
-        'drop trigger insert_into_location_slug_redirects_on_locations_update on locations',
-        { transaction: t },
-      ),
-      queryInterface.dropFunction(
-        'do_insert_into_location_slug_redirects_on_locations_update',
-        [],
-        { transaction: t },
-      ),
-      queryInterface.sequelize.query(
-        'drop trigger init_slug_on_physical_addresses_insert on physical_addresses',
-        [],
-        { transaction: t },
-      ),
-    ])).then(() => queryInterface.dropFunction(
-      'do_init_slug_on_physical_addresses_insert',
-      [],
-    ));
+    return queryInterface.sequelize.query(`
+      alter table locations drop column slug;
+      drop table location_slug_redirects cascade;
+      drop table nyc_neighborhoods cascade;
+      drop function slug_exists(varchar, uuid);
+      drop function get_slug(uuid);
+      drop function translate_slug_characters(varchar);
+      drop function update_slug_on_location(varchar, uuid);
+      drop trigger init_slug_on_location_insert on locations;
+      drop function do_init_slug_on_location_insert;
+      drop trigger init_slug_on_organization_update on organizations;
+      drop function do_init_slug_on_organization_update;
+      drop trigger init_slug_on_physical_addresses_update on physical_addresses;
+      drop function do_init_slug_on_physical_addresses_update;
+      drop trigger delete_slug_on_location_delete on locations;
+      drop function do_delete_slug_on_location_delete;
+      drop trigger insert_into_location_slug_redirects_on_locations_update on locations;
+      drop function do_insert_into_location_slug_redirects_on_locations_update;
+      drop trigger init_slug_on_physical_addresses_insert on physical_addresses;
+      drop function do_init_slug_on_physical_addresses_insert;
+      drop index metadata_resource_id;
+      drop index metadata_resource_table;
+    `);
   },
 };
