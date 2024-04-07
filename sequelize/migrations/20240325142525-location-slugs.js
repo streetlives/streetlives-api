@@ -862,7 +862,7 @@ module.exports = {
 
 
           -- locations
-            create or replace function handle_locations_insert_update_trigger()
+            create or replace function handle_locations_update_trigger()
                returns trigger
                language plpgsql
               as
@@ -883,17 +883,28 @@ module.exports = {
             end;
             $$;
 
+            create or replace function handle_locations_insert_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              NEW.last_validated_at := NOW();
+              return NEW;
+            end;
+            $$;
+
           CREATE TRIGGER locations_insert_trigger 
-             AFTER insert
+             BEFORE insert
              ON locations
              FOR EACH ROW
-                 EXECUTE PROCEDURE handle_locations_insert_update_trigger();
+                 EXECUTE PROCEDURE handle_locations_insert_trigger();
 
           CREATE TRIGGER locations_update_trigger 
              AFTER UPDATE
              ON locations
              FOR EACH ROW
-                 EXECUTE PROCEDURE handle_locations_insert_update_trigger();
+                 EXECUTE PROCEDURE handle_locations_update_trigger();
 
                  `)));
   },

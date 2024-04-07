@@ -28,6 +28,9 @@ describe('find locations', () => {
   let aDifferentKindOfService;
   let aSpecificOffering3;
 
+  let lastValidatedAtStartTime;
+  let lastValidatedAtEndTime;
+
   const clearData = async () => {
     await Promise.all([
       models.ServiceAtLocation.destroy({ where: {} }),
@@ -45,6 +48,7 @@ describe('find locations', () => {
   const setupData = async () => {
     await clearData();
 
+    lastValidatedAtStartTime = new Date();
     organization = await models.Organization.create(
       {
         name: 'The Test Org',
@@ -124,6 +128,7 @@ describe('find locations', () => {
         ],
       },
     );
+    lastValidatedAtEndTime = new Date();
 
     const locations = organization.Locations;
     [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
@@ -157,6 +162,15 @@ describe('find locations', () => {
     )));
   };
 
+  const checkLastValidatedAt = (returnedLocations) => {
+    returnedLocations.forEach((location) => {
+      const lastValidatedAt = new Date(location.last_validated_at).getTime();
+      // add a little buffer (100ms), because this property gets added in an AFTER trigger
+      expect(lastValidatedAt).toBeGreaterThan(lastValidatedAtStartTime.getTime() - 100);
+      expect(lastValidatedAt).toBeLessThan(lastValidatedAtEndTime.getTime() + 100);
+    });
+  };
+
   const expectMatchNearbyLocations = (res) => {
     const returnedLocations = res.body;
     expect(returnedLocations).toHaveLength(2);
@@ -164,6 +178,7 @@ describe('find locations', () => {
       expect.objectContaining({ name: primaryLocation.name }),
       expect.objectContaining({ name: otherServiceLocation.name }),
     ]));
+    checkLastValidatedAt(returnedLocations);
   };
 
   const expectMatchPrimaryLocation = (res) => {
@@ -172,6 +187,7 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: primaryLocation.name }),
     ]));
+    checkLastValidatedAt(returnedLocations);
   };
 
   const expectNoMatchingLocations = (res) => {
@@ -754,18 +770,22 @@ describe('find locations', () => {
     beforeEach(() => models.RegularSchedule.destroy({ where: {} }));
     afterAll(() => models.RegularSchedule.destroy({ where: {} }));
 
-    const setupBaseSchedule = () => Promise.all([
-      aSpecificOffering1.createRegularSchedule({
-        weekday: 7,
-        opens_at: '10:00',
-        closes_at: '11:00',
-      }),
-      aSpecificOffering1.createRegularSchedule({
-        weekday: 6,
-        opens_at: '8:00',
-        closes_at: '11:00',
-      }),
-    ]);
+    const setupBaseSchedule = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        aSpecificOffering1.createRegularSchedule({
+          weekday: 7,
+          opens_at: '10:00',
+          closes_at: '11:00',
+        }),
+        aSpecificOffering1.createRegularSchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '11:00',
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
     it('should filter out services closed at the given time', () =>
       setupBaseSchedule()
@@ -879,21 +899,25 @@ describe('find locations', () => {
       beforeEach(() => models.HolidaySchedule.destroy({ where: {} }));
       afterAll(() => models.HolidaySchedule.destroy({ where: {} }));
 
-      const setupHolidaySchedule = () => Promise.all([
-        setupBaseSchedule(),
-        aSpecificOffering1.createHolidaySchedule({
-          weekday: 7,
-          occasion: 'COVID-19',
-          closed: true,
-        }),
-        aSpecificOffering1.createHolidaySchedule({
-          weekday: 6,
-          opens_at: '8:00',
-          closes_at: '10:00',
-          occasion: 'COVID-19',
-          closed: false,
-        }),
-      ]);
+      const setupHolidaySchedule = async () => {
+        lastValidatedAtStartTime = new Date();
+        await Promise.all([
+          setupBaseSchedule(),
+          aSpecificOffering1.createHolidaySchedule({
+            weekday: 7,
+            occasion: 'COVID-19',
+            closed: true,
+          }),
+          aSpecificOffering1.createHolidaySchedule({
+            weekday: 6,
+            opens_at: '8:00',
+            closes_at: '10:00',
+            occasion: 'COVID-19',
+            closed: false,
+          }),
+        ]);
+        lastValidatedAtEndTime = new Date();
+      };
 
       it('should filter out locations that only have a regular schedule for that time', () =>
         setupBaseSchedule()
@@ -956,21 +980,29 @@ describe('find locations', () => {
     beforeEach(() => models.ServiceArea.destroy({ where: {} }));
     afterAll(() => models.ServiceArea.destroy({ where: {} }));
 
-    const setupBaseServiceArea = () => Promise.all([
-      aSpecificOffering1.createServiceArea({
-        postal_codes: servedArea1,
-      }),
-      aSpecificOffering1.createServiceArea({
-        postal_codes: servedArea2,
-      }),
-    ]);
+    const setupBaseServiceArea = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        aSpecificOffering1.createServiceArea({
+          postal_codes: servedArea1,
+        }),
+        aSpecificOffering1.createServiceArea({
+          postal_codes: servedArea2,
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
-    const setupAllServiceArea = () => Promise.all([
-      models.ServiceArea.create({
-        postal_codes: [],
-        service_id: primaryLocation.Services[0].id,
-      }),
-    ]);
+    const setupAllServiceArea = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        models.ServiceArea.create({
+          postal_codes: [],
+          service_id: primaryLocation.Services[0].id,
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
     it('should filter out locations that don\'t serve the given zipcode', () =>
       setupBaseServiceArea()
