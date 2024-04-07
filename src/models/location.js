@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     additional_info: DataTypes.TEXT,
     hidden_from_search: DataTypes.BOOLEAN,
     slug: DataTypes.TEXT,
+    last_validated_at: DataTypes.DATE,
   }, {
     underscored: true,
     underscoredAll: true,

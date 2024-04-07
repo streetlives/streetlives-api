@@ -468,7 +468,434 @@ module.exports = {
       .then(() =>
         queryInterface.sequelize.query(`
           create index metadata_resource_table on metadata(resource_table);
-          `)));
+          `))
+      // feature to populate last_validated_at
+      // add column to locations called last_validated_at
+      .then(() =>
+        (!isTesting ?
+          queryInterface.addColumn('locations', 'last_validated_at', {
+            type: Sequelize.DataTypes.DATE,
+          }) :
+          new Promise(resolve => resolve())))
+      // add function to compute last_validated_at.
+      .then(() =>
+        queryInterface.sequelize.query(`
+          create or replace function get_last_validated_date_for_location(_location_id uuid)
+             returns date
+             language sql
+            as
+          $$
+    select max(metadata.created_at) as "lastValidatedDateForLocation"
+    from locations
+    left join service_at_locations sal on sal.location_id = locations.id
+    left join services on sal.service_id = services.id
+    left join service_languages on service_languages.service_id = services.id
+    left join holiday_schedules on holiday_schedules.service_id = services.id
+    left join service_areas on service_areas.service_id = services.id
+    left join eligibility on eligibility.service_id = services.id
+    left join service_taxonomy_specific_attributes 
+      on service_taxonomy_specific_attributes.service_id = services.id
+    left join required_documents on required_documents.service_id = services.id
+    left join documents_infos on documents_infos.service_id = services.id
+    left join phones on (phones.service_id = services.id or phones.location_id = locations.id)
+    left join event_related_info on 
+      (event_related_info.service_id = services.id or 
+        event_related_info.location_id = locations.id)
+    left join accessibility_for_disabilities on 
+      accessibility_for_disabilities.location_id = locations.id
+    join metadata on (
+      (metadata.resource_table = 'locations' 
+        and metadata.resource_id = locations.id) or
+      (metadata.resource_table = 'accessibility_for_disabilities' and 
+        metadata.resource_id = accessibility_for_disabilities.id) or
+      (metadata.resource_table = 'service_languages' and 
+        metadata.resource_id = service_languages.id) or
+      (metadata.resource_table = 'holiday_schedules' and 
+        metadata.resource_id = holiday_schedules.id) or
+      (metadata.resource_table = 'service_areas' and 
+        metadata.resource_id = service_areas.id) or
+      (metadata.resource_table = 'eligibility' and 
+        metadata.resource_id = eligibility.id) or
+      (metadata.resource_table = 'service_taxonomy_specific_attributes' and 
+        metadata.resource_id = service_taxonomy_specific_attributes.id) or
+      (metadata.resource_table = 'required_documents' and 
+        metadata.resource_id = required_documents.id) or
+      (metadata.resource_table = 'documents_infos' and 
+        metadata.resource_id = documents_infos.id) or
+      (metadata.resource_table = 'phones' and 
+        metadata.resource_id = phones.id) or
+      (metadata.resource_table = 'event_related_info' and 
+        metadata.resource_id = event_related_info.id) or
+      (metadata.resource_table = 'services' and 
+        metadata.resource_id = services.id)
+    )
+    where locations.id = _location_id
+          $$
+          `))
+      // populate new column on existing location tables
+      .then(() => queryInterface.sequelize.query(`
+        create or replace function update_last_validated_at_on_location(loc_id uuid)
+           returns void
+           language plpgsql
+          as
+        $$
+        begin
+          RAISE LOG 'updating location % last_validated_at', loc_id;
+          update locations set last_validated_at = NOW() where id = loc_id;
+        end;
+        $$;
+        `))
+      .then(() =>
+        queryInterface.sequelize.query(`
+        DO $$
+        DECLARE location_to_update record;
+        BEGIN
+          FOR location_to_update IN
+                  SELECT id FROM locations
+              LOOP
+                  PERFORM update_last_validated_at_on_location(
+                    location_to_update.id
+                  );
+                  commit;
+              END LOOP;
+        END$$;
+        `))
+      // add triggers for each dependent table that will run on CUD
+      .then(() =>
+        queryInterface.sequelize.query(`
+            create or replace function update_last_validated_at_on_locations(location_ids uuid[])
+               returns void
+               language plpgsql
+              as
+            $$
+            declare 
+              location_id uuid;
+            begin
+              IF location_ids IS NOT NULL THEN
+                FOREACH location_id IN array location_ids
+                LOOP
+                  PERFORM update_last_validated_at_on_location(location_id);
+                END LOOP;
+              end if;
+            end;
+            $$;
+
+
+            -- services
+            create or replace function handle_services_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              PERFORM update_last_validated_at_on_locations(
+                  (
+                    select array_agg(sal.location_id) 
+                      from service_at_locations sal
+                      where sal.service_id = NEW.id
+                  )
+                );
+              return NEW;
+            end;
+            $$;
+
+            CREATE TRIGGER services_insert_trigger 
+               AFTER insert
+               ON services
+               FOR EACH ROW
+                   EXECUTE PROCEDURE handle_services_insert_update_trigger();
+
+            CREATE TRIGGER services_update_trigger 
+               AFTER UPDATE
+               ON services
+               FOR EACH ROW
+                   EXECUTE PROCEDURE handle_services_insert_update_trigger();
+
+
+          -- service_at_locations
+            create or replace function handle_service_at_locations_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              PERFORM update_last_validated_at_on_locations(
+                  (
+                    select array_agg(sal.location_id) 
+                    from service_at_locations sal
+                    where sal.id = NEW.id
+                  )
+                );
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER service_at_locations_insert_trigger 
+             AFTER insert
+             ON service_at_locations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_service_at_locations_insert_update_trigger();
+
+          CREATE TRIGGER service_at_locations_update_trigger 
+             AFTER UPDATE
+             ON service_at_locations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_service_at_locations_insert_update_trigger();
+
+
+          -- everything that has a service_id only
+            create or replace function handle_everything_with_service_id_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              PERFORM update_last_validated_at_on_locations(
+                  (
+                    select array_agg(sal.location_id) 
+                    from service_at_locations sal
+                    where sal.service_id = NEW.service_id
+                  )
+                );
+              return NEW;
+            end;
+            $$;
+
+
+          -- service_languages
+
+          CREATE TRIGGER service_languages_insert_trigger 
+             AFTER insert
+             ON service_languages
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER service_languages_update_trigger 
+             AFTER UPDATE
+             ON service_languages
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+
+          -- holiday_schedules
+          CREATE TRIGGER holiday_schedules_insert_trigger 
+             AFTER insert
+             ON holiday_schedules
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER holiday_schedules_update_trigger 
+             AFTER UPDATE
+             ON holiday_schedules
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+          -- service_areas
+          CREATE TRIGGER service_areas_insert_trigger 
+             AFTER insert
+             ON service_areas
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER service_areas_update_trigger 
+             AFTER UPDATE
+             ON service_areas
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+          -- eligibility
+          CREATE TRIGGER eligibility_insert_trigger 
+             AFTER insert
+             ON eligibility
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER eligibility_update_trigger 
+             AFTER UPDATE
+             ON eligibility
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+          -- service_taxonomy_specific_attributes
+          CREATE TRIGGER service_taxonomy_specific_attributes_insert_trigger 
+             AFTER insert
+             ON service_taxonomy_specific_attributes
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER service_taxonomy_specific_attributes_update_trigger 
+             AFTER UPDATE
+             ON service_taxonomy_specific_attributes
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+
+          -- required_documents
+          CREATE TRIGGER required_documents_insert_trigger 
+             AFTER insert
+             ON required_documents
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER required_documents_update_trigger 
+             AFTER UPDATE
+             ON required_documents
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+
+          -- documents_infos
+          CREATE TRIGGER documents_infos_insert_trigger 
+             AFTER insert
+             ON documents_infos
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+          CREATE TRIGGER documents_infos_update_trigger 
+             AFTER UPDATE
+             ON documents_infos
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_everything_with_service_id_insert_update_trigger();
+
+
+
+
+          -- phones
+            create or replace function handle_phones_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              PERFORM update_last_validated_at_on_locations(
+                (
+                  select array_agg(sal.location_id) 
+                      from service_at_locations sal 
+                      where sal.service_id = NEW.service_id
+                ) ||
+                ARRAY[NEW.location_id]
+              );
+
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER phones_insert_trigger 
+             AFTER insert
+             ON phones
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_phones_insert_update_trigger();
+
+          CREATE TRIGGER phones_update_trigger 
+             AFTER UPDATE
+             ON phones
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_phones_insert_update_trigger();
+
+
+
+          -- event_related_info
+            create or replace function handle_event_related_info_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+
+              PERFORM update_last_validated_at_on_locations(
+                (
+                  select array_agg(sal.location_id) 
+                      from service_at_locations sal 
+                      where sal.service_id = NEW.service_id
+                ) || 
+                ARRAY[NEW.location_id]
+              );
+
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER event_related_info_insert_trigger 
+             AFTER insert
+             ON event_related_info
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_event_related_info_insert_update_trigger();
+
+          CREATE TRIGGER event_related_info_update_trigger 
+             AFTER UPDATE
+             ON event_related_info
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_event_related_info_insert_update_trigger();
+
+
+
+          -- accessibility_for_disabilities
+            create or replace function handle_accessibility_for_disabilities_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              PERFORM update_last_validated_at_on_locations(NEW.location_id);
+
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER accessibility_for_disabilities_insert_trigger 
+             AFTER insert
+             ON accessibility_for_disabilities
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_accessibility_for_disabilities_insert_update_trigger();
+
+          CREATE TRIGGER accessibility_for_disabilities_update_trigger 
+             AFTER UPDATE
+             ON accessibility_for_disabilities
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_accessibility_for_disabilities_insert_update_trigger();
+
+
+          -- locations
+            create or replace function handle_locations_insert_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            begin
+              if 
+                (NEW.name <> OLD.name) OR
+                (NEW.description <> OLD.description) OR
+                (NEW.transportation <> OLD.transportation) OR
+                (NOT (NEW.position ~= OLD.position)) OR
+                (NEW.organization_id <> OLD.organization_id) OR
+                (NEW.additional_info <> OLD.additional_info) 
+                then
+                  PERFORM update_last_validated_at_on_locations(NEW.id);
+              end if;
+
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER locations_insert_trigger 
+             AFTER insert
+             ON locations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_locations_insert_update_trigger();
+
+          CREATE TRIGGER locations_update_trigger 
+             AFTER UPDATE
+             ON locations
+             FOR EACH ROW
+                 EXECUTE PROCEDURE handle_locations_insert_update_trigger();
+
+                 `)));
   },
 
   async down(queryInterface, Sequelize) {
@@ -492,8 +919,50 @@ module.exports = {
       drop function do_insert_into_location_slug_redirects_on_locations_update;
       drop trigger init_slug_on_physical_addresses_insert on physical_addresses;
       drop function do_init_slug_on_physical_addresses_insert;
+
       drop index metadata_resource_id;
       drop index metadata_resource_table;
+
+      alter table locations drop column last_validated_at;
+      drop function update_last_validated_at_on_locations(location_ids uuid[]);
+      drop function update_last_validated_at_on_location;
+      drop function get_last_validated_date_for_location;
+
+      DROP TRIGGER services_insert_trigger on services; 
+      DROP TRIGGER services_update_trigger on services;
+      DROP TRIGGER service_at_locations_insert_trigger on service_at_locations;
+      DROP TRIGGER service_at_locations_update_trigger on service_at_locations;
+      DROP TRIGGER service_languages_insert_trigger on service_languages; 
+      DROP TRIGGER service_languages_update_trigger on service_languages;
+      DROP TRIGGER holiday_schedules_insert_trigger on holiday_schedules;
+      DROP TRIGGER holiday_schedules_update_trigger on holiday_schedules; 
+      DROP TRIGGER service_areas_insert_trigger on service_areas; 
+      DROP TRIGGER service_areas_update_trigger on service_areas; 
+      DROP TRIGGER eligibility_insert_trigger on eligibility; 
+      DROP TRIGGER eligibility_update_trigger on eligibility; 
+      DROP TRIGGER service_taxonomy_specific_attributes_insert_trigger 
+        on service_taxonomy_specific_attributes; 
+      DROP TRIGGER service_taxonomy_specific_attributes_update_trigger 
+        on service_taxonomy_specific_attributes; 
+      DROP TRIGGER required_documents_insert_trigger on required_documents; 
+      DROP TRIGGER required_documents_update_trigger on required_documents; 
+      DROP TRIGGER documents_infos_insert_trigger on documents_infos; 
+      DROP TRIGGER documents_infos_update_trigger on documents_infos; 
+      DROP TRIGGER phones_insert_trigger on phones; 
+      DROP TRIGGER phones_update_trigger on phones; 
+      DROP TRIGGER event_related_info_insert_trigger on event_related_info; 
+      DROP TRIGGER event_related_info_update_trigger on event_related_info; 
+      DROP TRIGGER accessibility_for_disabilities_insert_trigger on accessibility_for_disabilities; 
+      DROP TRIGGER accessibility_for_disabilities_update_trigger on accessibility_for_disabilities;
+      DROP TRIGGER locations_insert_trigger on locations;
+      DROP TRIGGER locations_update_trigger on locations; 
+
+      DROP FUNCTION handle_services_insert_update_trigger();
+      DROP FUNCTION handle_service_at_locations_insert_update_trigger();
+      DROP FUNCTION handle_phones_insert_update_trigger();
+      DROP FUNCTION handle_event_related_info_insert_update_trigger();
+      DROP FUNCTION handle_accessibility_for_disabilities_insert_update_trigger();
+      DROP FUNCTION handle_locations_insert_update_trigger();
     `);
   },
 };
