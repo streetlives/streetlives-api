@@ -534,14 +534,23 @@ module.exports = {
           `))
       // populate new column on existing location tables
       .then(() => queryInterface.sequelize.query(`
-        create or replace function update_last_validated_at_on_location(loc_id uuid)
+        create or replace function update_last_validated_at_on_location(
+          loc_id uuid, 
+          _last_validated_at date default null
+        )
            returns void
            language plpgsql
           as
         $$
         begin
           RAISE LOG 'updating location % last_validated_at', loc_id;
-          update locations set last_validated_at = NOW() where id = loc_id;
+          update locations set last_validated_at = (
+            CASE
+              when _last_validated_at is null then NOW()
+              else _last_validated_at
+            end
+          ) 
+          where id = loc_id;
         end;
         $$;
         `))
@@ -554,7 +563,8 @@ module.exports = {
                   SELECT id FROM locations
               LOOP
                   PERFORM update_last_validated_at_on_location(
-                    location_to_update.id
+                    location_to_update.id,
+                    get_last_validated_date_for_location(location_to_update.id)
                   );
                   commit;
               END LOOP;
@@ -935,9 +945,9 @@ module.exports = {
       drop index metadata_resource_table;
 
       alter table locations drop column last_validated_at;
+      drop function get_last_validated_date_for_location;
       drop function update_last_validated_at_on_locations(location_ids uuid[]);
       drop function update_last_validated_at_on_location;
-      drop function get_last_validated_date_for_location;
 
       DROP TRIGGER services_insert_trigger on services; 
       DROP TRIGGER services_update_trigger on services;
