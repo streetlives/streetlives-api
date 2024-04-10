@@ -65,6 +65,7 @@ Object {
     "state": "NY",
     "street": "123 West 30th Street",
   },
+  "closed": false,
   "description": "This is how one would describe this shelter.",
   "metadata": Object {
     "address": Object {},

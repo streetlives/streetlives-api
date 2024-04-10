@@ -93,12 +93,18 @@ async function handleGetInfoResponse(location, excludeMetadata) {
     },
   };
 
+  const { EventRelatedInfos, Services } = location;
+  // FIXME: we should not be hard-coding the COVID19 event here
+  // this is logic that needs ot be revisited in this codebase
+  const closed = isLocationClosed('COVID19', EventRelatedInfos, Services);
+
   if (excludeMetadata) {
     const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
     return {
       ...responseData,
       Services: services,
       lastValidatedDateForLocation,
+      closed,
     };
   }
   const locationMetadata = await getMetadataForLocation(location, address);
@@ -106,10 +112,12 @@ async function handleGetInfoResponse(location, excludeMetadata) {
     ...service,
     metadata: await getMetadataForService(service),
   })));
+
   return {
     ...responseData,
     Services: servicesWithMetadata,
     metadata: locationMetadata,
+    closed,
   };
 }
 

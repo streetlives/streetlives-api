@@ -481,7 +481,7 @@ module.exports = {
       .then(() =>
         queryInterface.sequelize.query(`
           create or replace function get_last_validated_date_for_location(_location_id uuid)
-             returns date
+             returns timestamp with time zone
              language sql
             as
           $$
@@ -536,7 +536,7 @@ module.exports = {
       .then(() => queryInterface.sequelize.query(`
         create or replace function update_last_validated_at_on_location(
           loc_id uuid, 
-          _last_validated_at date default null
+          _last_validated_at timestamp with time zone default null
         )
            returns void
            language plpgsql
