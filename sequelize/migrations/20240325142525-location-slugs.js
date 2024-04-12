@@ -1,5 +1,11 @@
 
 const nycNeighborhoods = require("./Information Architecture - YourPeer - June '23 - Unduplicated zips.json"); // eslint-disable-line max-len
+const mergedNeighborhoodNames = require('./20231229 Location Area Updates - all_test_locations_data_2.json'); // eslint-disable-line max-len
+
+const mergedNeighborhoodNamesByLocationId = {};
+mergedNeighborhoodNames.forEach((o) => {
+  mergedNeighborhoodNamesByLocationId[o['gogetta /find_url'].split('/').pop()] = o.merged_area;
+});
 
 const isTesting = process.env.NODE_ENV === 'test';
 
@@ -39,20 +45,125 @@ module.exports = {
           type: Sequelize.DataTypes.STRING,
           primaryKey: true,
         },
-        neighborhood_name: {
+        neighborhood: {
           type: Sequelize.DataTypes.STRING,
         },
 
       }),
     ]).then(() => Promise.all(Object.entries(nycNeighborhoods)
-      .map(([neighborhoodName, zipCodes]) => Promise.all(zipCodes.map(zipCode =>
+      .map(([neighborhood, zipCodes]) => Promise.all(zipCodes.map(zipCode =>
         queryInterface.sequelize.query(
           'insert into nyc_neighborhoods values ($1, $2)',
           {
-            bind: [zipCode, neighborhoodName],
+            bind: [zipCode, neighborhood],
             type: Sequelize.QueryTypes.INSERT,
           },
         ))))))
+
+      // add support for manually-set neighborhood name for each physical location
+      // add neighborhood field to physical_addresses table
+      .then(() =>
+        (!isTesting ?
+          queryInterface.addColumn('physical_addresses', 'neighborhood', {
+            type: Sequelize.DataTypes.STRING,
+          }) :
+          new Promise(resolve => resolve())))
+      // initialize new physical_address.neighborhood field from the spreadsheet
+      .then(() => Promise.all(Object.entries(mergedNeighborhoodNamesByLocationId)
+        .map(([locationId, neighborhood]) =>
+          queryInterface.sequelize.query(
+            'update physical_addresses set neighborhood = $1 where location_id = $2',
+            {
+              bind: [neighborhood, locationId],
+              type: Sequelize.QueryTypes.INSERT,
+            },
+          ))))
+      // Fill in the remaining gaps
+      .then(() =>
+        queryInterface.sequelize.query(`
+        DO $$
+        DECLARE 
+          physical_address_to_update record;
+          default_neighborhood varchar;
+        BEGIN
+          FOR physical_address_to_update IN
+                  SELECT id, postal_code FROM physical_addresses
+                    WHERE neighborhood IS NULL
+              LOOP
+
+                SELECT neighborhood into default_neighborhood from 
+                  nyc_neighborhoods where 
+                    nyc_neighborhoods.zip_code = physical_address_to_update.postal_code;
+
+                UPDATE physical_addresses set neighborhood = default_neighborhood
+                  WHERE id = physical_address_to_update.id;
+
+              END LOOP;
+        END$$;
+        `))
+      // write the trigger that will set a default value on the record to insert
+      .then(() =>
+        queryInterface.sequelize.query(`
+            create or replace function 
+              handle_set_default_neighborhood_on_physical_address_insert_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            DECLARE 
+              default_neighborhood varchar;
+            begin
+
+              SELECT neighborhood into default_neighborhood from 
+                nyc_neighborhoods where 
+                  nyc_neighborhoods.zip_code = NEW.postal_code;
+
+              NEW.neighborhood := default_neighborhood;
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER set_default_neighborhood_on_physical_address_insert_trigger 
+             BEFORE insert
+             ON physical_addresses
+             FOR EACH ROW
+                 EXECUTE PROCEDURE 
+                   handle_set_default_neighborhood_on_physical_address_insert_trigger();
+
+
+          create or replace function 
+              handle_set_default_neighborhood_on_physical_address_update_trigger()
+               returns trigger
+               language plpgsql
+              as
+            $$
+            DECLARE 
+              default_neighborhood varchar;
+            begin
+
+              -- if we change his postal code, then reset his neighborhood to the default
+              if NEW.postal_code <> OLD.postal_code and NEW.postal_code is not null then
+                SELECT neighborhood into default_neighborhood from 
+                  nyc_neighborhoods where 
+                    nyc_neighborhoods.zip_code = NEW.postal_code;
+
+                UPDATE physical_addresses set neighborhood = default_neighborhood
+                  WHERE id = NEW.id;
+              end if;
+              return NEW;
+            end;
+            $$;
+
+          CREATE TRIGGER set_default_neighborhood_on_physical_address_update_trigger 
+             AFTER update
+             ON physical_addresses
+             FOR EACH ROW
+                 EXECUTE PROCEDURE 
+                   handle_set_default_neighborhood_on_physical_address_update_trigger();
+
+        `))
+
+      // slugs
       .then(() => queryInterface.sequelize.query(`
           create or replace function translate_slug_characters(slug varchar)
              returns varchar
@@ -88,18 +199,6 @@ module.exports = {
               location_slug_count int;
               loc record;
           begin
-                -- logging
-                FOR loc IN
-                    SELECT * FROM locations 
-                LOOP
-                  RAISE LOG 'location: % % % % %',
-                   loc.id,
-                   loc.slug,
-                   loc_id,
-                   _slug,
-                   loc.slug <> _slug;
-                END LOOP;
-
               return exists(
                 select * 
                 from locations where locations.slug = _slug 
@@ -116,7 +215,6 @@ module.exports = {
           $$
           begin
             if _slug is not null then
-              RAISE LOG 'updating location % slug to %', _slug, loc_id;
               update locations set slug = _slug where id = loc_id;
             end if;
           end;
@@ -134,7 +232,7 @@ module.exports = {
               slug_with_suffix_count varchar;
               slug_without_suffix_count varchar;
               org_name varchar;
-              neighborhood varchar;
+              _neighborhood varchar;
               _slug_exists boolean;
               address_1 varchar;
               suffix_count int = 2;
@@ -154,26 +252,21 @@ module.exports = {
               where l.id = loc_id;
 
               -- get the area
-              select neighborhood_name into neighborhood 
-              from nyc_neighborhoods nycn 
-                inner join physical_addresses pa on nycn.zip_code = pa.postal_code
+              select neighborhood into _neighborhood 
+              from physical_addresses pa 
               where pa.location_id = loc_id;
 
               if org_name is not null then
                 _slug := org_name; 
               END IF;
 
-              if neighborhood is not null then
-                _slug := _slug || ' ' || neighborhood; 
+              if _neighborhood is not null then
+                _slug := _slug || ' ' || _neighborhood; 
               END IF;
 
               _slug := translate_slug_characters(_slug);
 
-              RAISE LOG 'get_slug 1: % %', loc_id, _slug;
-
               _slug_exists := slug_exists(_slug, loc_id);
-
-              RAISE LOG 'get_slug _slug_exists 2: % %', loc_id, _slug;
 
               -- check if the slug exists in the location_slugs table
               if _slug_exists then
@@ -182,11 +275,8 @@ module.exports = {
                 from physical_addresses pa 
                 where pa.location_id = loc_id;
 
-                RAISE LOG 'get_slug address_1 3: % %', loc_id, address_1;
-
                 if address_1 is not null then
                   _slug := translate_slug_characters(_slug || ' ' || address_1);
-                  RAISE LOG 'get_slug _slug 3: % % %', loc_id, address_1, _slug;
                 end if;
 
               end if;
@@ -194,8 +284,6 @@ module.exports = {
               slug_without_suffix_count := _slug;
 
               _slug_exists := slug_exists(_slug, loc_id);
-
-              RAISE LOG 'get_slug _slug 4: % % %', loc_id, _slug_exists, _slug;
 
               if _slug_exists then
 
@@ -210,19 +298,11 @@ module.exports = {
 
                   _slug_exists := slug_exists(slug_with_suffix_count, loc_id);
 
-                  RAISE LOG 'get_slug loop 5: % % % %',
-                   suffix_count,
-                   slug_without_suffix_count,
-                   slug_with_suffix_count,
-                   _slug_exists;
-
                 end loop;
 
                 _slug := slug_with_suffix_count;
 
               end if;
-
-              RAISE LOG 'final slug 5: % %', loc_id, _slug;
 
               return _slug; 
             end;
@@ -274,7 +354,6 @@ module.exports = {
               as
             $$
             begin
-              RAISE LOG 'init_slug_on_location_insert: %', NEW.id;
               NEW.slug := get_slug(NEW.id);
               PERFORM update_slug_on_location(NEW.slug, NEW.id);
               return NEW;
@@ -301,8 +380,6 @@ module.exports = {
               new_slug varchar;
               old_slug varchar;
             begin
-
-              RAISE LOG 'init_slug_on_organization_update: %', NEW.id;
 
               -- only update if organization.name has changed
               IF NEW.name <> OLD.name THEN
@@ -344,11 +421,11 @@ module.exports = {
               old_slug varchar;
               new_slug varchar;
             begin
-              RAISE LOG 'init_slug_on_physical_addresses_update: %', NEW.id;
-
               -- only do update if the address field changes
               IF NEW.address_1 <> OLD.address_1 OR 
-                  NEW.postal_code <> OLD.postal_code THEN
+                  NEW.postal_code <> OLD.postal_code OR 
+                  NEW.neighborhood <> OLD.neighborhood
+                  THEN
 
                 select slug into old_slug from locations where locations.id = NEW.location_id;
 
@@ -387,8 +464,6 @@ module.exports = {
               old_slug varchar;
               new_slug varchar;
             begin
-              RAISE LOG 'init_slug_on_physical_addresses_insert: %', NEW.id;
-
               select slug into old_slug from locations where locations.id = NEW.location_id;
 
               new_slug := get_slug(NEW.location_id);
@@ -421,7 +496,6 @@ module.exports = {
               as
             $$
             begin
-              RAISE LOG 'delete location: %', OLD.id;
               delete from location_slug_redirects where location_id = OLD.id;
               return OLD;
             end;
@@ -543,7 +617,6 @@ module.exports = {
           as
         $$
         begin
-          RAISE LOG 'updating location % last_validated_at', loc_id;
           update locations set last_validated_at = (
             CASE
               when _last_validated_at is null then NOW()
@@ -924,6 +997,15 @@ module.exports = {
       alter table locations drop column slug;
       drop table location_slug_redirects cascade;
       drop table nyc_neighborhoods cascade;
+
+      alter table physical_addresses drop column neighborhood;
+      drop trigger 
+          set_default_neighborhood_on_physical_address_insert_trigger on physical_addresses;
+      drop function handle_set_default_neighborhood_on_physical_address_insert_trigger;
+      drop trigger 
+          set_default_neighborhood_on_physical_address_update_trigger on physical_addresses;
+      drop function handle_set_default_neighborhood_on_physical_address_update_trigger;
+
       drop function slug_exists(varchar, uuid);
       drop function get_slug(uuid);
       drop function translate_slug_characters(varchar);
@@ -983,7 +1065,7 @@ module.exports = {
       DROP FUNCTION handle_phones_insert_update_trigger();
       DROP FUNCTION handle_event_related_info_insert_update_trigger();
       DROP FUNCTION handle_accessibility_for_disabilities_insert_update_trigger();
-      DROP FUNCTION handle_locations_insert_update_trigger();
+      DROP FUNCTION handle_locations_insert_trigger();
     `);
   },
 };

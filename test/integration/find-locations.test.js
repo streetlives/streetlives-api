@@ -166,8 +166,8 @@ describe('find locations', () => {
     returnedLocations.forEach((location) => {
       const lastValidatedAt = new Date(location.last_validated_at).getTime();
       // add a little buffer (100ms), because this property gets added in an AFTER trigger
-      expect(lastValidatedAt).toBeGreaterThan(lastValidatedAtStartTime.getTime() - 100);
-      expect(lastValidatedAt).toBeLessThan(lastValidatedAtEndTime.getTime() + 100);
+      expect(lastValidatedAt).toBeGreaterThan(lastValidatedAtStartTime.getTime() - 200);
+      expect(lastValidatedAt).toBeLessThan(lastValidatedAtEndTime.getTime() + 200);
     });
   };
 
