@@ -90,6 +90,7 @@ async function handleGetInfoResponse(location, excludeMetadata) {
       state: address.state_province,
       postalCode: address.postal_code,
       country: address.country,
+      neighborhood: address.neighborhood,
     },
   };
 

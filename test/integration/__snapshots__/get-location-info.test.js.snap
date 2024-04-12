@@ -60,6 +60,7 @@ Object {
   "address": Object {
     "city": "New York",
     "country": "United States",
+    "neighborhood": "Chelsea",
     "postalCode": "10001",
     "region": null,
     "state": "NY",
