@@ -12,10 +12,10 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   ServiceAtLocation.associate = (models) => {
-    ServiceAtLocation.hasMany(models.Phone);
-    ServiceAtLocation.hasMany(models.RegularSchedule);
-    ServiceAtLocation.hasMany(models.HolidaySchedule);
-    ServiceAtLocation.hasMany(models.Comment);
+    ServiceAtLocation.hasMany(models.Phone, { foreignKey: 'service_at_location_id' });
+    ServiceAtLocation.hasMany(models.RegularSchedule, { foreignKey: 'service_at_location_id' });
+    ServiceAtLocation.hasMany(models.HolidaySchedule, { foreignKey: 'service_at_location_id' });
+    ServiceAtLocation.hasMany(models.Comment, { foreignKey: 'service_at_location_id' });
   };
 
   return ServiceAtLocation;

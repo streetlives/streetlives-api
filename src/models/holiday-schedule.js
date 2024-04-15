@@ -21,9 +21,9 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   HolidaySchedule.associate = (models) => {
-    HolidaySchedule.belongsTo(models.Location);
-    HolidaySchedule.belongsTo(models.Service);
-    HolidaySchedule.belongsTo(models.ServiceAtLocation);
+    HolidaySchedule.belongsTo(models.Location, { foreignKey: 'location_id' });
+    HolidaySchedule.belongsTo(models.Service, { foreignKey: 'service_id' });
+    HolidaySchedule.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
   };
 
   return HolidaySchedule;

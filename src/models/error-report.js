@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   ErrorReport.associate = (models) => {
-    ErrorReport.belongsTo(models.Location);
+    ErrorReport.belongsTo(models.Location, { foreignKey: 'location_id' });
   };
 
   ErrorReport.findAllForLocation = (locationId, { attributes, order }) => ErrorReport.findAll({

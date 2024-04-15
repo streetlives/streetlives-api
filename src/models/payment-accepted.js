@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   PaymentAccepted.associate = (models) => {
-    PaymentAccepted.belongsTo(models.Service);
+    PaymentAccepted.belongsTo(models.Service, { foreignKey: 'service_id' });
   };
 
   return PaymentAccepted;

@@ -1,4 +1,4 @@
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const actionTypes = {
     create: 'create',
     update: 'update',
@@ -74,7 +74,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Metadata.getLatestUpdateDateForResources = resourceIds => Metadata.getLatestUpdateDateForQuery({
-    resource_id: { [sequelize.Op.in]: resourceIds },
+    resource_id: { [Op.in]: resourceIds },
   });
 
   Metadata.getSourcesForResources = async (resourceIds) => {
@@ -83,8 +83,8 @@ module.exports = (sequelize, DataTypes) => {
         [sequelize.fn('DISTINCT', sequelize.col('source')), 'source'],
       ],
       where: {
-        resource_id: { [sequelize.Op.in]: resourceIds },
-        source: { [sequelize.Op.ne]: null },
+        resource_id: { [Op.in]: resourceIds },
+        source: { [Op.ne]: null },
       },
     });
     return rows.map(({ source }) => source);

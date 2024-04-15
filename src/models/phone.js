@@ -19,10 +19,10 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Phone.associate = (models) => {
-    Phone.belongsTo(models.Location);
-    Phone.belongsTo(models.Service);
-    Phone.belongsTo(models.Organization);
-    Phone.belongsTo(models.ServiceAtLocation);
+    Phone.belongsTo(models.Location, { foreignKey: 'location_id' });
+    Phone.belongsTo(models.Service, { foreignKey: 'service_id' });
+    Phone.belongsTo(models.Organization, { foreignKey: 'organization_id' });
+    Phone.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
   };
 
   return Phone;

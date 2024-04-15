@@ -1,4 +1,4 @@
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const Comment = sequelize.define('Comment', {
     id: {
       type: DataTypes.UUID,
@@ -15,8 +15,8 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Comment.associate = (models) => {
-    Comment.belongsTo(models.Location);
-    Comment.belongsTo(models.ServiceAtLocation);
+    Comment.belongsTo(models.Location, { foreignKey: 'location_id' });
+    Comment.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
     Comment.belongsTo(models.Comment, { as: 'ReplyTo', foreignKey: 'reply_to_id' });
     Comment.hasMany(models.Comment, { as: 'Replies', foreignKey: 'reply_to_id' });
   };
@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
     where: {
       location_id: locationId,
       reply_to_id: null,
-      hidden: { [sequelize.Op.or]: [false, null] },
+      hidden: { [Op.or]: [false, null] },
     },
     attributes,
     order,

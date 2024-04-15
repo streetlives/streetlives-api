@@ -26,8 +26,8 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   EventRelatedInfo.associate = (models) => {
-    EventRelatedInfo.belongsTo(models.Location);
-    EventRelatedInfo.belongsTo(models.Service);
+    EventRelatedInfo.belongsTo(models.Location, { foreignKey: 'location_id' });
+    EventRelatedInfo.belongsTo(models.Service, { foreignKey: 'service_id' });
   };
 
   return EventRelatedInfo;
