@@ -275,10 +275,12 @@ export default {
         include: getInfoAssociations.include,
       });
 
-      const getInfoResponse = locations.length ?
-        await handleGetInfoResponse(locations[0], true) :
-        null;
-      res.send(getInfoResponse);
+      if (!locations.length) {
+        res.status(404).send({ status: 404 });
+      } else {
+        const getInfoResponse = await handleGetInfoResponse(locations[0], true);
+        res.send(getInfoResponse);
+      }
     } catch (err) {
       next(err);
     }
@@ -306,7 +308,7 @@ export default {
           slug: locationSlug.Location.slug,
         });
       } else {
-        res.send(404);
+        res.status(404).send({ status: 404 });
       }
     } catch (err) {
       next(err);
