@@ -23,6 +23,8 @@ export default (app) => {
   app.get('/locations', locations.find);
 
   app.post('/locations/suggestions', locations.suggestNew);
+  app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
+  app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations', getUser, dataEntryAuth, locations.create);

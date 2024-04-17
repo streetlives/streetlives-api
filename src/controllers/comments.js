@@ -35,7 +35,7 @@ export default {
         contactInfo,
       } = req.body;
 
-      const location = await models.Location.findById(locationId, { include: models.Organization });
+      const location = await models.Location.findByPk(locationId, { include: models.Organization });
       if (!location) {
         throw new NotFoundError('Location not found');
       }
@@ -75,7 +75,7 @@ export default {
         contactInfo,
       } = req.body;
 
-      const originalComment = await models.Comment.findById(commentId, {
+      const originalComment = await models.Comment.findByPk(commentId, {
         include: { model: models.Location, include: models.Organization },
       });
       if (!originalComment) {
@@ -123,7 +123,7 @@ export default {
 
       const { commentId } = req.params;
 
-      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
       if (!comment) {
         throw new NotFoundError('Comment not found');
       }
@@ -151,7 +151,7 @@ export default {
       const { commentId } = req.params;
       const { hidden } = req.body;
 
-      const comment = await models.Comment.findById(commentId, { include: models.Location });
+      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
       if (!comment) {
         throw new NotFoundError('Comment not found');
       }

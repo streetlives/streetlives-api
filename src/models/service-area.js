@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   ServiceArea.associate = (models) => {
-    ServiceArea.belongsTo(models.Service);
+    ServiceArea.belongsTo(models.Service, { foreignKey: 'service_id' });
   };
 
   return ServiceArea;

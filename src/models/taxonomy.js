@@ -18,7 +18,11 @@ module.exports = (sequelize, DataTypes) => {
   Taxonomy.associate = (models) => {
     Taxonomy.belongsTo(models.Taxonomy, { as: 'Parent', foreignKey: 'parent_id' });
     Taxonomy.hasMany(models.Taxonomy, { as: 'Children', foreignKey: 'parent_id' });
-    Taxonomy.belongsToMany(models.Service, { through: models.ServiceTaxonomy });
+    Taxonomy.belongsToMany(models.Service, {
+      through: models.ServiceTaxonomy,
+      foreignKey: 'taxonomy_id',
+      otherKey: 'service_id',
+    });
   };
 
   Taxonomy.getTaxonomiesWithDescendants = async () => {

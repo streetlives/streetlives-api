@@ -41,7 +41,7 @@ export default {
         content,
       } = req.body;
 
-      const location = await models.Location.findById(locationId, { include: models.Organization });
+      const location = await models.Location.findByPk(locationId, { include: models.Organization });
 
       if (!location) {
         throw new NotFoundError('Location not found when attempting to create new error report');
@@ -78,7 +78,7 @@ export default {
 
       const { errorReportId } = req.params;
 
-      const errorReport = await models.ErrorReport.findById(errorReportId, {
+      const errorReport = await models.ErrorReport.findByPk(errorReportId, {
         include: models.Location,
       });
 

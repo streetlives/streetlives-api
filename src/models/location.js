@@ -1,6 +1,6 @@
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes, Op) => {
   const Location = sequelize.define('Location', {
     id: {
       type: DataTypes.UUID,
@@ -13,17 +13,21 @@ module.exports = (sequelize, DataTypes) => {
     position: DataTypes.GEOMETRY,
     additional_info: DataTypes.TEXT,
     hidden_from_search: DataTypes.BOOLEAN,
+    slug: DataTypes.TEXT,
+    last_validated_at: DataTypes.DATE,
   }, {
     underscored: true,
     underscoredAll: true,
     hooks: {
       beforeFind: (options) => {
-        const isSearchingBySpecificId = options.where.id != null;
-        if (!isSearchingBySpecificId) {
-          // Mutating args is awful, but is how sequelize hooks officially work:
-          // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
-          // eslint-disable-next-line no-param-reassign
-          options.where.hidden_from_search = { [sequelize.Op.or]: [false, null] };
+        if (options && options.where) {
+          const isSearchingBySpecificId = options.where.id != null;
+          if (!isSearchingBySpecificId) {
+            // Mutating args is awful, but is how sequelize hooks officially work:
+            // http://docs.sequelizejs.com/manual/tutorial/hooks.html.
+            // eslint-disable-next-line no-param-reassign
+            options.where.hidden_from_search = { [Op.or]: [false, null] };
+          }
         }
         return options;
       },
@@ -31,17 +35,25 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Location.associate = (models) => {
-    Location.belongsTo(models.Organization);
-    Location.belongsToMany(models.Service, { through: models.ServiceAtLocation });
-    Location.belongsToMany(models.Language, { through: models.LocationLanguages });
-    Location.hasMany(models.PhysicalAddress);
-    Location.hasMany(models.Phone);
-    Location.hasMany(models.RegularSchedule);
-    Location.hasMany(models.HolidaySchedule);
-    Location.hasMany(models.AccessibilityForDisabilities);
-    Location.hasMany(models.EventRelatedInfo);
-    Location.hasMany(models.Comment);
-    Location.hasMany(models.ErrorReport);
+    Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
+    Location.belongsToMany(models.Service, {
+      through: models.ServiceAtLocation,
+      foreignKey: 'location_id',
+      otherKey: 'service_id',
+    });
+    Location.belongsToMany(models.Language, {
+      through: models.LocationLanguages,
+      foreignKey: 'location_id',
+      otherKey: 'language_id',
+    });
+    Location.hasMany(models.PhysicalAddress, { foreignKey: 'location_id' });
+    Location.hasMany(models.Phone, { foreignKey: 'location_id' });
+    Location.hasMany(models.RegularSchedule, { foreignKey: 'location_id' });
+    Location.hasMany(models.HolidaySchedule, { foreignKey: 'location_id' });
+    Location.hasMany(models.AccessibilityForDisabilities, { foreignKey: 'location_id' });
+    Location.hasMany(models.EventRelatedInfo, { foreignKey: 'location_id' });
+    Location.hasMany(models.Comment, { foreignKey: 'location_id' });
+    Location.hasMany(models.ErrorReport, { foreignKey: 'location_id' });
 
     // Can't just set defaultScope on the initial model definition:
     // https://github.com/sequelize/sequelize/issues/6245.
@@ -53,24 +65,24 @@ module.exports = (sequelize, DataTypes) => {
   const getSearchStringCondition = (searchString) => {
     const fuzzySearchString = `%${searchString}%`;
     return sequelize.or(
-      { name: { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Organization.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.description$': { [sequelize.Op.iLike]: fuzzySearchString } },
-      { '$Services.Taxonomies.name$': { [sequelize.Op.iLike]: fuzzySearchString } },
+      { name: { [Op.iLike]: fuzzySearchString } },
+      { '$Organization.name$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.name$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.description$': { [Op.iLike]: fuzzySearchString } },
+      { '$Services.Taxonomies.name$': { [Op.iLike]: fuzzySearchString } },
     );
   };
 
   const getOrganizationNameCondition = organizationName => ({
-    '$Organization.name$': { [sequelize.Op.iLike]: `%${organizationName}%` },
+    '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
   });
 
   const getZipcodesCondition = zipcodes => ({
-    '$PhysicalAddresses.postal_code$': { [sequelize.Op.in]: zipcodes },
+    '$PhysicalAddresses.postal_code$': { [Op.in]: zipcodes },
   });
 
   const getTaxonomyCondition = taxonomyIds => ({
-    '$Services.Taxonomies.id$': { [sequelize.Op.in]: taxonomyIds },
+    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
   });
 
   const getOpeningHoursCondition = (openAt, occasion) => {
@@ -86,16 +98,16 @@ module.exports = (sequelize, DataTypes) => {
       return {
         '$Services.HolidaySchedules.occasion$': occasion,
         '$Services.HolidaySchedules.weekday$': weekday,
-        '$Services.HolidaySchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
-        '$Services.HolidaySchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
-        '$Services.HolidaySchedules.closed$': { [sequelize.Op.or]: [false, null] },
+        '$Services.HolidaySchedules.opens_at$': { [Op.lte]: timeOfDay },
+        '$Services.HolidaySchedules.closes_at$': { [Op.gt]: timeOfDay },
+        '$Services.HolidaySchedules.closed$': { [Op.or]: [false, null] },
       };
     }
 
     return {
       '$Services.RegularSchedules.weekday$': weekday,
-      '$Services.RegularSchedules.opens_at$': { [sequelize.Op.lte]: timeOfDay },
-      '$Services.RegularSchedules.closes_at$': { [sequelize.Op.gt]: timeOfDay },
+      '$Services.RegularSchedules.opens_at$': { [Op.lte]: timeOfDay },
+      '$Services.RegularSchedules.closes_at$': { [Op.gt]: timeOfDay },
     };
   };
 
@@ -107,9 +119,9 @@ module.exports = (sequelize, DataTypes) => {
     ),
     {
       '$Services.ServiceAreas.postal_codes$': {
-        [sequelize.Op.or]: {
-          [sequelize.Op.contains]: [zipcode],
-          [sequelize.Op.eq]: '{}',
+        [Op.or]: {
+          [Op.contains]: [zipcode],
+          [Op.eq]: '{}',
         },
       },
     },
@@ -187,14 +199,16 @@ module.exports = (sequelize, DataTypes) => {
     const requiredDocumentCondition = sequelize.and(...requiredDocuments.map(doc =>
       sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase())));
     const notRequiredDocumentCondition = {
-      [sequelize.Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
+      [Op.not]: sequelize.or(...notRequiredDocuments.map(doc =>
         sequelize.where(serviceRequiredDocuments, '?', doc.toLowerCase()))),
     };
 
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationIds = async (filterParameters, additionalConditions, queryProps) => {
+  Location.findUniqueLocationIds = async (filterParameters,
+    additionalConditions,
+    queryProps = {}) => {
     const {
       searchString,
       organizationName,
@@ -307,12 +321,14 @@ module.exports = (sequelize, DataTypes) => {
     position,
     radius,
     minResults,
-    maxResults,
     filterParameters,
     locationFieldsOnly,
+    limit,
+    offset,
   }) => {
     let locationIds;
     let distance;
+    let totalNumLocations;
 
     if (position && radius) {
       distance = sequelize.fn(
@@ -321,13 +337,19 @@ module.exports = (sequelize, DataTypes) => {
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
 
-      const distanceCondition = sequelize.where(distance, { [sequelize.Op.lte]: radius });
+      const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
+
+      totalNumLocations = (await Location.findUniqueLocationIds(
+        filterParameters,
+        [distanceCondition],
+      )).length;
 
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition], {
           order: [[distance, 'ASC']],
-          limit: maxResults,
+          limit,
+          offset,
         },
       );
 
@@ -338,14 +360,18 @@ module.exports = (sequelize, DataTypes) => {
       // aren't natively supported by sequelize and would require a raw query.
       // For now, the simplicity and security of sequelize seems worth the slight performance hit.
       if (minResults && locationIds.length < minResults) {
+        totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
           order: distance ? [[distance, 'ASC']] : null,
           limit: minResults,
+          offset,
         });
       }
     } else {
+      totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-        limit: maxResults,
+        limit,
+        offset,
       });
     }
 
@@ -373,11 +399,14 @@ module.exports = (sequelize, DataTypes) => {
     ];
 
     const locationsWithAssociations = await Location.findAll({
-      where: { id: { [sequelize.Op.in]: locationIds } },
+      where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
-    return locationsWithAssociations;
+    return {
+      locations: locationsWithAssociations,
+      totalNumLocations,
+    };
   };
 
   return Location;

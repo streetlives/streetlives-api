@@ -17,9 +17,9 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   RegularSchedule.associate = (models) => {
-    RegularSchedule.belongsTo(models.Location);
-    RegularSchedule.belongsTo(models.Service);
-    RegularSchedule.belongsTo(models.ServiceAtLocation);
+    RegularSchedule.belongsTo(models.Location, { foreignKey: 'location_id' });
+    RegularSchedule.belongsTo(models.Service, { foreignKey: 'service_id' });
+    RegularSchedule.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
   };
 
   return RegularSchedule;
