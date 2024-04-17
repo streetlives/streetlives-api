@@ -26,14 +26,17 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    neighborhood: {
+      type: DataTypes.TEXT,
+    },
   }, {
     underscored: true,
     underscoredAll: true,
   });
 
   PhysicalAddress.associate = (models) => {
-    PhysicalAddress.belongsTo(models.Location);
-    PhysicalAddress.belongsTo(models.LocationSuggestion);
+    PhysicalAddress.belongsTo(models.Location, { foreignKey: 'location_id' });
+    PhysicalAddress.belongsTo(models.LocationSuggestion, { foreignKey: 'location_suggestion_id' });
   };
 
   return PhysicalAddress;

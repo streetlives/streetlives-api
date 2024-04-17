@@ -16,12 +16,12 @@ export default {
         ...otherProps
       } = req.body;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findByPk(locationId);
       if (!location) {
         throw new NotFoundError('Location not found');
       }
 
-      const taxonomy = await models.Taxonomy.findById(taxonomyId);
+      const taxonomy = await models.Taxonomy.findByPk(taxonomyId);
       if (!taxonomy) {
         throw new NotFoundError('Taxonomy not found');
       }
@@ -45,7 +45,7 @@ export default {
       const { serviceId } = req.params;
       const { metadata, taxonomyId, ...otherProps } = req.body;
 
-      const service = await models.Service.findById(serviceId, {
+      const service = await models.Service.findByPk(serviceId, {
         include: [models.DocumentsInfo],
       });
       if (!service) {
@@ -57,7 +57,7 @@ export default {
 
       let taxonomy = null;
       if (taxonomyId) {
-        taxonomy = await models.Taxonomy.findById(taxonomyId);
+        taxonomy = await models.Taxonomy.findByPk(taxonomyId);
         if (!taxonomy) {
           throw new NotFoundError('Taxonomy not found');
         }
