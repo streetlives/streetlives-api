@@ -30,7 +30,9 @@
     "deploy:prod": "aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --zip-file fileb://./dist.zip --publish",
     "package-deploy:dev": "npm run clean && npm run build && npm run package && npm run deploy:dev",
     "package-deploy:prod": "npm run clean && npm run build && npm run package && npm run deploy:prod",
-    "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy"
+    "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy",
+    "sequelize:migration:generate": "sequelize-cli migration:generate --name",
+    "sequelize:db:migrate": "sequelize-cli db:migrate"
   },
   "author": "",
   "license": "MIT",
@@ -67,6 +69,7 @@
     "nodemon": "^1.18.7",
     "pre-commit": "^1.2.2",
     "qs": "^6.9.4",
+    "sequelize-cli": "^6.6.2",
     "supertest": "^3.0.0",
     "trace": "^3.1.1",
     "uuid": "^3.2.1"
