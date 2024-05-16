@@ -64,13 +64,13 @@ module.exports = (sequelize, DataTypes, Op) => {
   };
 
   const getSearchStringCondition = (searchString) => {
-    const fuzzySearchString = `%${searchString}%`;
+    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', searchString) }
     return sequelize.or(
-      { name: { [Op.iLike]: fuzzySearchString } },
-      { '$Organization.name$': { [Op.iLike]: fuzzySearchString } },
-      { '$Services.name$': { [Op.iLike]: fuzzySearchString } },
-      { '$Services.description$': { [Op.iLike]: fuzzySearchString } },
-      { '$Services.Taxonomies.name$': { [Op.iLike]: fuzzySearchString } },
+      { name: condition},
+      { '$Organization.name$': condition },
+      { '$Services.name$': condition },
+      { '$Services.description$': condition },
+      { '$Services.Taxonomies.name$': condition },
     );
   };
 
