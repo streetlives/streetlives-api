@@ -64,13 +64,13 @@ module.exports = (sequelize, DataTypes, Op) => {
   };
 
   const getSearchStringCondition = (searchString) => {
-    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', searchString) };
+    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', 'english', searchString) };
     return sequelize.or(
-      { name: condition },
-      { '$Organization.name$': condition },
-      { '$Services.name$': condition },
-      { '$Services.description$': condition },
-      { '$Services.Taxonomies.name$': condition },
+      { name_vector: condition },
+      { '$Organization.name_vector$': condition },
+      { '$Services.name_vector$': condition },
+      { '$Services.description_vector$': condition },
+      { '$Services.Taxonomies.name_vector$': condition },
     );
   };
 
