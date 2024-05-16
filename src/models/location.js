@@ -64,9 +64,9 @@ module.exports = (sequelize, DataTypes, Op) => {
   };
 
   const getSearchStringCondition = (searchString) => {
-    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', searchString) }
+    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', searchString) };
     return sequelize.or(
-      { name: condition},
+      { name: condition },
       { '$Organization.name$': condition },
       { '$Services.name$': condition },
       { '$Services.description$': condition },
