@@ -63,16 +63,64 @@ module.exports = (sequelize, DataTypes, Op) => {
     }, { override: true });
   };
 
-  const getSearchStringCondition = (searchString) => {
-    const condition = { [Op.match]: sequelize.fn('websearch_to_tsquery', 'english', searchString) };
+  const getLevenshteinCondition = (col, searchString) =>
+    sequelize.where(
+      sequelize.fn(
+        'levenshtein',
+        sequelize.fn('lower', sequelize.col(col)),
+        searchString.toLowerCase(),
+      ),
+      { [Op.lte]: 2 },
+    );
+
+  const getSoundexCondition = (col, searchString) =>
+    sequelize.where(
+      sequelize.fn('difference', sequelize.col(col), searchString),
+      4,
+    );
+
+  const getSearchStringConditionFullTextSearch = (searchString) => {
+    const websearchToTsqueryCondition = {
+      [Op.match]:
+      sequelize.fn('websearch_to_tsquery', 'english', searchString),
+    };
     return sequelize.or(
-      { name_vector: condition },
-      { '$Organization.name_vector$': condition },
-      { '$Services.name_vector$': condition },
-      { '$Services.description_vector$': condition },
-      { '$Services.Taxonomies.name_vector$': condition },
+
+      { name_vector: websearchToTsqueryCondition },
+      { '$Organization.name_vector$': websearchToTsqueryCondition },
+      { '$Services.name_vector$': websearchToTsqueryCondition },
+      { '$Services.description_vector$': websearchToTsqueryCondition },
+      { '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition },
+
     );
   };
+
+  const getSearchStringConditionPrefix = (searchString) => {
+    const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
+    return sequelize.or(
+      // prefix search
+      { name: prefixCondition },
+      { '$Organization.name$': prefixCondition },
+      { '$Services.name$': prefixCondition },
+      { '$Services.Taxonomies.name$': prefixCondition },
+    );
+  };
+
+  const getSearchStringConditionLevenshtein = searchString => sequelize.or(
+    // levenshtein search
+    getLevenshteinCondition('Location.name', searchString),
+    getLevenshteinCondition('Organization.name', searchString),
+    getLevenshteinCondition('Services.name', searchString),
+    getLevenshteinCondition('Services->Taxonomies.name', searchString),
+  );
+
+  const getSearchStringConditionSoundex = searchString => sequelize.or(
+    // soundex
+    getSoundexCondition('Location.name', searchString),
+    getSoundexCondition('Organization.name', searchString),
+    getSoundexCondition('Services.name', searchString),
+    getSoundexCondition('Services->Taxonomies.name', searchString),
+  );
 
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
@@ -228,9 +276,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
 
     const whereConditions = [];
-    if (searchString) {
-      whereConditions.push(getSearchStringCondition(searchString));
-    }
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
@@ -261,59 +306,76 @@ module.exports = (sequelize, DataTypes, Op) => {
       havingConditions.push(getTaxonomySpecificAttributesCondition(taxonomySpecificAttributes));
     }
 
-    const locations = await Location.findAll({
-      ...queryProps,
-      where: sequelize.and(...whereConditions, ...additionalConditions),
-      attributes: [
-        sequelize.fn('DISTINCT', sequelize.col('Location.id')),
-        // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-        ...(queryProps.order || []),
-      ],
-      raw: true,
-      // Not like associations and grouping work perfectly out of the box either though...
-      // https://github.com/sequelize/sequelize/issues/5481
-      includeIgnoreAttributes: false,
-      // Without this, sequelize limits on a subquery that has only the main table, and applies
-      // conditions on it too. Conditions on associated columns will, therefore, fail:
-      // https://github.com/sequelize/sequelize/issues/6073
-      // As noted there, subQuery: false has problems with the limit count too,
-      // but it should be fine as long as we apply it after getting distinct location IDs.
-      subQuery: false,
-      include: [
-        sequelize.models.Organization,
-        ...(zipcodes ? [sequelize.models.PhysicalAddress] : []),
-        {
-          model: sequelize.models.Service,
-          required: isEligibilitySpecified,
-          include: [
-            sequelize.models.Taxonomy,
-            ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
-            ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
-            ...(occasion ? [sequelize.models.HolidaySchedule] : []),
-            ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
-            ...(isEligibilitySpecified ? [{
-              model: sequelize.models.Eligibility,
-              include: {
-                model: sequelize.models.EligibilityParameter,
+    async function findAll(_whereConditions) {
+      return Location.findAll({
+        ...queryProps,
+        where: sequelize.and(..._whereConditions, ...additionalConditions),
+        attributes: [
+          sequelize.fn('DISTINCT', sequelize.col('Location.id')),
+          // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
+          ...(queryProps.order || []),
+        ],
+        raw: true,
+        // Not like associations and grouping work perfectly out of the box either though...
+        // https://github.com/sequelize/sequelize/issues/5481
+        includeIgnoreAttributes: false,
+        // Without this, sequelize limits on a subquery that has only the main table, and applies
+        // conditions on it too. Conditions on associated columns will, therefore, fail:
+        // https://github.com/sequelize/sequelize/issues/6073
+        // As noted there, subQuery: false has problems with the limit count too,
+        // but it should be fine as long as we apply it after getting distinct location IDs.
+        subQuery: false,
+        include: [
+          sequelize.models.Organization,
+          ...(zipcodes ? [sequelize.models.PhysicalAddress] : []),
+          {
+            model: sequelize.models.Service,
+            required: isEligibilitySpecified,
+            include: [
+              sequelize.models.Taxonomy,
+              ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
+              ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
+              ...(occasion ? [sequelize.models.HolidaySchedule] : []),
+              ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
+              ...(isEligibilitySpecified ? [{
+                model: sequelize.models.Eligibility,
+                include: {
+                  model: sequelize.models.EligibilityParameter,
+                  required: true,
+                },
                 required: true,
-              },
-              required: true,
-            }] : []),
-            ...(areTaxonomyAttributesSpecified ? [{
-              model: sequelize.models.ServiceTaxonomySpecificAttribute,
-              include: {
-                model: sequelize.models.TaxonomySpecificAttribute,
-                as: 'attribute',
+              }] : []),
+              ...(areTaxonomyAttributesSpecified ? [{
+                model: sequelize.models.ServiceTaxonomySpecificAttribute,
+                include: {
+                  model: sequelize.models.TaxonomySpecificAttribute,
+                  as: 'attribute',
+                  required: true,
+                },
                 required: true,
-              },
-              required: true,
-            }] : []),
-          ],
-        },
-      ],
-      group: ['Location.id', 'Services.id'],
-      having: havingConditions,
-    });
+              }] : []),
+            ],
+          },
+        ],
+        group: ['Location.id', 'Services.id'],
+        having: havingConditions,
+      });
+    }
+
+    let locations;
+    if (searchString) {
+      locations = [];
+      for (const fn of [
+        getSearchStringConditionFullTextSearch,
+        getSearchStringConditionPrefix,
+        getSearchStringConditionLevenshtein,
+        getSearchStringConditionSoundex,
+      ]) {
+        locations = locations.concat(await findAll(whereConditions.concat(fn(searchString))));
+      }
+    } else {
+      locations = await findAll(whereConditions);
+    }
 
     return locations.map(location => location.id);
   };
