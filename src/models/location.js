@@ -79,49 +79,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       4,
     );
 
-  const getSearchStringConditionFullTextSearch = (searchString) => {
-    const websearchToTsqueryCondition = {
-      [Op.match]:
-      sequelize.fn('websearch_to_tsquery', 'english', searchString),
-    };
-    return sequelize.or(
-
-      { name_vector: websearchToTsqueryCondition },
-      { '$Organization.name_vector$': websearchToTsqueryCondition },
-      { '$Services.name_vector$': websearchToTsqueryCondition },
-      { '$Services.description_vector$': websearchToTsqueryCondition },
-      { '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition },
-
-    );
-  };
-
-  const getSearchStringConditionPrefix = (searchString) => {
-    const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
-    return sequelize.or(
-      // prefix search
-      { name: prefixCondition },
-      { '$Organization.name$': prefixCondition },
-      { '$Services.name$': prefixCondition },
-      { '$Services.Taxonomies.name$': prefixCondition },
-    );
-  };
-
-  const getSearchStringConditionLevenshtein = searchString => sequelize.or(
-    // levenshtein search
-    getLevenshteinCondition('Location.name', searchString),
-    getLevenshteinCondition('Organization.name', searchString),
-    getLevenshteinCondition('Services.name', searchString),
-    getLevenshteinCondition('Services->Taxonomies.name', searchString),
-  );
-
-  const getSearchStringConditionSoundex = searchString => sequelize.or(
-    // soundex
-    getSoundexCondition('Location.name', searchString),
-    getSoundexCondition('Organization.name', searchString),
-    getSoundexCondition('Services.name', searchString),
-    getSoundexCondition('Services->Taxonomies.name', searchString),
-  );
-
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
   });
@@ -330,7 +287,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           ...(zipcodes ? [sequelize.models.PhysicalAddress] : []),
           {
             model: sequelize.models.Service,
-            required: isEligibilitySpecified,
+            required: true,
             include: [
               sequelize.models.Taxonomy,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
@@ -362,17 +319,49 @@ module.exports = (sequelize, DataTypes, Op) => {
       });
     }
 
+    async function findWithCondition(condition) {
+      return findAll(whereConditions.concat(condition));
+    }
+
     let locations;
     if (searchString) {
-      locations = [];
-      for (const fn of [
-        getSearchStringConditionFullTextSearch,
-        getSearchStringConditionPrefix,
-        getSearchStringConditionLevenshtein,
-        getSearchStringConditionSoundex,
-      ]) {
-        locations = locations.concat(await findAll(whereConditions.concat(fn(searchString))));
-      }
+      const websearchToTsqueryCondition = {
+        [Op.match]:
+        sequelize.fn('websearch_to_tsquery', 'english', searchString),
+      };
+      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
+      locations = [
+        // organization name
+        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Organization.name$': prefixCondition }),
+        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
+        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
+
+        // location name
+        await findWithCondition({ name_vector: websearchToTsqueryCondition }),
+        await findWithCondition({ name: prefixCondition }),
+        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
+        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
+
+        // service name
+        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Services.name$': prefixCondition }),
+        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
+        await findWithCondition(getSoundexCondition('Services.name', searchString)),
+
+        // taxonomy name
+        await findWithCondition({
+          '$Services.Taxonomies.name_vector$':
+          websearchToTsqueryCondition,
+        }),
+        await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
+        await findWithCondition(getLevenshteinCondition('Services->Taxonomies.name', searchString)),
+        await findWithCondition(getSoundexCondition('Services->Taxonomies.name', searchString)),
+
+        // description
+        await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
+
+      ].reduce((a, b) => a.concat(b));
     } else {
       locations = await findAll(whereConditions);
     }
