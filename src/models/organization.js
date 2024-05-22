@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     description: DataTypes.TEXT,
     email: DataTypes.TEXT,
     url: DataTypes.TEXT,
+    name_vector: DataTypes.TSVECTOR,
   }, {
     underscored: true,
     underscoredAll: true,

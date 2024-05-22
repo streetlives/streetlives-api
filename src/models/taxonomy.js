@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     parent_name: DataTypes.TEXT,
+    name_vector: DataTypes.TSVECTOR,
   }, {
     underscored: true,
     underscoredAll: true,
