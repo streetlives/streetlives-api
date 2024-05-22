@@ -15,6 +15,8 @@ module.exports = (sequelize, DataTypes) => {
     interpretation_services: DataTypes.TEXT,
     fees: DataTypes.TEXT,
     additional_info: DataTypes.TEXT,
+    name_vector: DataTypes.TSVECTOR,
+    description_vector: DataTypes.TSVECTOR,
   }, {
     underscored: true,
     underscoredAll: true,
