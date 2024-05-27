@@ -330,35 +330,47 @@ module.exports = (sequelize, DataTypes, Op) => {
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
       const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
+      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
+      const exactExactMatchCondition = { [Op.iLike]: searchString };
       locations = [
-        // organization name
-        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
+
+        // exact match
+        await findWithCondition({ '$Organization.name$': exactMatchCondition }),
+        await findWithCondition({ '$Location.name$': exactMatchCondition }),
+        await findWithCondition({ '$Services.name$': exactMatchCondition }),
+        await findWithCondition({ '$Services.Taxonomies.name$': exactMatchCondition }),
+
+        // prefix match
         await findWithCondition({ '$Organization.name$': prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
-        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
-
-        // location name
-        await findWithCondition({ name_vector: websearchToTsqueryCondition }),
-        await findWithCondition({ name: prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
-        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
-
-        // service name
-        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Location.name$': prefixCondition }),
         await findWithCondition({ '$Services.name$': prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
-        await findWithCondition(getSoundexCondition('Services.name', searchString)),
-
-        // taxonomy name
-        await findWithCondition({
-          '$Services.Taxonomies.name_vector$':
-          websearchToTsqueryCondition,
-        }),
         await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
+
+        // full-text search
+        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({
+          '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
+        }),
+
+        // levenshtein fuzzy match
+        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
+        await findWithCondition(getLevenshteinCondition('Location.name', searchString)),
+        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
         await findWithCondition(getLevenshteinCondition('Services->Taxonomies.name', searchString)),
+
+        // soundex fuzzy match
+        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
+        await findWithCondition(getSoundexCondition('Location.name', searchString)),
+        await findWithCondition(getSoundexCondition('Services.name', searchString)),
         await findWithCondition(getSoundexCondition('Services->Taxonomies.name', searchString)),
 
-        // description
+        // full text search on the description
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 
       ].reduce((a, b) => a.concat(b));
@@ -455,8 +467,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       include: additionalLocationData,
       order: distance ? [[distance, 'ASC']] : null,
     });
+
+    function sortByLocationIds(a, b) {
+      return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);
+    }
+
+    // if not sorting by distance, then sort by the order of locationIds
+    const sortedLocationsWithAssociations = distance ?
+      locationsWithAssociations :
+      locationsWithAssociations.sort(sortByLocationIds);
+
     return {
-      locations: locationsWithAssociations,
+      locations: sortedLocationsWithAssociations,
       totalNumLocations,
     };
   };
