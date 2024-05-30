@@ -39,7 +39,7 @@ export default (app) => {
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
   app.delete('/services/:serviceId', getUser, services.delete);
 
-  app.get('/geocode/neighborhood', geocode.findNeighborhood);
+  app.get('/geocode/analytics/all', geocode.findAnalytics);
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);

@@ -40,97 +40,71 @@ module.exports = {
     const API_ROOT = 'https://data.cityofnewyork.us/api/geospatial';
     const API_PARAMS = 'method=export&format=GeoJSON';
 
+    await queryInterface.createTable('nyc_districts', {
+      district_id: {
+        type: Sequelize.DataTypes.INTEGER,
+      },
+      geometry: {
+        type: Sequelize.DataTypes.GEOMETRY('MULTIPOLYGON'),
+      },
+      type: {
+        type: Sequelize.DataTypes.ENUM(['community', 'congressional', 'school'])
+      }
+    });
+
     // https://data.cityofnewyork.us/City-Government/Community-Districts/yfnk-k7r4
     // eslint-disable-next-line no-undef
-    const response2 = await fetch(`${API_ROOT}/yfnk-k7r4?${API_PARAMS}`);
-    const geojson2 = await response2.json();
-    await queryInterface.createTable('nyc_community_districts', {
-      district_id: {
-        type: Sequelize.DataTypes.INTEGER,
-        primaryKey: true,
-      },
-      geometry: {
-        type: Sequelize.DataTypes.GEOMETRY('MULTIPOLYGON'),
-      },
-    });
-    await queryInterface.sequelize.query(`
-      CREATE INDEX nyc_community_districts_geometry_index 
-        ON nyc_community_districts USING GIST (geometry)
-    `);
-    await queryInterface.sequelize.transaction(async t =>
-      Promise.all(geojson2.features.map(feature =>
-        queryInterface.sequelize.query(
-          'insert into nyc_community_districts values ($1, ST_GeomFromGeoJSON($2))',
-          {
-            bind: [
-              parseInt(feature.properties.boro_cd, 10),
-              feature.geometry,
-            ],
-            type: Sequelize.QueryTypes.INSERT,
-          },
-          { transaction: t },
-        ))));
-
+    const geojsonCommunityDistricts  = await (await fetch(`${API_ROOT}/yfnk-k7r4?${API_PARAMS}`)).json();
     // https://data.cityofnewyork.us/City-Government/Congressional-Districts/qd3c-zuu7
-    // eslint-disable-next-line no-undef
-    const response3 = await fetch(`${API_ROOT}/qd3c-zuu7?${API_PARAMS}`);
-    const geojson3 = await response3.json();
-    await queryInterface.createTable('nyc_congressional_districts', {
-      district_id: {
-        type: Sequelize.DataTypes.INTEGER,
-        primaryKey: true,
-      },
-      geometry: {
-        type: Sequelize.DataTypes.GEOMETRY('MULTIPOLYGON'),
-      },
-    });
-    await queryInterface.sequelize.query(`
-      CREATE INDEX nyc_congressional_districts_geometry_index 
-        ON nyc_congressional_districts USING GIST (geometry)
-    `);
-    await queryInterface.sequelize.transaction(async t =>
-      Promise.all(geojson3.features.map(feature =>
-        queryInterface.sequelize.query(
-          'insert into nyc_community_districts values ($1, ST_GeomFromGeoJSON($2))',
-          {
-            bind: [
-              parseInt(feature.properties.cong_dist, 10),
-              feature.geometry,
-            ],
-            type: Sequelize.QueryTypes.INSERT,
-          },
-          { transaction: t },
-        ))));
-
+    const geojsonCongressionalDistricts = await (await fetch(`${API_ROOT}/qd3c-zuu7?${API_PARAMS}`)).json();
     // https://data.cityofnewyork.us/Education/School-Districts/r8nu-ymqj
-    // eslint-disable-next-line no-undef
-    const response4 = await fetch(`${API_ROOT}/r8nu-ymqj?${API_PARAMS}`);
-    const geojson4 = await response4.json();
-    await queryInterface.createTable('nyc_school_districts', {
-      district_id: {
-        type: Sequelize.DataTypes.INTEGER,
-      },
-      geometry: {
-        type: Sequelize.DataTypes.GEOMETRY('MULTIPOLYGON'),
-      },
-    });
+    const geojsonSchoolDistricts = await (await fetch(`${API_ROOT}/r8nu-ymqj?${API_PARAMS}`)).json();
+
     await queryInterface.sequelize.query(`
-      CREATE INDEX nyc_school_districts_geometry_index 
-        ON nyc_school_districts USING GIST (geometry)
+      CREATE INDEX nyc_districts_geometry_index 
+        ON nyc_districts USING GIST (geometry)
     `);
     await queryInterface.sequelize.transaction(async t =>
-      Promise.all(geojson4.features.map(feature =>
-        queryInterface.sequelize.query(
-          'insert into nyc_school_districts values ($1, ST_GeomFromGeoJSON($2))',
-          {
-            bind: [
-              parseInt(feature.properties.school_dist, 10),
-              feature.geometry,
-            ],
-            type: Sequelize.QueryTypes.INSERT,
-          },
-          { transaction: t },
-        ))));
+      Promise.all(
+        geojsonCommunityDistricts.features.map(feature =>
+          queryInterface.sequelize.query(
+            "insert into nyc_districts values ($1, ST_GeomFromGeoJSON($2), 'community')",
+            {
+              bind: [
+                parseInt(feature.properties.boro_cd, 10),
+                feature.geometry,
+              ],
+              type: Sequelize.QueryTypes.INSERT,
+            },
+            { transaction: t },
+          )).concat(
+            geojsonCongressionalDistricts.features.map(feature =>
+              queryInterface.sequelize.query(
+                "insert into nyc_districts values ($1, ST_GeomFromGeoJSON($2), 'congressional')",
+                {
+                  bind: [
+                    parseInt(feature.properties.cong_dist, 10),
+                    feature.geometry,
+                  ],
+                  type: Sequelize.QueryTypes.INSERT,
+                },
+                { transaction: t },
+              ))
+          ).concat(
+            geojsonSchoolDistricts.features.map(feature =>
+              queryInterface.sequelize.query(
+                "insert into nyc_districts values ($1, ST_GeomFromGeoJSON($2), 'school')",
+                {
+                  bind: [
+                    parseInt(feature.properties.school_dist, 10),
+                    feature.geometry,
+                  ],
+                  type: Sequelize.QueryTypes.INSERT,
+                },
+                { transaction: t },
+              ))
+          )
+      ));
 
     // TODO: update the locations.neighborhood database table
     // TODO: update the database trigger that keeps this up-to-date
@@ -139,9 +113,7 @@ module.exports = {
   async down(queryInterface, Sequelize) {
     return queryInterface.sequelize.transaction(async t => Promise.all([
       queryInterface.dropTable('nyc_neighborhood_geometries', { transaction: t }),
-      queryInterface.dropTable('nyc_community_districts', { transaction: t }),
-      queryInterface.dropTable('nyc_congressional_districts', { transaction: t }),
-      queryInterface.dropTable('nyc_school_districts', { transaction: t }),
+      queryInterface.dropTable('nyc_districts', { transaction: t }),
     ]));
   },
 };
