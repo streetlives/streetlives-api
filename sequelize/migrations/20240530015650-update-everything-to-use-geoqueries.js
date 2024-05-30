@@ -62,43 +62,43 @@ module.exports = {
       begin
 
         SELECT nng.neighborhood into default_neighborhood from
-          physical_addresses pa
-          inner join locations l on pa.location_id = l.id
+          locations l
           cross join nyc_neighborhood_geometries  nng
-          where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326));
+          where l.id = NEW.location_id 
+          and ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326));
 
         SELECT nng.borough into default_borough from
-          physical_addresses pa
-          inner join locations l on pa.location_id = l.id
+          locations l
           cross join nyc_neighborhood_geometries  nng
-          where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326));
+          where l.id = NEW.location_id 
+            and ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326));
 
         SELECT nd.district_id into default_school_district from
-          physical_addresses pa
-          inner join locations l on pa.location_id = l.id
+          locations l
           cross join nyc_districts nd
-          where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
+          where l.id = NEW.location_id 
+            and ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
             and nd.type = 'school';
 
         SELECT nd.district_id into default_congressional_district from
-          physical_addresses pa
-          inner join locations l on pa.location_id = l.id
+          locations l
           cross join nyc_districts nd
-          where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
+          where l.id = NEW.location_id 
+            and ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
             and nd.type = 'congressional';
 
         SELECT nd.district_id into default_community_district from
-          physical_addresses pa
-          inner join locations l on pa.location_id = l.id
+          locations l
           cross join nyc_districts nd
-          where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
+          where l.id = NEW.location_id 
+            and ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
             and nd.type = 'community';
 
         NEW.neighborhood := default_neighborhood;
         NEW.borough := default_borough;
         NEW.school_district = default_school_district;
         NEW.congressional_district = default_congressional_district;
-        NEW.community_district = default_community_distric;
+        NEW.community_district = default_community_district;
         return NEW;
       end;
       $$;
