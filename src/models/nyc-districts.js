@@ -1,3 +1,5 @@
+import assert from 'assert';
+
 module.exports = (sequelize, DataTypes, Op) => {
   const NycDistricts = sequelize.define('NycDistricts', {
     district_id: {
@@ -15,10 +17,20 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   NycDistricts.findByLatLong = async (latitude, longitude) => {
+    assert.strictEqual(typeof latitude, 'number');
+    assert.strictEqual(typeof longitude, 'number');
     const contains = sequelize.fn(
       'ST_Contains',
       sequelize.col('geometry'),
-      sequelize.literal(`ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326) `),
+      sequelize.fn(
+        'ST_SetSRID',
+        sequelize.fn(
+          'ST_MakePoint',
+          sequelize.literal(longitude),
+          sequelize.literal(latitude),
+        ),
+        sequelize.literal(4326),
+      ),
     );
 
     const containsCondition = sequelize.where(contains, true);
