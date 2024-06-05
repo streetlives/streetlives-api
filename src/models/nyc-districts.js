@@ -15,7 +15,6 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   NycDistricts.findByLatLong = async (latitude, longitude) => {
-    // where ST_Contains(nng.geometry, pa.point)
     const contains = sequelize.fn(
       'ST_Contains',
       sequelize.col('geometry'),
