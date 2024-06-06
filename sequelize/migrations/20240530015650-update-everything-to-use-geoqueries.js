@@ -54,6 +54,7 @@ module.exports = {
                     and nd.type = 'community'
           ) community_districts
     `);
+    // update the existing slug generation trigger to query this view
     await queryInterface.sequelize.query(`
             create or replace function get_slug(loc_id uuid)
                returns varchar
