@@ -171,7 +171,7 @@ module.exports = {
             end;
             $$;
           `);
-    // TODO: Should we also add triggers to update the slug on changes to location.position ? 
+    // TODO: Should we also add triggers to update the slug on changes to location.position ?
   },
 
   async down(queryInterface, Sequelize) {
