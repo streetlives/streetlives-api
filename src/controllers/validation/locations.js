@@ -32,6 +32,7 @@ export default {
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
+      age: Joi.number(),
     })
       .and('radius', 'latitude', 'longitude')
       .required(),

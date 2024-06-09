@@ -137,6 +137,22 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$Services.HolidaySchedules.occasion$': occasion,
   });
 
+  const getAgeCondition = age => sequelize.fn(
+    'is_age_eligibility_requirement_met',
+      age,
+      sequelize.cast(
+        sequelize.where(
+          sequelize.fn(
+            'json_object_agg',
+            sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
+            sequelize.col('"Services->Eligibilities".eligible_values'),
+          ),
+          '->', 'age'
+        ),
+        'jsonb',
+      )
+  )
+
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
@@ -226,6 +242,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       eligibility,
       documents,
       taxonomySpecificAttributes,
+      age,
     } = filterParameters;
     const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
     const areRequiredDocsSpecified = documents && Object.keys(documents).length;
@@ -252,7 +269,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push(getOccasionCondition(occasion));
     }
 
-    const havingConditions = [];
+    // we put empty object in the having array to work around this bug in sequelize: 
+    // https://github.com/sequelize/sequelize/issues/10142
+    const havingConditions = [{}];
+    if(age) {
+      havingConditions.push(getAgeCondition(age));
+    }
     if (isEligibilitySpecified) {
       havingConditions.push(getEligibilityCondition(eligibility));
     }
@@ -294,7 +316,7 @@ module.exports = (sequelize, DataTypes, Op) => {
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
               ...(occasion ? [sequelize.models.HolidaySchedule] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
-              ...(isEligibilitySpecified ? [{
+              ...(age || isEligibilitySpecified ? [{
                 model: sequelize.models.Eligibility,
                 include: {
                   model: sequelize.models.EligibilityParameter,

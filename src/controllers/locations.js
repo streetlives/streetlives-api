@@ -144,6 +144,7 @@ export default {
         membership,
         gender,
         servesZipcode,
+        age: _age,
         taxonomySpecificAttributes,
         locationFieldsOnly,
         pageNumber: _pageNumber,
@@ -152,6 +153,7 @@ export default {
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
       const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const age = _age ? parseInt(_age, 10) : undefined;
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -185,6 +187,7 @@ export default {
         servesZipcode,
         openAt: openAt && new Date(openAt),
         taxonomySpecificAttributes: attributesObject,
+        age
       };
 
       if (searchString) {
