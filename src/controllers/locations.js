@@ -187,7 +187,7 @@ export default {
         servesZipcode,
         openAt: openAt && new Date(openAt),
         taxonomySpecificAttributes: attributesObject,
-        age
+        age,
       };
 
       if (searchString) {

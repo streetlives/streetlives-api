@@ -139,19 +139,19 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   const getAgeCondition = age => sequelize.fn(
     'is_age_eligibility_requirement_met',
-      age,
-      sequelize.cast(
-        sequelize.where(
-          sequelize.fn(
-            'json_object_agg',
-            sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
-            sequelize.col('"Services->Eligibilities".eligible_values'),
-          ),
-          '->', 'age'
+    age,
+    sequelize.cast(
+      sequelize.where(
+        sequelize.fn(
+          'json_object_agg',
+          sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
+          sequelize.col('"Services->Eligibilities".eligible_values'),
         ),
-        'jsonb',
-      )
-  )
+        '->', 'age',
+      ),
+      'jsonb',
+    ),
+  );
 
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
@@ -269,10 +269,10 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push(getOccasionCondition(occasion));
     }
 
-    // we put empty object in the having array to work around this bug in sequelize: 
+    // we put empty object in the having array to work around this bug in sequelize:
     // https://github.com/sequelize/sequelize/issues/10142
     const havingConditions = [{}];
-    if(age) {
+    if (age) {
       havingConditions.push(getAgeCondition(age));
     }
     if (isEligibilitySpecified) {
