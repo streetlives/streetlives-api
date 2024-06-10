@@ -258,5 +258,51 @@ describe('find locations', () => {
         locationWithGenderFemaleEligibility.id,
         locationWithGenderFemaleAndAge18PlusEligibility.id,
       ].sort())));
+
+    it('should filter locations for gender female', () => request(app)
+      .get('/locations')
+      .query(qs.stringify({ gender: 'female' }))
+      .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
+        eligibilityFrom0To18Location.id,
+        eligibilityFrom18PlusLocation.id,
+        eligibilityFrom18To24Location.id,
+        eligibilityFrom24To60Location.id,
+        eligibilityFrom60PlusLocation.id,
+        eligibilityAllAgesLocation.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
+      ].sort())));
+
+    it('should filter locations for gender male', () => request(app)
+      .get('/locations')
+      .query(qs.stringify({ gender: 'male' }))
+      .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
+        eligibilityFrom0To18Location.id,
+        eligibilityFrom18PlusLocation.id,
+        eligibilityFrom18To24Location.id,
+        eligibilityFrom24To60Location.id,
+        eligibilityFrom60PlusLocation.id,
+        eligibilityAllAgesLocation.id,
+      ].sort())));
+
+    it('should filter locations for gender female and age 19', () => request(app)
+      .get('/locations')
+      .query(qs.stringify({ gender: 'female', age: 19 }))
+      .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
+        eligibilityFrom18PlusLocation.id,
+        eligibilityFrom18To24Location.id,
+        eligibilityAllAgesLocation.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
+      ].sort())));
+
+    it('should filter locations for gender male and age 19', () => request(app)
+      .get('/locations')
+      .query(qs.stringify({ gender: 'male', age: 19 }))
+      .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
+        eligibilityFrom18PlusLocation.id,
+        eligibilityFrom18To24Location.id,
+        eligibilityAllAgesLocation.id,
+      ].sort())));
   });
 });
