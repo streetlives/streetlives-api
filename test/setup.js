@@ -7,6 +7,21 @@ const models = require('../src/models');
 
 const { exec } = require('child_process');
 
+async function execScript(script) {
+  await new Promise((resolve, reject) => {
+    // run the migrations
+    const migrate = exec(
+      script,
+      { env: process.env },
+      err => (err ? reject(err) : resolve()),
+    );
+
+    // Forward stdout+stderr to this process
+    migrate.stdout.pipe(process.stdout);
+    migrate.stderr.pipe(process.stderr);
+  });
+}
+
 beforeAll(async () => {
   // reset the database state
   await models.sequelize.query(`
@@ -30,17 +45,13 @@ beforeAll(async () => {
 
   await models.sequelize.sync({ force: true });
 
-  await new Promise((resolve, reject) => {
-    // run the migrations
-    const migrate = exec(
-      'npx sequelize-cli db:migrate --name 20240325142525-location-slugs',
-      { env: process.env },
-      err => (err ? reject(err) : resolve()),
-    );
-
-    // Forward stdout+stderr to this process
-    migrate.stdout.pipe(process.stdout);
-    migrate.stderr.pipe(process.stderr);
-  });
+  // eslint-disable-next-line no-implied-eval
+  await execScript('npx sequelize-cli db:migrate --name 20240325142525-location-slugs');
+  // eslint-disable-next-line no-implied-eval
+  await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
 });
-afterAll(() => models.sequelize.close());
+afterAll(async () => {
+  // eslint-disable-next-line no-implied-eval
+  await execScript('npx sequelize-cli db:migrate:undo --name 20240607172205-age-filter');
+  await models.sequelize.close();
+});
