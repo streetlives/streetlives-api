@@ -17,10 +17,13 @@ describe('find locations', () => {
   let eligibilityFrom24To60Location;
   let eligibilityFrom60PlusLocation;
   let eligibilityAllAgesLocation;
+  // FIXME: let locationWithoutEligibility;
+  let locationWithGenderFemaleEligibility;
+  let locationWithGenderFemaleAndAge18PlusEligibility;
 
   let ageEligibilityParameter;
-  // TODO: test age eligibility in conjunction with other eligibilities
-  // let membershipEligibilityParameter;
+  // test age eligibility in conjunction with other eligibilities
+  let genderEligibilityParameter;
 
   const clearData = async () => {
     await Promise.all([
@@ -38,9 +41,17 @@ describe('find locations', () => {
     await models.EligibilityParameter.destroy({ where: {} });
   };
 
-  async function createLocationServiceWrapper(organization, eligibilityParameter) {
+  async function createLocationServiceWrapper(
+    organization,
+    eligibilityParameter,
+    locationServiceName,
+  ) {
+    const name = eligibilityParameter === null ?
+      'No eligibilities' :
+      (locationServiceName ||
+        eligibilityParameter.eligible_values[0].population_served);
     const service = await organization.createService({
-      name: eligibilityParameter.eligible_values[0].population_served,
+      name,
       Taxonomies: [{
         name: 'Shelter',
       }],
@@ -50,7 +61,7 @@ describe('find locations', () => {
       ],
     });
     const location = await organization.createLocation({
-      name: eligibilityParameter.eligible_values[0].population_served,
+      name,
       position: pointNearOrigin,
       PhysicalAddresses: [{
         address_1: '123 W 50th St.',
@@ -66,7 +77,15 @@ describe('find locations', () => {
       ],
     });
     await location.setServices([service]);
-    await eligibilityParameter.setService(service);
+    if (eligibilityParameter) {
+      if (Array.isArray(eligibilityParameter)) {
+        for (const param of eligibilityParameter) {
+          await param.setService(service);
+        }
+      } else {
+        await eligibilityParameter.setService(service);
+      }
+    }
     return location;
   }
 
@@ -81,9 +100,9 @@ describe('find locations', () => {
     ageEligibilityParameter = await models.EligibilityParameter.create({
       name: 'age',
     });
-    // membershipEligibilityParameter = await models.EligibilityParameter.create({
-    //  name: 'membership',
-    // });
+    genderEligibilityParameter = await models.EligibilityParameter.create({
+      name: 'gender',
+    });
 
     const eligibilityFrom0To18 = await ageEligibilityParameter.createEligibility({
       eligible_values: [{
@@ -145,6 +164,38 @@ describe('find locations', () => {
     });
     eligibilityAllAgesLocation =
       await createLocationServiceWrapper(organization, eligibilityAllAges);
+
+    // service without eligibility
+    // locationWithoutEligibility =
+    //   await createLocationServiceWrapper(organization, null);
+    // service with gender eligibility only
+    locationWithGenderFemaleEligibility =
+      await createLocationServiceWrapper(
+        organization,
+        await genderEligibilityParameter.createEligibility({
+          eligible_values: ['female'],
+        }),
+        'location With Gender Female Eligibility',
+      );
+    // service with gender eligibility plus age eligibility
+    locationWithGenderFemaleAndAge18PlusEligibility =
+      await createLocationServiceWrapper(
+        organization,
+        [
+          await genderEligibilityParameter.createEligibility({
+            eligible_values: ['female'],
+          }),
+          await ageEligibilityParameter.createEligibility({
+            eligible_values: [{
+              age_min: 18,
+              age_max: null,
+              all_ages: null,
+              population_served: '18+',
+            }],
+          }),
+        ],
+        'location With Gender Female And Age 18 Plus Eligibility',
+      );
   };
 
   beforeEach(setupData);
@@ -155,7 +206,11 @@ describe('find locations', () => {
       .get('/locations')
       .query(qs.stringify({ age: 10 }))
       .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
-        eligibilityFrom0To18Location.id, eligibilityAllAgesLocation.id].sort())));
+        eligibilityFrom0To18Location.id,
+        eligibilityAllAgesLocation.id,
+        // FIXME: locationWithoutEligibility.id,
+        locationWithGenderFemaleEligibility.id,
+      ].sort())));
 
     it('should filter locations for age 18', () => request(app)
       .get('/locations')
@@ -165,6 +220,8 @@ describe('find locations', () => {
         eligibilityAllAgesLocation.id,
         eligibilityFrom18PlusLocation.id,
         eligibilityFrom18To24Location.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
       ].sort())));
 
     it('should filter locations for age 24', () => request(app)
@@ -175,6 +232,8 @@ describe('find locations', () => {
         eligibilityFrom18PlusLocation.id,
         eligibilityFrom18To24Location.id,
         eligibilityFrom24To60Location.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
       ].sort())));
 
     it('should filter locations for age 60', () => request(app)
@@ -185,6 +244,8 @@ describe('find locations', () => {
         eligibilityFrom18PlusLocation.id,
         eligibilityFrom24To60Location.id,
         eligibilityFrom60PlusLocation.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
       ].sort())));
 
     it('should filter locations for age 61', () => request(app)
@@ -194,6 +255,8 @@ describe('find locations', () => {
         eligibilityAllAgesLocation.id,
         eligibilityFrom18PlusLocation.id,
         eligibilityFrom60PlusLocation.id,
+        locationWithGenderFemaleEligibility.id,
+        locationWithGenderFemaleAndAge18PlusEligibility.id,
       ].sort())));
   });
 });
