@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
@@ -137,21 +138,43 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$Services.HolidaySchedules.occasion$': occasion,
   });
 
-  const getAgeCondition = age => sequelize.fn(
-    'is_age_eligibility_requirement_met',
-    age,
-    sequelize.cast(
-      sequelize.where(
-        sequelize.fn(
-          'json_object_agg',
-          sequelize.col('"Services->Eligibilities->EligibilityParameter".name'),
-          sequelize.col('"Services->Eligibilities".eligible_values'),
-        ),
-        '->', 'age',
-      ),
-      'jsonb',
-    ),
-  );
+  const ageAgg = `
+    (
+      jsonb_object_agg(
+        "Services->Eligibilities->EligibilityParameter".name,
+        "Services->Eligibilities".eligible_values
+      ) -> 'age'
+    )
+  `;
+
+  const getAgeCondition = (age) => {
+    // I believe this type check makes the subsequent literal replacement safe wrt sql injection
+    assert(typeof age === 'number', 'age parameter must be a number');
+    return sequelize.literal(`
+      (
+        select
+          -- either no age eligibility criteria are listed for service, OR
+          ${ageAgg} is null OR
+          jsonb_array_length(${ageAgg}) = 0 OR
+          -- age eligibility is listed AND 
+          -- exists at least one eligibility that fulfills the following criteria:
+          (
+            select count(1) 
+            from jsonb_populate_recordset(null::age_eligibility, ${ageAgg})
+            where
+               -- all ages, OR
+               all_ages is not null and all_ages OR
+                -- age is greater than min age and less than max age
+               (age_min is not null and age_max is not null and 
+                  ${age} <= age_max and ${age} >= age_min) OR
+                -- age is less than max age and min age is null, OR
+               (age_min is null and age_max is not null and ${age} <= age_max) OR
+               -- age is greater than min age and max age is null, OR
+               (age_min is not null and age_max is null and ${age} >= age_min)
+          ) > 0
+      )
+    `);
+  };
 
   const getEligibilityCondition = (eligibility) => {
     const serviceEligibilities = sequelize.cast(
