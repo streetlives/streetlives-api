@@ -17,7 +17,7 @@ describe('filter by age', () => {
   let eligibilityFrom24To60Location;
   let eligibilityFrom60PlusLocation;
   let eligibilityAllAgesLocation;
-  // FIXME: let locationWithoutEligibility;
+  // FIXME #106: let locationWithoutEligibility;
   let locationWithGenderFemaleEligibility;
   let locationWithGenderFemaleAndAge18PlusEligibility;
 
@@ -165,6 +165,7 @@ describe('filter by age', () => {
     eligibilityAllAgesLocation =
       await createLocationServiceWrapper(organization, eligibilityAllAges);
 
+    // FIXME: #106
     // service without eligibility
     // locationWithoutEligibility =
     //   await createLocationServiceWrapper(organization, null);
@@ -208,7 +209,7 @@ describe('filter by age', () => {
       .then(res => expect(res.body.map(l => l.id).sort()).toEqual([
         eligibilityFrom0To18Location.id,
         eligibilityAllAgesLocation.id,
-        // FIXME: locationWithoutEligibility.id,
+        // FIXME #106: locationWithoutEligibility.id,
         locationWithGenderFemaleEligibility.id,
       ].sort())));
 
