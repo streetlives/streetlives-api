@@ -201,7 +201,7 @@ describe('find locations', () => {
   beforeEach(setupData);
   afterAll(clearData);
 
-  describe('when "age" filter is specific', () => {
+  describe('when "age" filter is specified', () => {
     it('should filter locations for age 10', () => request(app)
       .get('/locations')
       .query(qs.stringify({ age: 10 }))
