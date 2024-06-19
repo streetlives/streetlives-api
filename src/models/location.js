@@ -162,14 +162,14 @@ module.exports = (sequelize, DataTypes, Op) => {
             from jsonb_populate_recordset(null::age_eligibility, ${ageAgg})
             where
                -- all ages, OR
-               all_ages is not null and all_ages OR
-                -- age is greater than min age and less than max age
-               (age_min is not null and age_max is not null and 
-                  ${age} <= age_max and ${age} >= age_min) OR
-                -- age is less than max age and min age is null, OR
-               (age_min is null and age_max is not null and ${age} <= age_max) OR
-               -- age is greater than min age and max age is null, OR
-               (age_min is not null and age_max is null and ${age} >= age_min)
+               -- age is greater than min age and less than max age, OR
+               -- age is less than max age and min age is null, OR
+               -- age is greater than min age and max age is null
+               (all_ages is not null and all_ages) OR
+               (
+                 (age_min is null OR ${age} >= age_min) AND
+                 (age_max is null OR ${age} <= age_max)
+               )
           ) > 0
       )
     `);
