@@ -8,7 +8,7 @@ import app from '../../src/app';
 import models from '../../src/models';
 import geometry from '../../src/utils/geometry';
 
-describe('find locations', () => {
+describe('filter by age', () => {
   const pointNearOrigin = geometry.createPoint(-73.991303, 40.751908);
 
   let eligibilityFrom0To18Location;
