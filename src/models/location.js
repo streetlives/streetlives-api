@@ -157,8 +157,8 @@ module.exports = (sequelize, DataTypes, Op) => {
           ${ageAgg} is null OR
           -- age eligibility is listed AND 
           -- exists at least one eligibility that fulfills the following criteria:
-          (
-            select count(1) 
+          EXISTS (
+            select *
             from jsonb_populate_recordset(null::age_eligibility, ${ageAgg})
             where
                -- all ages, OR
@@ -170,7 +170,7 @@ module.exports = (sequelize, DataTypes, Op) => {
                  (age_min is null OR ${age} >= age_min) AND
                  (age_max is null OR ${age} <= age_max)
                )
-          ) > 0
+          )
       )
     `);
   };
