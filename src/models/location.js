@@ -155,7 +155,6 @@ module.exports = (sequelize, DataTypes, Op) => {
         select
           -- either no age eligibility criteria are listed for service, OR
           ${ageAgg} is null OR
-          jsonb_array_length(${ageAgg}) = 0 OR
           -- age eligibility is listed AND 
           -- exists at least one eligibility that fulfills the following criteria:
           (
