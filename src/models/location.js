@@ -175,7 +175,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     `);
   };
 
-  const getEligibilityCondition = (eligibility) => {
+  const getEligibilityCondition = ({ age, ...eligibility }) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
         'json_object_agg',
@@ -264,7 +264,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       eligibility,
       documents,
       taxonomySpecificAttributes,
-      age,
     } = filterParameters;
     const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
     const areRequiredDocsSpecified = documents && Object.keys(documents).length;
@@ -294,8 +293,8 @@ module.exports = (sequelize, DataTypes, Op) => {
     // we put empty object in the having array to work around this bug in sequelize:
     // https://github.com/sequelize/sequelize/issues/10142
     const havingConditions = [{}];
-    if (age) {
-      havingConditions.push(getAgeCondition(age));
+    if (eligibility.age != null) {
+      havingConditions.push(getAgeCondition(eligibility.age));
     }
     if (isEligibilitySpecified) {
       havingConditions.push(getEligibilityCondition(eligibility));
@@ -338,7 +337,7 @@ module.exports = (sequelize, DataTypes, Op) => {
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
               ...(occasion ? [sequelize.models.HolidaySchedule] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
-              ...(age || isEligibilitySpecified ? [{
+              ...(isEligibilitySpecified ? [{
                 model: sequelize.models.Eligibility,
                 include: {
                   model: sequelize.models.EligibilityParameter,

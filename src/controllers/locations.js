@@ -171,6 +171,9 @@ export default {
       if (gender != null) {
         eligibility[eligibilityParams.gender] = gender;
       }
+      if (age != null) {
+        eligibility.age = age;
+      }
 
       const documents = {};
       if (referralRequired != null) {
@@ -187,7 +190,6 @@ export default {
         servesZipcode,
         openAt: openAt && new Date(openAt),
         taxonomySpecificAttributes: attributesObject,
-        age,
       };
 
       if (searchString) {
