@@ -1,3 +1,6 @@
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
+
 jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';
@@ -5,21 +8,20 @@ process.env.DATABASE_LOGGING = 'false';
 
 const models = require('../src/models');
 
-const { exec } = require('child_process');
-
 async function execScript(script) {
-  await new Promise((resolve, reject) => {
-    // run the migrations
-    const migrate = exec(
-      script,
-      { env: process.env },
-      err => (err ? reject(err) : resolve()),
-    );
+  // run the migrations
+  const promise = exec(
+    script,
+    { env: process.env },
+  );
 
-    // Forward stdout+stderr to this process
-    migrate.stdout.pipe(process.stdout);
-    migrate.stderr.pipe(process.stderr);
-  });
+  const { child } = promise;
+
+  // Forward stdout+stderr to this process
+  child.stdout.pipe(process.stdout);
+  child.stderr.pipe(process.stderr);
+
+  await promise;
 }
 
 beforeAll(async () => {
