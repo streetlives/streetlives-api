@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
@@ -137,7 +138,44 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$Services.HolidaySchedules.occasion$': occasion,
   });
 
-  const getEligibilityCondition = (eligibility) => {
+  const ageAgg = `
+    (
+      jsonb_object_agg(
+        "Services->Eligibilities->EligibilityParameter".name,
+        "Services->Eligibilities".eligible_values
+      ) -> 'age'
+    )
+  `;
+
+  const getAgeCondition = (age) => {
+    // I believe this type check makes the subsequent literal replacement safe wrt sql injection
+    assert(typeof age === 'number', 'age parameter must be a number');
+    return sequelize.literal(`
+      (
+        select
+          -- either no age eligibility criteria are listed for service, OR
+          ${ageAgg} is null OR
+          -- age eligibility is listed AND 
+          -- exists at least one eligibility that fulfills the following criteria:
+          EXISTS (
+            select *
+            from jsonb_populate_recordset(null::age_eligibility, ${ageAgg})
+            where
+               -- all ages, OR
+               -- age is greater than min age and less than max age, OR
+               -- age is less than max age and min age is null, OR
+               -- age is greater than min age and max age is null
+               (all_ages is not null and all_ages) OR
+               (
+                 (age_min is null OR ${age} >= age_min) AND
+                 (age_max is null OR ${age} <= age_max)
+               )
+          )
+      )
+    `);
+  };
+
+  const getEligibilityCondition = ({ age, ...eligibility }) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
         'json_object_agg',
@@ -252,7 +290,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push(getOccasionCondition(occasion));
     }
 
-    const havingConditions = [];
+    // we put empty object in the having array to work around this bug in sequelize:
+    // https://github.com/sequelize/sequelize/issues/10142
+    const havingConditions = [{}];
+    if (eligibility.age != null) {
+      havingConditions.push(getAgeCondition(eligibility.age));
+    }
     if (isEligibilitySpecified) {
       havingConditions.push(getEligibilityCondition(eligibility));
     }
