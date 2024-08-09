@@ -1,3 +1,5 @@
+import assert from 'assert';
+
 module.exports = (sequelize, DataTypes, Op) => {
   const NycNeighborhoodGeometries = sequelize.define('NycNeighborhoodGeometries', {
     neighborhood: {
@@ -15,7 +17,8 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   NycNeighborhoodGeometries.findByLatLong = async (latitude, longitude) => {
-    // where ST_Contains(nng.geometry, pa.point)
+    assert.strictEqual(typeof latitude, 'number');
+    assert.strictEqual(typeof longitude, 'number');
     const contains = sequelize.fn(
       'ST_Contains',
       sequelize.col('geometry'),
