@@ -5,6 +5,12 @@ const updateMetadataSchema = Joi.object().keys({
   lastUpdated: Joi.date().iso(),
 });
 
+export const SORT_BY_PROXIMITY_OPTION = 'proximity';
+
+export const SORT_BY_MOST_RECENTLY_VALIDATED_OPTION = 'mostRecentlyValidated';
+
+export const SORT_BY_OPTIONS = [SORT_BY_PROXIMITY_OPTION, SORT_BY_MOST_RECENTLY_VALIDATED_OPTION];
+
 export default {
   find: {
     query: Joi.object().keys({
@@ -33,8 +39,9 @@ export default {
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
       age: Joi.number(),
+      sortBy: Joi.string(), // TODO: specify three possible values
     })
-      .and('radius', 'latitude', 'longitude')
+      .and('latitude', 'longitude')
       .required(),
   },
 

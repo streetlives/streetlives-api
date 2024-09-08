@@ -1,4 +1,8 @@
 import assert from 'assert';
+import {
+  SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
+  SORT_BY_PROXIMITY_OPTION,
+} from '../controllers/validation/locations';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
@@ -432,18 +436,29 @@ module.exports = (sequelize, DataTypes, Op) => {
     locationFieldsOnly,
     limit,
     offset,
+    sortBy,
   }) => {
     let locationIds;
     let distance;
+    let order;
     let totalNumLocations;
 
-    if (position && radius) {
+    if (position) {
       distance = sequelize.fn(
         'ST_DistanceSphere',
         sequelize.col('position'),
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
+    }
 
+    // TODO: implement the two other sort options
+    if (position && sortBy === SORT_BY_PROXIMITY_OPTION) {
+      order = [[distance, 'ASC']];
+    } else if (sortBy === SORT_BY_MOST_RECENTLY_VALIDATED_OPTION) {
+      order = [['last_validated_at', 'DESC']];
+    }
+
+    if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
       totalNumLocations = (await Location.findUniqueLocationIds(
@@ -454,7 +469,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition], {
-          order: [[distance, 'ASC']],
+          order,
           limit,
           offset,
         },
@@ -469,7 +484,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       if (minResults && locationIds.length < minResults) {
         totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-          order: distance ? [[distance, 'ASC']] : null,
+          order,
           limit: minResults,
           offset,
         });
@@ -508,7 +523,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     const locationsWithAssociations = await Location.findAll({
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
-      order: distance ? [[distance, 'ASC']] : null,
+      order,
     });
 
     function sortByLocationIds(a, b) {
@@ -516,7 +531,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
 
     // if not sorting by distance, then sort by the order of locationIds
-    const sortedLocationsWithAssociations = distance ?
+    const sortedLocationsWithAssociations = order ?
       locationsWithAssociations :
       locationsWithAssociations.sort(sortByLocationIds);
 

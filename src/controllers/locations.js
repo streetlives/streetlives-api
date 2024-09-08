@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import locationSchemas from './validation/locations';
+import locationSchemas, { SORT_BY_PROXIMITY_OPTION } from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {
@@ -149,7 +149,18 @@ export default {
         locationFieldsOnly,
         pageNumber: _pageNumber,
         pageSize: _pageSize,
+        sortBy,
       } = req.query;
+
+      if (sortBy === SORT_BY_PROXIMITY_OPTION && !(latitude && longitude)) {
+        throw new ValidationError(`If sortBy param is set to ${SORT_BY_PROXIMITY_OPTION}, 
+          then latitude and longitude params must be specified`);
+      }
+
+      if (radius && !(latitude && longitude)) {
+        throw new ValidationError('If radius param is specified, ' +
+          ' then latitude and longitude params must also be specified');
+      }
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
       const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
@@ -222,6 +233,7 @@ export default {
         locationFieldsOnly,
         limit,
         offset,
+        sortBy,
       });
       const plainLocations = await locations
         .map(location => location.get({ plain: true }));
