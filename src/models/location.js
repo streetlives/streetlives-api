@@ -494,6 +494,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         limit,
         offset,
+        order,
       });
     }
 

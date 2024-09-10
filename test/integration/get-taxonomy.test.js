@@ -33,6 +33,7 @@ describe('get taxonomy', () => {
     name: `taxonomy ${number}`,
     parent_id: parent ? parent.id : null,
     parent_name: parent ? parent.name : null,
+    name_vector: null,
   });
 
   const taxonomy1 = generateTestTaxonomy({ number: 1 });

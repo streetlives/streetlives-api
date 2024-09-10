@@ -5,11 +5,17 @@ const updateMetadataSchema = Joi.object().keys({
   lastUpdated: Joi.date().iso(),
 });
 
-export const SORT_BY_PROXIMITY_OPTION = 'proximity';
+export const SORT_BY_PROXIMITY_OPTION = 'nearby';
 
-export const SORT_BY_MOST_RECENTLY_VALIDATED_OPTION = 'mostRecentlyValidated';
+export const SORT_BY_MOST_RECENTLY_VALIDATED_OPTION = 'recentlyUpdated';
 
-export const SORT_BY_OPTIONS = [SORT_BY_PROXIMITY_OPTION, SORT_BY_MOST_RECENTLY_VALIDATED_OPTION];
+export const SORT_BY_MOST_SERVICES_OPTION = 'mostServices';
+
+export const SORT_BY_OPTIONS = [
+  SORT_BY_PROXIMITY_OPTION,
+  SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
+  SORT_BY_MOST_SERVICES_OPTION,
+];
 
 export default {
   find: {
