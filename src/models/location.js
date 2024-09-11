@@ -2,6 +2,7 @@ import assert from 'assert';
 import {
   SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
   SORT_BY_PROXIMITY_OPTION,
+  SORT_BY_MOST_SERVICES_OPTION,
 } from '../controllers/validation/locations';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
@@ -254,6 +255,28 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
+  Location.findCountOfServices = async (locationIds) => {
+    return Location.findAll({
+      attributes: {
+        include: [
+          'id',
+          [
+            sequelize.literal(`(
+                        SELECT cast(COUNT(*) as integer)
+                        FROM service_at_locations
+                        WHERE service_at_locations.location_id = "Location"."id"
+                    )`),
+            'service_count',
+          ],
+        ],
+      },
+      where: {
+        id: locationIds,
+      },
+      order: [[sequelize.literal('service_count'), 'DESC']],
+    });
+  };
+
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     queryProps = {}) => {
@@ -441,7 +464,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     let locationIds;
     let distance;
     let order;
+    let lookupOrdering;
     let totalNumLocations;
+
+    function sortByLookupOrder(a, b) {
+      return lookupOrdering[b] - lookupOrdering[a];
+    }
 
     if (position) {
       distance = sequelize.fn(
@@ -489,6 +517,19 @@ module.exports = (sequelize, DataTypes, Op) => {
           offset,
         });
       }
+    } else if (sortBy === SORT_BY_MOST_SERVICES_OPTION) {
+      // FIXME: I wish there were a more efficient way to do this, and there is in SQL,
+      // but I can't figure out how to express it with sequelize,
+      // and we need to just move forward
+      locationIds = await Location.findUniqueLocationIds(filterParameters, [], {});
+      totalNumLocations = locationIds.length;
+      const countOfServices = (await Location.findCountOfServices(locationIds))
+        .map(row => [row.dataValues.id, row.dataValues.service_count]);
+      // do the join in memory in the client
+      // limit, offset, order
+      lookupOrdering = Object.fromEntries(countOfServices);
+      const sortedLocations = locationIds.sort(sortByLookupOrder);
+      locationIds = sortedLocations.slice(offset, offset + limit);
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
@@ -531,10 +572,16 @@ module.exports = (sequelize, DataTypes, Op) => {
       return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);
     }
 
-    // if not sorting by distance, then sort by the order of locationIds
-    const sortedLocationsWithAssociations = order ?
-      locationsWithAssociations :
-      locationsWithAssociations.sort(sortByLocationIds);
+    let sortedLocationsWithAssociations;
+    if (order) {
+      sortedLocationsWithAssociations = locationsWithAssociations;
+    } else if (lookupOrdering) {
+      // sort in memory, which we do for subquery
+      sortedLocationsWithAssociations = locationsWithAssociations.sort(sortByLookupOrder);
+    } else {
+      // if not sorting by distance, then sort by the order of locationIds
+      sortedLocationsWithAssociations = locationsWithAssociations.sort(sortByLocationIds);
+    }
 
     return {
       locations: sortedLocationsWithAssociations,
