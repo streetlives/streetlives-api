@@ -268,7 +268,8 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
-    queryProps = {}) => {
+    queryProps = {},
+    selectedAttributeForOrderBy) => {
     const {
       searchString,
       organizationName,
@@ -328,16 +329,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         where: sequelize.and(..._whereConditions, ...additionalConditions),
         attributes: [
           sequelize.fn('DISTINCT', sequelize.col('Location.id')),
-          [
-            sequelize.literal(`(
-                        SELECT cast(COUNT(*) as integer)
-                        FROM service_at_locations
-                        WHERE service_at_locations.location_id = "Location"."id"
-                    )`),
-            'service_count',
-          ],
           // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-          // ...(queryProps.order || []),
+          ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
         ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -460,8 +453,11 @@ module.exports = (sequelize, DataTypes, Op) => {
   }) => {
     let locationIds;
     let distance;
-    let order;
     let totalNumLocations;
+    // order is used to specify the attribute referenced in the ORDER BY
+    let order;
+    // selectedAttributeForOrderBy is the attribute in the select statement
+    let selectedAttributeForOrderBy;
 
     if (position) {
       distance = sequelize.fn(
@@ -471,13 +467,15 @@ module.exports = (sequelize, DataTypes, Op) => {
       );
     }
 
-    // TODO: implement the two other sort options
     if (position && sortBy === SORT_BY_PROXIMITY_OPTION) {
       order = [[distance, 'ASC']];
+      selectedAttributeForOrderBy = distance;
     } else if (sortBy === SORT_BY_MOST_RECENTLY_VALIDATED_OPTION) {
       order = [['last_validated_at', 'DESC']];
+      selectedAttributeForOrderBy = 'last_validated_at';
     } else if (sortBy === SORT_BY_MOST_SERVICES_OPTION) {
       order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
+      selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
     }
 
     if (radius && position) {
@@ -495,6 +493,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           limit,
           offset,
         },
+        selectedAttributeForOrderBy,
       );
 
       // Note: We could avoid having 2 separate queries if we were to first order by distance
@@ -509,7 +508,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           order,
           limit: minResults,
           offset,
-        });
+        }, selectedAttributeForOrderBy);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
@@ -517,7 +516,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         limit,
         offset,
         order,
-      });
+      }, selectedAttributeForOrderBy);
     }
 
     const additionalLocationData = locationFieldsOnly ? [
