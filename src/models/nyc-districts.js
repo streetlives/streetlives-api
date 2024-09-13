@@ -35,20 +35,28 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     const containsCondition = sequelize.where(contains, true);
 
-    return (await NycDistricts.findAll({
+    const dbResult = await NycDistricts.findAll({
       attributes: [
-        'district_id',
         'type',
+        [sequelize.literal('(ARRAY_AGG(district_id))[1]'), 'districtId'],
       ],
       group: [
-        'district_id',
         'type',
       ],
       where: containsCondition,
-    })).reduce((a, b) => ({
-      ...a,
-      [b.type]: b.district_id,
-    }), {});
+    });
+
+    const keys = [
+      'school',
+      'community',
+      'congressional',
+    ];
+    const response = Object.fromEntries(keys.map((key) => {
+      const row = dbResult.find(dbRow => dbRow.dataValues.type === key);
+      return [key, row && row.dataValues.districtId];
+    }).filter(([k, v]) => v));
+
+    return response;
   };
 
   return NycDistricts;
