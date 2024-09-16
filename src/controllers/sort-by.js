@@ -1,11 +1,17 @@
-export const SORT_BY_PROXIMITY_OPTION = 'nearby';
+const NEARBY = 'nearby';
 
-export const SORT_BY_MOST_RECENTLY_VALIDATED_OPTION = 'recentlyUpdated';
+const MOST_RECENTLY_VALIDATED = 'recentlyUpdated';
 
-export const SORT_BY_MOST_SERVICES_OPTION = 'mostServices';
+const MOST_SERVICES = 'mostServices';
 
-export const SORT_BY_OPTIONS = [
-  SORT_BY_PROXIMITY_OPTION,
-  SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
-  SORT_BY_MOST_SERVICES_OPTION,
+export const SORT_OPTIONS = [
+  NEARBY,
+  MOST_RECENTLY_VALIDATED,
+  MOST_SERVICES,
 ];
+
+export const SORT_ORDER = {
+  NEARBY,
+  MOST_RECENTLY_VALIDATED,
+  MOST_SERVICES,
+};

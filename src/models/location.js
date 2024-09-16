@@ -1,9 +1,5 @@
 import assert from 'assert';
-import {
-  SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
-  SORT_BY_MOST_SERVICES_OPTION,
-  SORT_BY_PROXIMITY_OPTION,
-} from '../controllers/sort-by';
+import { SORT_ORDER } from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
@@ -467,13 +463,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       );
     }
 
-    if (position && sortBy === SORT_BY_PROXIMITY_OPTION) {
+    if (position && sortBy === SORT_ORDER.NEARBY) {
       order = [[distance, 'ASC']];
       selectedAttributeForOrderBy = distance;
-    } else if (sortBy === SORT_BY_MOST_RECENTLY_VALIDATED_OPTION) {
+    } else if (sortBy === SORT_ORDER.MOST_RECENTLY_VALIDATED) {
       order = [['last_validated_at', 'DESC']];
       selectedAttributeForOrderBy = 'last_validated_at';
-    } else if (sortBy === SORT_BY_MOST_SERVICES_OPTION) {
+    } else if (sortBy === SORT_ORDER.MOST_SERVICES) {
       order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
       selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
     }
