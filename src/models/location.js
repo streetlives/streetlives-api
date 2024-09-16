@@ -550,8 +550,6 @@ module.exports = (sequelize, DataTypes, Op) => {
         'slug',
         'last_validated_at',
         SERVICE_COUNT_SUBQUERY,
-        // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-        // ...(queryProps.order || []),
       ],
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
