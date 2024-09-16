@@ -152,16 +152,6 @@ export default {
         sortBy,
       } = req.query;
 
-      if (sortBy === SORT_BY_PROXIMITY_OPTION && !(latitude && longitude)) {
-        throw new ValidationError(`If sortBy param is set to ${SORT_BY_PROXIMITY_OPTION}, 
-          then latitude and longitude params must be specified`);
-      }
-
-      if (radius && !(latitude && longitude)) {
-        throw new ValidationError('If radius param is specified, ' +
-          ' then latitude and longitude params must also be specified');
-      }
-
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
       const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
       const age = _age ? parseInt(_age, 10) : undefined;
