@@ -47,7 +47,7 @@ export default {
       age: Joi.number(),
       sortBy: Joi.string().valid(SORT_BY_OPTIONS),
     })
-      .and('latitude', 'longitude')
+      .with('radius', ['latitude', 'longitude'])
       .required(),
   },
 
