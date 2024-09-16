@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import locationSchemas, { SORT_BY_PROXIMITY_OPTION } from './validation/locations';
+import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {

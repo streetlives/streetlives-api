@@ -1,9 +1,9 @@
 import assert from 'assert';
 import {
   SORT_BY_MOST_RECENTLY_VALIDATED_OPTION,
-  SORT_BY_PROXIMITY_OPTION,
   SORT_BY_MOST_SERVICES_OPTION,
-} from '../controllers/validation/locations';
+  SORT_BY_PROXIMITY_OPTION,
+} from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
