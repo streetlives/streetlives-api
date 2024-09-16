@@ -45,7 +45,7 @@ export default {
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
       age: Joi.number(),
-      sortBy: Joi.string().valid.apply(Joi, SORT_BY_OPTIONS),
+      sortBy: Joi.string().valid(...SORT_BY_OPTIONS),
     })
       .and('latitude', 'longitude')
       .required(),
