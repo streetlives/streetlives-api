@@ -20,8 +20,14 @@ export const SORT_BY_OPTIONS = [
 export default {
   find: {
     query: Joi.object().keys({
-      latitude: Joi.number(),
-      longitude: Joi.number(),
+      latitude: Joi.number().when('sortBy', {
+        is: SORT_BY_PROXIMITY_OPTION,
+        then: Joi.required(),
+      }),
+      longitude: Joi.number().when('sortBy', {
+        is: SORT_BY_PROXIMITY_OPTION,
+        then: Joi.required(),
+      }),
       radius: Joi.number()
         .integer().positive().max(50000),
       minResults: Joi.number()
