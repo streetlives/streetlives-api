@@ -296,7 +296,7 @@ module.exports = {
             $$;
           `);
     await queryInterface.sequelize.query(`
-      DROP FUNCTION IF EXISTS locations_geocoded_metadata`);
+      DROP VIEW IF EXISTS locations_geocoded_metadata`);
     // create the neighborhood field
     await (!isTesting ?
       queryInterface.addColumn('physical_addresses', 'neighborhood', {
