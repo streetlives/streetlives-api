@@ -149,6 +149,7 @@ export default {
         locationFieldsOnly,
         pageNumber: _pageNumber,
         pageSize: _pageSize,
+        sortBy,
       } = req.query;
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
@@ -222,6 +223,7 @@ export default {
         locationFieldsOnly,
         limit,
         offset,
+        sortBy,
       });
       const plainLocations = await locations
         .map(location => location.get({ plain: true }));
