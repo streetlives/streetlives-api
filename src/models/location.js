@@ -549,7 +549,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         'hidden_from_search',
         'slug',
         'last_validated_at',
-      ].concat([selectedAttributeForOrderBy]),
+      ].concat(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
       order,
