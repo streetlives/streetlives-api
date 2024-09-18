@@ -1,3 +1,5 @@
+import assert from 'assert';
+import { SORT_ORDER } from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
 module.exports = (sequelize, DataTypes, Op) => {
@@ -34,6 +36,17 @@ module.exports = (sequelize, DataTypes, Op) => {
       },
     },
   });
+
+  const SERVICE_COUNT_COLUMN_ALIAS = 'service_count';
+
+  const SERVICE_COUNT_SUBQUERY = [
+    sequelize.literal(`(
+                SELECT cast(COUNT(*) as integer)
+                FROM service_at_locations
+                WHERE service_at_locations.location_id = "Location"."id"
+            )`),
+    SERVICE_COUNT_COLUMN_ALIAS,
+  ];
 
   Location.associate = (models) => {
     Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
@@ -137,7 +150,44 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$Services.HolidaySchedules.occasion$': occasion,
   });
 
-  const getEligibilityCondition = (eligibility) => {
+  const ageAgg = `
+    (
+      jsonb_object_agg(
+        "Services->Eligibilities->EligibilityParameter".name,
+        "Services->Eligibilities".eligible_values
+      ) -> 'age'
+    )
+  `;
+
+  const getAgeCondition = (age) => {
+    // I believe this type check makes the subsequent literal replacement safe wrt sql injection
+    assert(typeof age === 'number', 'age parameter must be a number');
+    return sequelize.literal(`
+      (
+        select
+          -- either no age eligibility criteria are listed for service, OR
+          ${ageAgg} is null OR
+          -- age eligibility is listed AND 
+          -- exists at least one eligibility that fulfills the following criteria:
+          EXISTS (
+            select *
+            from jsonb_populate_recordset(null::age_eligibility, ${ageAgg})
+            where
+               -- all ages, OR
+               -- age is greater than min age and less than max age, OR
+               -- age is less than max age and min age is null, OR
+               -- age is greater than min age and max age is null
+               (all_ages is not null and all_ages) OR
+               (
+                 (age_min is null OR ${age} >= age_min) AND
+                 (age_max is null OR ${age} <= age_max)
+               )
+          )
+      )
+    `);
+  };
+
+  const getEligibilityCondition = ({ age, ...eligibility }) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
         'json_object_agg',
@@ -214,7 +264,8 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
-    queryProps = {}) => {
+    queryProps = {},
+    selectedAttributeForOrderBy) => {
     const {
       searchString,
       organizationName,
@@ -252,7 +303,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push(getOccasionCondition(occasion));
     }
 
-    const havingConditions = [];
+    // we put empty object in the having array to work around this bug in sequelize:
+    // https://github.com/sequelize/sequelize/issues/10142
+    const havingConditions = [{}];
+    if (eligibility.age != null) {
+      havingConditions.push(getAgeCondition(eligibility.age));
+    }
     if (isEligibilitySpecified) {
       havingConditions.push(getEligibilityCondition(eligibility));
     }
@@ -270,7 +326,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         attributes: [
           sequelize.fn('DISTINCT', sequelize.col('Location.id')),
           // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-          ...(queryProps.order || []),
+          ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
         ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -330,35 +386,47 @@ module.exports = (sequelize, DataTypes, Op) => {
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
       const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
+      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
+      const exactExactMatchCondition = { [Op.iLike]: searchString };
       locations = [
-        // organization name
-        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
+
+        // exact match
+        await findWithCondition({ '$Organization.name$': exactMatchCondition }),
+        await findWithCondition({ '$Location.name$': exactMatchCondition }),
+        await findWithCondition({ '$Services.name$': exactMatchCondition }),
+        await findWithCondition({ '$Services.Taxonomies.name$': exactMatchCondition }),
+
+        // prefix match
         await findWithCondition({ '$Organization.name$': prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
-        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
-
-        // location name
-        await findWithCondition({ name_vector: websearchToTsqueryCondition }),
-        await findWithCondition({ name: prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
-        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
-
-        // service name
-        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Location.name$': prefixCondition }),
         await findWithCondition({ '$Services.name$': prefixCondition }),
-        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
-        await findWithCondition(getSoundexCondition('Services.name', searchString)),
-
-        // taxonomy name
-        await findWithCondition({
-          '$Services.Taxonomies.name_vector$':
-          websearchToTsqueryCondition,
-        }),
         await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
+
+        // full-text search
+        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition({
+          '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
+        }),
+
+        // levenshtein fuzzy match
+        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
+        await findWithCondition(getLevenshteinCondition('Location.name', searchString)),
+        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
         await findWithCondition(getLevenshteinCondition('Services->Taxonomies.name', searchString)),
+
+        // soundex fuzzy match
+        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
+        await findWithCondition(getSoundexCondition('Location.name', searchString)),
+        await findWithCondition(getSoundexCondition('Services.name', searchString)),
         await findWithCondition(getSoundexCondition('Services->Taxonomies.name', searchString)),
 
-        // description
+        // full text search on the description
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 
       ].reduce((a, b) => a.concat(b));
@@ -377,18 +445,36 @@ module.exports = (sequelize, DataTypes, Op) => {
     locationFieldsOnly,
     limit,
     offset,
+    sortBy,
   }) => {
     let locationIds;
     let distance;
     let totalNumLocations;
+    // order is used to specify the attribute referenced in the ORDER BY
+    let order;
+    // selectedAttributeForOrderBy is the attribute in the select statement
+    let selectedAttributeForOrderBy;
 
-    if (position && radius) {
+    if (position) {
       distance = sequelize.fn(
         'ST_DistanceSphere',
         sequelize.col('position'),
         sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
       );
+    }
 
+    if (position && sortBy === SORT_ORDER.NEARBY) {
+      order = [[distance, 'ASC']];
+      selectedAttributeForOrderBy = distance;
+    } else if (sortBy === SORT_ORDER.MOST_RECENTLY_VALIDATED) {
+      order = [['last_validated_at', 'DESC']];
+      selectedAttributeForOrderBy = 'last_validated_at';
+    } else if (sortBy === SORT_ORDER.MOST_SERVICES) {
+      order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
+      selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
+    }
+
+    if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
       totalNumLocations = (await Location.findUniqueLocationIds(
@@ -399,10 +485,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition], {
-          order: [[distance, 'ASC']],
+          order,
           limit,
           offset,
         },
+        selectedAttributeForOrderBy,
       );
 
       // Note: We could avoid having 2 separate queries if we were to first order by distance
@@ -414,17 +501,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       if (minResults && locationIds.length < minResults) {
         totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-          order: distance ? [[distance, 'ASC']] : null,
+          order,
           limit: minResults,
           offset,
-        });
+        }, selectedAttributeForOrderBy);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         limit,
         offset,
-      });
+        order,
+      }, selectedAttributeForOrderBy);
     }
 
     const additionalLocationData = locationFieldsOnly ? [
@@ -451,12 +539,32 @@ module.exports = (sequelize, DataTypes, Op) => {
     ];
 
     const locationsWithAssociations = await Location.findAll({
+      attributes: [
+        'id',
+        'name',
+        'description',
+        'transportation',
+        'position',
+        'additional_info',
+        'hidden_from_search',
+        'slug',
+        'last_validated_at',
+      ].concat(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
-      order: distance ? [[distance, 'ASC']] : null,
+      order,
     });
+
+    function sortByLocationIds(a, b) {
+      return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);
+    }
+
+    const sortedLocationsWithAssociations = order ?
+      locationsWithAssociations :
+      locationsWithAssociations.sort(sortByLocationIds);
+
     return {
-      locations: locationsWithAssociations,
+      locations: sortedLocationsWithAssociations,
       totalNumLocations,
     };
   };

@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { SORT_OPTIONS, SORT_ORDER } from '../sort-by';
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -8,8 +9,14 @@ const updateMetadataSchema = Joi.object().keys({
 export default {
   find: {
     query: Joi.object().keys({
-      latitude: Joi.number(),
-      longitude: Joi.number(),
+      latitude: Joi.number().when('sortBy', {
+        is: SORT_ORDER.NEARBY,
+        then: Joi.required(),
+      }),
+      longitude: Joi.number().when('sortBy', {
+        is: SORT_ORDER.NEARBY,
+        then: Joi.required(),
+      }),
       radius: Joi.number()
         .integer().positive().max(50000),
       minResults: Joi.number()
@@ -32,8 +39,10 @@ export default {
       taxonomySpecificAttributes: Joi.array().items(Joi.string()),
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
+      age: Joi.number(),
+      sortBy: Joi.string().valid(SORT_OPTIONS),
     })
-      .and('radius', 'latitude', 'longitude')
+      .with('radius', ['latitude', 'longitude'])
       .required(),
   },
 

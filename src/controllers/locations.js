@@ -144,14 +144,17 @@ export default {
         membership,
         gender,
         servesZipcode,
+        age: _age,
         taxonomySpecificAttributes,
         locationFieldsOnly,
         pageNumber: _pageNumber,
         pageSize: _pageSize,
+        sortBy,
       } = req.query;
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
       const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const age = _age ? parseInt(_age, 10) : undefined;
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -168,6 +171,9 @@ export default {
       }
       if (gender != null) {
         eligibility[eligibilityParams.gender] = gender;
+      }
+      if (age != null) {
+        eligibility.age = age;
       }
 
       const documents = {};
@@ -217,6 +223,7 @@ export default {
         locationFieldsOnly,
         limit,
         offset,
+        sortBy,
       });
       const plainLocations = await locations
         .map(location => location.get({ plain: true }));
