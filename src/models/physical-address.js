@@ -26,9 +26,6 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    neighborhood: {
-      type: DataTypes.TEXT,
-    },
   }, {
     underscored: true,
     underscoredAll: true,

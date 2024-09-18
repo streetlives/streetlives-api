@@ -261,7 +261,24 @@ export default {
 
       const location = await models.Location.findByPk(
         req.params.locationId,
-        getInfoAssociations,
+        {
+          include: getInfoAssociations.include,
+          attributes: {
+            include: [
+              [
+                models.sequelize.literal(`(
+                    SELECT neighborhood
+                    FROM nyc_neighborhood_geometries
+                    WHERE ST_Contains(
+                      nyc_neighborhood_geometries.geometry, 
+                      ST_SetSRID(position,4326)
+                    )
+                )`),
+                'neighborhood',
+              ],
+            ],
+          },
+        },
       );
 
       const getInfoResponse = await handleGetInfoResponse(location, false);
