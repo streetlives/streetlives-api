@@ -539,17 +539,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     ];
 
     const locationsWithAssociations = await Location.findAll({
-      attributes: [
-        'id',
-        'name',
-        'description',
-        'transportation',
-        'position',
-        'additional_info',
-        'hidden_from_search',
-        'slug',
-        'last_validated_at',
-      ].concat(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+      attributes: {
+        include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+      },
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
       order,

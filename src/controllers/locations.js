@@ -62,6 +62,24 @@ const getInfoAssociations = {
   ],
 };
 
+const getNeighborhoodAttributeSubquery = {
+  attributes: {
+    include: [
+      [
+        models.sequelize.literal(`(
+            SELECT neighborhood
+            FROM nyc_neighborhood_geometries
+            WHERE ST_Contains(
+              nyc_neighborhood_geometries.geometry, 
+              ST_SetSRID(position,4326)
+            )
+        )`),
+        'neighborhood',
+      ],
+    ],
+  },
+}
+
 async function handleGetInfoResponse(location, excludeMetadata) {
   if (!location) {
     throw new NotFoundError('Location not found');
@@ -261,7 +279,10 @@ export default {
 
       const location = await models.Location.findByPk(
         req.params.locationId,
-        getInfoAssociations,
+        {
+          include: getInfoAssociations.include,
+          attributes: getNeighborhoodAttributeSubquery.attributes,
+        },
       );
 
       const getInfoResponse = await handleGetInfoResponse(location, false);
@@ -280,6 +301,7 @@ export default {
           slug: req.params.slug,
         },
         include: getInfoAssociations.include,
+        attributes: getNeighborhoodAttributeSubquery.attributes,
       });
 
       if (!locations.length) {
