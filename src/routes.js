@@ -3,6 +3,7 @@ import services from './controllers/services';
 import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
+import geocode from './controllers/geocode';
 import comments from './controllers/comments';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
@@ -37,6 +38,8 @@ export default (app) => {
   app.post('/services', getUser, dataEntryAuth, services.create);
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
   app.delete('/services/:serviceId', getUser, services.delete);
+
+  app.get('/geocode/analytics/all', geocode.findAnalytics);
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
