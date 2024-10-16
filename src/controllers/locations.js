@@ -78,7 +78,7 @@ const getNeighborhoodAttributeSubquery = {
       ],
     ],
   },
-}
+};
 
 async function handleGetInfoResponse(location, excludeMetadata) {
   if (!location) {
