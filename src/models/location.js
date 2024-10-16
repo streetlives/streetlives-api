@@ -466,12 +466,16 @@ module.exports = (sequelize, DataTypes, Op) => {
     if (position && sortBy === SORT_ORDER.NEARBY) {
       order = [[distance, 'ASC']];
       selectedAttributeForOrderBy = distance;
-    } else if (sortBy === SORT_ORDER.MOST_RECENTLY_VALIDATED) {
-      order = [['last_validated_at', 'DESC']];
-      selectedAttributeForOrderBy = 'last_validated_at';
     } else if (sortBy === SORT_ORDER.MOST_SERVICES) {
       order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
       selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
+    } else if (filterParameters.searchString) {
+      // if search string is specified, use default sort order
+      order = null;
+      selectedAttributeForOrderBy = null;
+    } else if (!sortBy || sortBy === SORT_ORDER.MOST_RECENTLY_VALIDATED) {
+      order = [['last_validated_at', 'DESC']];
+      selectedAttributeForOrderBy = 'last_validated_at';
     }
 
     if (radius && position) {
