@@ -463,7 +463,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       );
     }
 
-    console.log('sortBy', sortBy, 'filterParameters.searchString', filterParameters.searchString);
     if (position && sortBy === SORT_ORDER.NEARBY) {
       order = [[distance, 'ASC']];
       selectedAttributeForOrderBy = distance;
