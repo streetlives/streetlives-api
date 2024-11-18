@@ -127,6 +127,7 @@ export const getMetadataForService = async (service) => {
     languagesLatestUpdate,
     eventRelatedInfoLatestUpdate,
     taxonomySpecificAttributesUpdates,
+    eligibilityMetaDataUpdate
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(service.id),
     models.Metadata.getLatestUpdateDateForQuery({
@@ -148,9 +149,22 @@ export const getMetadataForService = async (service) => {
     models.Metadata
       .getLastUpdateDatesForResourceFields(service
         .ServiceTaxonomySpecificAttributes.map(a => a.id)),
+    models.Metadata.getLatestUpdateDateForQuery({
+      resource_table: 'eligibility',
+      field_name: 'service_id',
+      replacement_value: service.id,
+    }),
   ]);
 
   const serviceWithAdditionalMetadata = [...serviceMetadata];
+
+
+  if(eligibilityMetaDataUpdate) {
+    serviceWithAdditionalMetadata.push({
+      field_name: 'who_does_it_serve',
+      last_action_date: eligibilityMetaDataUpdate
+    })
+  }
   if (hoursLatestUpdate) {
     serviceWithAdditionalMetadata.push({
       field_name: 'hours',
