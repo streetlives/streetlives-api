@@ -353,6 +353,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         include: [
           sequelize.models.Organization,
           sequelize.models.PhysicalAddress,
+          sequelize.models.Phone,
           {
             model: sequelize.models.Service,
             required: true,
@@ -393,7 +394,15 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
-      // whereConditions.push(getZipcodesCondition([searchString]));
+      function isValidPostalCode(value) {
+        const postalCodeRegex = /^\d{5}$/;
+        return postalCodeRegex.test(value);
+      }
+      function isValidUSPhoneNumber(value) {
+        const phoneRegex = /^(?:\+1\s?)?(\d{3}|\(\d{3}\))[-.\s]?\d{3}[-.\s]?\d{4}$/;
+        return phoneRegex.test(value);
+      }
+
 
       const websearchToTsqueryCondition = {
         [Op.match]:
@@ -402,6 +411,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
+
+      if(isValidPostalCode(searchString)) {
+        locations = await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition })
+      } else if (isValidUSPhoneNumber(searchString)) {
+        locations = await findWithCondition({ '$Phones.number$': exactExactMatchCondition })
+      } else {
+
 
       locations = [
         await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition }),
@@ -442,7 +458,7 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       ].reduce((a, b) => a.concat(b));
 
-
+      }
 
     } else {
       locations = await findAll(whereConditions);
