@@ -11,7 +11,7 @@ export default function getUser(req, res, next) {
   if (claims && claims.sub) {
     req.user = claims.sub;
 
-    const organizationClaims = claims['custom:organizations'];
+    const organizationClaims = claims['custom:orgs'] || claims['custom:organizations'];
     if (organizationClaims && organizationClaims.length) {
       req.userOrganizationIds = organizationClaims.split(',');
     }
