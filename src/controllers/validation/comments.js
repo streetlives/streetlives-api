@@ -41,4 +41,10 @@ export default {
       hidden: Joi.boolean().required(),
     }).required(),
   },
+
+  editReply: {
+    body: Joi.object().keys({
+      content: Joi.string().required(),
+    }).required(),
+  },
 };

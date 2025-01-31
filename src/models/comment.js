@@ -25,11 +25,11 @@ module.exports = (sequelize, DataTypes, Op) => {
     where: {
       location_id: locationId,
       reply_to_id: null,
-      hidden: { [Op.or]: [false, null] },
+      // hidden: { [Op.or]: [false, null] },
     },
     attributes,
     order,
-    include: [{ model: Comment, as: 'Replies', attributes }],
+    include: [{ model: Comment, as: 'Replies', attributes: ['id', 'content', 'created_at'] }],
   });
 
   return Comment;

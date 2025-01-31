@@ -12,7 +12,7 @@ export default {
 
       const { locationId } = req.query;
 
-      const publicAttributes = ['id', 'content', 'created_at'];
+      const publicAttributes = ['id', 'content', 'created_at', 'hidden'];
 
       const comments = await models.Comment.findAllForLocation(locationId, {
         attributes: publicAttributes,
@@ -45,18 +45,6 @@ export default {
         posted_by: postedBy,
         contact_info: contactInfo,
       });
-
-      try {
-        await slackNotifier.notifyNewComment({
-          location,
-          content,
-          postedBy,
-          contactInfo,
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Error notifying Slack of new comment', err);
-      }
 
       res.status(201).send(postedComment);
     } catch (err) {
@@ -98,20 +86,33 @@ export default {
         },
       );
 
-      try {
-        await slackNotifier.notifyReplyToComment({
-          originalComment,
-          location: originalComment.Location,
-          content,
-          postedBy,
-          contactInfo,
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Error notifying Slack of reply to comment', err);
+      res.status(201).send(postedReply);
+    } catch (err) {
+      next(err);
+    }
+  },
+  editReply: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.editReply, { allowUnknown: true });
+
+      const { replyId } = req.params;
+      const { content } = req.body;
+
+      const reply = await models.Comment.findByPk(replyId, {
+        include: { model: models.Location, include: models.Organization },
+      });
+
+      if (!reply) {
+        throw new NotFoundError('Reply not found');
       }
 
-      res.status(201).send(postedReply);
+      const organizationId = reply.Location.organization_id;
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
+      }
+
+      await updateInstance(req.user, reply, { content });
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
