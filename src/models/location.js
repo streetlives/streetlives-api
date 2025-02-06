@@ -76,7 +76,6 @@ module.exports = (sequelize, DataTypes, Op) => {
     }, { override: true });
   };
 
-
   const getCombinedFuzzySearchCondition = (col, searchString) => {
     // Break the search string into individual words (tokens)
     const searchTokens = searchString.split(' ').map(token => token.toLowerCase());
@@ -179,7 +178,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         select
           -- either no age eligibility criteria are listed for service, OR
           ${ageAgg} is null OR
-          -- age eligibility is listed AND 
+          -- age eligibility is listed AND
           -- exists at least one eligibility that fulfills the following criteria:
           EXISTS (
             select *
@@ -408,7 +407,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),  
+        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Organization.name$': exactMatchCondition }),
         await findWithCondition({ '$Location.name$': exactMatchCondition }),
         await findWithCondition({ '$Services.name$': exactMatchCondition }),
@@ -431,19 +430,14 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
         await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
         await findWithCondition(getCombinedFuzzySearchCondition('Services.name', searchString)),
-        await findWithCondition(
-          getCombinedFuzzySearchCondition(
-            'Services->Taxonomies.name',
-            searchString,
-          )
-        ),
+        await findWithCondition(getCombinedFuzzySearchCondition(
+          'Services->Taxonomies.name',
+          searchString,
+        )),
         // full text search on the description
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 
       ].reduce((a, b) => a.concat(b));
-
-
-
     } else {
       locations = await findAll(whereConditions);
     }

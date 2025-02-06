@@ -1,9 +1,8 @@
 import Joi from 'joi';
 import commentSchemas from './validation/comments';
 import models from '../models';
-import { createInstance, updateInstance, destroyInstance } from '../services/data-changes';
-import slackNotifier from '../services/slack-notifier';
-import { NotFoundError, ForbiddenError } from '../utils/errors';
+import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
 
 export default {
   get: async (req, res, next) => {
@@ -46,7 +45,35 @@ export default {
         contact_info: contactInfo,
       });
 
-      res.status(201).send(postedComment);
+      res.status(201)
+        .send(postedComment);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  setEmail: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.setEmail, { allowUnknown: true });
+
+      const { commentId } = req.params;
+      const { email } = req.body;
+
+      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
+
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      // eslint-disable-next-line no-mixed-operators
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+      if (comment.createdAt < fiveMinutesAgo) {
+        throw new ForbiddenError('Comment is too old to edit');
+      }
+
+      await updateInstance(req.user, comment, { contact_info: email });
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
@@ -64,7 +91,10 @@ export default {
       } = req.body;
 
       const originalComment = await models.Comment.findByPk(commentId, {
-        include: { model: models.Location, include: models.Organization },
+        include: {
+          model: models.Location,
+          include: models.Organization,
+        },
       });
       if (!originalComment) {
         throw new NotFoundError('Original comment not found');
@@ -86,11 +116,13 @@ export default {
         },
       );
 
-      res.status(201).send(postedReply);
+      res.status(201)
+        .send(postedReply);
     } catch (err) {
       next(err);
     }
   },
+
   editReply: async (req, res, next) => {
     try {
       await Joi.validate(req, commentSchemas.editReply, { allowUnknown: true });
@@ -99,7 +131,10 @@ export default {
       const { content } = req.body;
 
       const reply = await models.Comment.findByPk(replyId, {
-        include: { model: models.Location, include: models.Organization },
+        include: {
+          model: models.Location,
+          include: models.Organization,
+        },
       });
 
       if (!reply) {

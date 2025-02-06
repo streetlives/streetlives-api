@@ -29,7 +29,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     },
     attributes,
     order,
-    include: [{ model: Comment, as: 'Replies', attributes: ['id', 'content', 'created_at'] }],
+    include: [
+      { model: Comment, as: 'Replies', attributes: ['id', 'content', 'created_at', 'posted_by'] },
+    ],
   });
 
   return Comment;
