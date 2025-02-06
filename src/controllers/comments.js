@@ -59,7 +59,7 @@ export default {
       const { commentId } = req.params;
       const { email } = req.body;
 
-      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
+      const comment = await models.Comment.findByPk(commentId);
 
       if (!comment) {
         throw new NotFoundError('Comment not found');
