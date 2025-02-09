@@ -11,7 +11,9 @@ export default {
 
       const { locationId } = req.query;
 
-      const publicAttributes = ['id', 'content', 'created_at', 'hidden'];
+      const publicAttributes = [
+        'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
+      ];
 
       const comments = await models.Comment.findAllForLocation(locationId, {
         attributes: publicAttributes,
@@ -197,6 +199,26 @@ export default {
       }
 
       await updateInstance(req.user, comment, { hidden });
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  report: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.report, { allowUnknown: true });
+
+      const { commentId } = req.params;
+
+      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
+
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      await updateInstance(req.user, comment, { report_count: comment.report_count + 1 });
+
       res.sendStatus(204);
     } catch (err) {
       next(err);

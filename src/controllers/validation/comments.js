@@ -41,6 +41,11 @@ export default {
       hidden: Joi.boolean().required(),
     }).required(),
   },
+  report: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+  },
 
   setEmail: {
     params: Joi.object().keys({

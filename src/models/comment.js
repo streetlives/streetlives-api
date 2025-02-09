@@ -9,6 +9,11 @@ module.exports = (sequelize, DataTypes, Op) => {
     posted_by: DataTypes.TEXT,
     contact_info: DataTypes.TEXT,
     hidden: DataTypes.BOOLEAN,
+    report_count: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      allowNull: false,
+    },
   }, {
     underscored: true,
     underscoredAll: true,
