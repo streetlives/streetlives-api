@@ -50,6 +50,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       'school',
       'community',
       'congressional',
+      'state_assembly_districts_clipped_to_shoreline',
+      'state_assembly_districts_water_areas_included',
+      'us_congressional_districts_clipped_to_shoreline',
+      'us_congressional_districts_water_areas_included',
+      'state_senate_districts_clipped_to_shoreline',
+      'state_senate_districts_water_areas_included',
+      'municipal_court_districts_clipped_to_shoreline',
+      'municipal_court_districts_water_areas_included',
+      'city_council_districts_clipped_to_shoreline',
+      'city_council_districts_water_areas_included',
+      'election_districts_clipped_to_shoreline',
+      'election_districts_water_areas_included',
     ];
     const response = Object.fromEntries(keys.map((key) => {
       const row = dbResult.find(dbRow => dbRow.dataValues.type === key);
