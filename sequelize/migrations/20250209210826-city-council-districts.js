@@ -77,16 +77,23 @@ const DATASETS = [
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    const existingEnumValues = (
+      await queryInterface.sequelize.query(`SELECT unnest(
+          enum_range(
+            NULL::enum_nyc_districts_type))`)
+    )[0].map(o => o.unnest);
+
     const data = [];
     for (const [type, url, prop] of DATASETS) {
-      // postgres does not allow you to remove values from enum, so we just wrap this in a try-catch
-      try {
-        // eslint-disable-next-line max-len
-        await queryInterface.sequelize.query(`ALTER TYPE enum_nyc_districts_type ADD VALUE '${type}'`);
-      } catch (e) {
+      // if the enum already has this value, then skip him
+      if (existingEnumValues.includes(type)) {
         // eslint-disable-next-line no-console
-        console.error(e);
+        console.log(`skip adding ${type} to enum`);
+        // eslint-disable-next-line no-continue
+        continue;
       }
+      // eslint-disable-next-line max-len
+      await queryInterface.sequelize.query(`ALTER TYPE enum_nyc_districts_type ADD VALUE '${type}'`);
 
       const geojson =
         // eslint-disable-next-line no-undef
@@ -259,8 +266,7 @@ module.exports = {
      * Example:
      * await queryInterface.dropTable('users');
      */
-
-    await queryInterface.sequelize.query('drop view locations_geocoded_metadata');
+    await queryInterface.sequelize.query('drop view if exists locations_geocoded_metadata');
 
     await queryInterface.sequelize.query(`
       create view locations_geocoded_metadata as 
