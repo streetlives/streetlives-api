@@ -1,73 +1,73 @@
 
 const DATASETS = [
   [
-    'state_assembly_districts_clipped_to_shoreline',
+    'state_assembly_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_State_Assembly_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'AssemDist',
   ],
   [
-    'state_assembly_districts_water_areas_included',
+    'state_assembly_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_State_Assembly_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'AssemDist',
   ],
   [
-    'us_congressional_districts_clipped_to_shoreline',
+    'us_congressional_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Congressional_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'CongDist',
   ],
   [
-    'us_congressional_districts_water_areas_included',
+    'us_congressional_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Congressional_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'CongDist',
   ],
   [
-    'state_senate_districts_clipped_to_shoreline',
+    'state_senate_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_State_Senate_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'StSenDist',
   ],
   [
-    'state_senate_districts_water_areas_included',
+    'state_senate_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_State_Senate_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'StSenDist',
   ],
   [
-    'municipal_court_districts_clipped_to_shoreline',
+    'municipal_court_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Municipal_Court_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'MuniCourt',
   ],
   [
-    'municipal_court_districts_water_areas_included',
+    'municipal_court_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Municipal_Court_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'MuniCourt',
   ],
   [
-    'city_council_districts_clipped_to_shoreline',
+    'city_council_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_City_Council_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'CounDist',
   ],
   [
-    'city_council_districts_water_areas_included',
+    'city_council_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_City_Council_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'CounDist',
   ],
   [
-    'election_districts_clipped_to_shoreline',
+    'election_district',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Election_Districts/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'ElectDist',
   ],
   [
-    'election_districts_water_areas_included',
+    'election_district_water_areas',
     // eslint-disable-next-line max-len
     'https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Election_Districts_Water_Included/FeatureServer/0/query?where=1=1&outFields=*&outSR=4326&f=pgeojson',
     'ElectDist',
@@ -77,140 +77,6 @@ const DATASETS = [
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.sequelize.query(`
-      create or replace view locations_geocoded_metadata as 
-        select l.id as location_id, 
-          neighborhoods.*, 
-          boroughs.*, 
-          school_districts.school_district_id, 
-          congressional_districts.congressional_district_id, 
-          community_districts.community_district_id,
-          state_assembly_districts_clipped_to_shoreline.
-            state_assembly_districts_clipped_to_shoreline_district_id,
-          state_assembly_districts_water_areas_included.
-            state_assembly_districts_water_areas_included_district_id,
-          us_congressional_districts_clipped_to_shoreline.
-            us_congressional_districts_clipped_to_shoreline_district_id,
-          us_congressional_districts_water_areas_included.
-            us_congressional_districts_water_areas_included_district_id,
-          state_senate_districts_clipped_to_shoreline.
-            state_senate_districts_clipped_to_shoreline_district_id,
-          state_senate_districts_water_areas_included.
-            state_senate_districts_water_areas_included_district_id,
-          municipal_court_districts_clipped_to_shoreline.
-            municipal_court_districts_clipped_to_shoreline_district_id,
-          municipal_court_districts_water_areas_included.
-            municipal_court_districts_water_areas_included_district_id,
-          city_council_districts_clipped_to_shoreline.
-            city_council_districts_clipped_to_shoreline_district_id,
-          city_council_districts_water_areas_included.
-            city_council_districts_water_areas_included_district_id,
-          election_districts_clipped_to_shoreline.
-            election_districts_clipped_to_shoreline_district_id,
-          election_districts_water_areas_included.
-            election_districts_water_areas_included_district_id
-        from locations l,
-          lateral (
-                SELECT nng.neighborhood from nyc_neighborhood_geometries nng
-                  where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
-          ) neighborhoods,
-          lateral ( 
-                SELECT nng.borough 
-                   from nyc_neighborhood_geometries  nng
-                   where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
-          ) boroughs,
-          lateral (
-                SELECT  nd.district_id as school_district_id from nyc_districts nd
-                  where 
-                    ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'school'
-          ) school_districts,
-          lateral (
-                SELECT nd.district_id as congressional_district_id from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'congressional'
-          ) congressional_districts,
-          lateral (
-                SELECT nd.district_id as community_district_id from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'community'
-          ) community_districts,
-          lateral (
-                SELECT nd.district_id as state_assembly_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'state_assembly_districts_clipped_to_shoreline'
-          ) state_assembly_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as state_assembly_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'state_assembly_districts_water_areas_included'
-          ) state_assembly_districts_water_areas_included,
-          lateral (
-                SELECT nd.district_id as 
-                us_congressional_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'us_congressional_districts_clipped_to_shoreline'
-          ) us_congressional_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as 
-                us_congressional_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'us_congressional_districts_water_areas_included'
-          ) us_congressional_districts_water_areas_included,
-          lateral (
-                SELECT nd.district_id as state_senate_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'state_senate_districts_clipped_to_shoreline'
-          ) state_senate_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as state_senate_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'state_senate_districts_water_areas_included'
-          ) state_senate_districts_water_areas_included,
-          lateral (
-                SELECT nd.district_id as municipal_court_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'municipal_court_districts_clipped_to_shoreline'
-          ) municipal_court_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as municipal_court_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'municipal_court_districts_water_areas_included'
-          ) municipal_court_districts_water_areas_included,
-          lateral (
-                SELECT nd.district_id as city_council_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'city_council_districts_clipped_to_shoreline'
-          ) city_council_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as city_council_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'city_council_districts_water_areas_included'
-          ) city_council_districts_water_areas_included,
-          lateral (
-                SELECT nd.district_id as election_districts_clipped_to_shoreline_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'election_districts_clipped_to_shoreline'
-          ) election_districts_clipped_to_shoreline,
-          lateral (
-                SELECT nd.district_id as election_districts_water_areas_included_district_id 
-                from nyc_districts nd
-                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
-                    and nd.type = 'election_districts_water_areas_included'
-          ) election_districts_water_areas_included
-    `);
-
     const data = [];
     for (const [type, url, prop] of DATASETS) {
       // postgres does not allow you to remove values from enum, so we just wrap this in a try-catch
@@ -250,6 +116,140 @@ module.exports = {
             { transaction: t },
           );
         })).reduce((a, b) => a.concat(b), [])));
+
+    await queryInterface.sequelize.query(`
+      create or replace view locations_geocoded_metadata as 
+        select l.id as location_id, 
+          neighborhoods.*, 
+          boroughs.*, 
+          school_district.school_district_id, 
+          congressional_district.congressional_district_id, 
+          community_district.community_district_id,
+          state_assembly_district.
+            state_assembly_district_id,
+          state_assembly_district_water_areas.
+            state_assembly_district_water_areas_district_id,
+          us_congressional_district.
+            us_congressional_district_id,
+          us_congressional_district_water_areas.
+            us_congressional_district_water_areas_district_id,
+          state_senate_district.
+            state_senate_district_id,
+          state_senate_district_water_areas.
+            state_senate_district_water_areas_district_id,
+          municipal_court_district.
+            municipal_court_district_id,
+          municipal_court_district_water_areas.
+            municipal_court_district_water_areas_district_id,
+          city_council_district.
+            city_council_district_id,
+          city_council_district_water_areas.
+            city_council_district_water_areas_district_id,
+          election_district.
+            election_district_id,
+          election_district_water_areas.
+            election_district_water_areas_district_id
+        from locations l,
+          lateral (
+                SELECT nng.neighborhood from nyc_neighborhood_geometries nng
+                  where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
+          ) neighborhoods,
+          lateral ( 
+                SELECT nng.borough 
+                   from nyc_neighborhood_geometries  nng
+                   where ST_Contains(nng.geometry, ST_SetSRID(l.position, 4326))
+          ) boroughs,
+          lateral (
+                SELECT  nd.district_id as school_district_id from nyc_districts nd
+                  where 
+                    ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'school'
+          ) school_district,
+          lateral (
+                SELECT nd.district_id as congressional_district_id from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'congressional'
+          ) congressional_district,
+          lateral (
+                SELECT nd.district_id as community_district_id from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'community'
+          ) community_district,
+          lateral (
+                SELECT nd.district_id as state_assembly_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'state_assembly_district'
+          ) state_assembly_district,
+          lateral (
+                SELECT nd.district_id as state_assembly_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'state_assembly_district_water_areas'
+          ) state_assembly_district_water_areas,
+          lateral (
+                SELECT nd.district_id as 
+                us_congressional_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'us_congressional_district'
+          ) us_congressional_district,
+          lateral (
+                SELECT nd.district_id as 
+                us_congressional_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'us_congressional_district_water_areas'
+          ) us_congressional_district_water_areas,
+          lateral (
+                SELECT nd.district_id as state_senate_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'state_senate_district'
+          ) state_senate_district,
+          lateral (
+                SELECT nd.district_id as state_senate_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'state_senate_district_water_areas'
+          ) state_senate_district_water_areas,
+          lateral (
+                SELECT nd.district_id as municipal_court_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'municipal_court_district'
+          ) municipal_court_district,
+          lateral (
+                SELECT nd.district_id as municipal_court_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'municipal_court_district_water_areas'
+          ) municipal_court_district_water_areas,
+          lateral (
+                SELECT nd.district_id as city_council_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'city_council_district'
+          ) city_council_district,
+          lateral (
+                SELECT nd.district_id as city_council_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'city_council_district_water_areas'
+          ) city_council_district_water_areas,
+          lateral (
+                SELECT nd.district_id as election_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'election_district'
+          ) election_district,
+          lateral (
+                SELECT nd.district_id as election_district_water_areas_district_id 
+                from nyc_districts nd
+                  where ST_Contains(nd.geometry, ST_SetSRID(l.position, 4326))
+                    and nd.type = 'election_district_water_areas'
+          ) election_district_water_areas
+    `);
   },
 
   async down(queryInterface, Sequelize) {
@@ -260,8 +260,10 @@ module.exports = {
      * await queryInterface.dropTable('users');
      */
 
+    await queryInterface.sequelize.query('drop view locations_geocoded_metadata');
+
     await queryInterface.sequelize.query(`
-      create or replace view locations_geocoded_metadata as 
+      create view locations_geocoded_metadata as 
         select l.id as location_id, 
           neighborhoods.*, 
           boroughs.*, 
