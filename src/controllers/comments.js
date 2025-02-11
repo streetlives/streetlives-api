@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { col, fn, cast, literal } from 'sequelize';
 import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
@@ -10,9 +11,22 @@ export default {
       await Joi.validate(req, commentSchemas.get, { allowUnknown: true });
 
       const { locationId } = req.query;
+      const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
+        [cast(fn('COUNT', col('likes.id')), 'integer'), 'likes_count'],
+        [
+          literal(`
+            EXISTS (
+              SELECT 1
+              FROM comment_likes cl
+              WHERE cl.comment_id = "Comment"."id"
+              AND cl.ip_address = '${ipAddress}'
+            )
+        `),
+          'likedByCurrentUser',
+        ],
       ];
 
       const comments = await models.Comment.findAllForLocation(locationId, {
@@ -211,7 +225,7 @@ export default {
 
       const { commentId } = req.params;
 
-      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
+      const comment = await models.Comment.findByPk(commentId);
 
       if (!comment) {
         throw new NotFoundError('Comment not found');
@@ -220,6 +234,53 @@ export default {
       await updateInstance(req.user, comment, { report_count: comment.report_count + 1 });
 
       res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  like: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.like, { allowUnknown: true });
+
+      const { commentId } = req.params;
+
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+      if (req.method === 'PUT') {
+        const existingLike = await models.CommentLike.findOne({
+          where: {
+            comment_id: commentId,
+            ip_address: ip,
+          },
+        });
+
+        if (existingLike) {
+          throw res.status(409)
+            .json({ message: 'Already liked' });
+        }
+
+        await models.CommentLike.create({
+          comment_id: commentId,
+          ip_address: ip,
+        });
+        res.status(201)
+          .json({ message: 'Like added successfully' });
+      } else if (req.method === 'DELETE') {
+        const deletedLike = await models.CommentLike.destroy({
+          where: {
+            comment_id: commentId,
+            ip_address: ip,
+          },
+        });
+
+        if (deletedLike) {
+          res.status(200)
+            .json({ message: 'Like removed successfully' });
+        }
+        throw res.status(404)
+          .json({ message: 'Like not found' });
+      }
     } catch (err) {
       next(err);
     }

@@ -24,9 +24,17 @@ module.exports = (sequelize, DataTypes, Op) => {
     Comment.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
     Comment.belongsTo(models.Comment, { as: 'ReplyTo', foreignKey: 'reply_to_id' });
     Comment.hasMany(models.Comment, { as: 'Replies', foreignKey: 'reply_to_id' });
+
+    Comment.hasMany(models.CommentLike, {
+      foreignKey: 'comment_id',
+      as: 'likes',
+    });
   };
 
-  Comment.findAllForLocation = (locationId, { attributes, order }) => Comment.findAll({
+  Comment.findAllForLocation = (locationId, {
+    attributes,
+    order,
+  }) => Comment.findAll({
     where: {
       location_id: locationId,
       reply_to_id: null,
@@ -35,8 +43,18 @@ module.exports = (sequelize, DataTypes, Op) => {
     attributes,
     order,
     include: [
-      { model: Comment, as: 'Replies', attributes: ['id', 'content', 'created_at', 'posted_by'] },
+      {
+        model: Comment,
+        as: 'Replies',
+        attributes: ['id', 'content', 'created_at', 'posted_by'],
+      },
+      {
+        model: sequelize.models.CommentLike,
+        as: 'likes',
+        attributes: [],
+      },
     ],
+    group: ['Comment.id', 'Replies.id'],
   });
 
   return Comment;

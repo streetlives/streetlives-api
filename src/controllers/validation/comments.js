@@ -46,7 +46,11 @@ export default {
       commentId: Joi.string().guid().required(),
     }).required(),
   },
-
+  like: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+  },
   setEmail: {
     params: Joi.object().keys({
       commentId: Joi.string().guid().required(),
