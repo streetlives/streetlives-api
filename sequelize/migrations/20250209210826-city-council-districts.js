@@ -101,28 +101,28 @@ module.exports = {
       // eslint-disable-next-line max-len
       await queryInterface.sequelize.query(`ALTER TYPE enum_nyc_districts_type ADD VALUE '${type}'`);
     }
-    await queryInterface.sequelize.transaction(async t =>
-      Promise.all(data.map(([type, dataset, prop]) =>
-        dataset.features.map((feature) => {
-          const f = {
-            ...feature,
-            geometry: {
-              ...feature.geometry,
-              type: 'MultiPolygon',
-              coordinates: feature.geometry.type === 'Polygon' ?
-                [feature.geometry.coordinates] :
-                feature.geometry.coordinates,
-            },
-          };
-          return queryInterface.sequelize.query(
-            'insert into nyc_districts values ($1, ST_GeomFromGeoJSON($2), $3)',
-            {
-              bind: [f.properties[prop], f.geometry, type],
-              type: Sequelize.QueryTypes.INSERT,
-            },
-            { transaction: t },
-          );
-        })).reduce((a, b) => a.concat(b), [])));
+    for (const [type, dataset, prop] of data) {
+      for (const feature of dataset.features) {
+        const f = {
+          ...feature,
+          geometry: {
+            ...feature.geometry,
+            type: 'MultiPolygon',
+            coordinates:
+              feature.geometry.type === 'Polygon'
+                ? [feature.geometry.coordinates]
+                : feature.geometry.coordinates,
+          },
+        };
+        await queryInterface.sequelize.query(
+          'insert into nyc_districts values ($1, ST_GeomFromGeoJSON($2), $3)',
+          {
+            bind: [f.properties[prop], f.geometry, type],
+            type: Sequelize.QueryTypes.INSERT,
+          },
+        );
+      }
+    }
 
     await queryInterface.sequelize.query(`
       create or replace view locations_geocoded_metadata as 
