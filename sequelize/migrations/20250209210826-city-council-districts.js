@@ -85,6 +85,12 @@ module.exports = {
 
     const data = [];
     for (const [type, url, prop] of DATASETS) {
+      const geojson =
+        // eslint-disable-next-line no-undef
+        await (await fetch(url)).json();
+
+      data.push([type, geojson, prop]);
+
       // if the enum already has this value, then skip him
       if (existingEnumValues.includes(type)) {
         // eslint-disable-next-line no-console
@@ -94,12 +100,6 @@ module.exports = {
       }
       // eslint-disable-next-line max-len
       await queryInterface.sequelize.query(`ALTER TYPE enum_nyc_districts_type ADD VALUE '${type}'`);
-
-      const geojson =
-        // eslint-disable-next-line no-undef
-        await (await fetch(url)).json();
-
-      data.push([type, geojson, prop]);
     }
     await queryInterface.sequelize.transaction(async t =>
       Promise.all(data.map(([type, dataset, prop]) =>
