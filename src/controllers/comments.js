@@ -5,13 +5,24 @@ import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 
+function getClientIp(req) {
+  const forwardedIp = req.headers['x-forwarded-for']
+    ? req.headers['x-forwarded-for'].split(',')[0]
+    : null;
+
+  const ip = forwardedIp || req.ip || req.connection.remoteAddress;
+
+  // Remove IPv6 prefix (if present)
+  return ip.replace(/^::ffff:/, '');
+}
+
 export default {
   get: async (req, res, next) => {
     try {
       await Joi.validate(req, commentSchemas.get, { allowUnknown: true });
 
       const { locationId } = req.query;
-      const ipAddress = req.ip || req.connection.remoteAddress;
+      const ipAddress = getClientIp(req);
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
@@ -245,7 +256,7 @@ export default {
 
       const { commentId } = req.params;
 
-      const ip = req.ip || req.connection.remoteAddress;
+      const ip = getClientIp(req);
 
       if (req.method === 'PUT') {
         const existingLike = await models.CommentLike.findOne({
