@@ -11,7 +11,7 @@ export default {
       await Joi.validate(req, commentSchemas.get, { allowUnknown: true });
 
       const { locationId } = req.query;
-      const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const ipAddress = req.ip || req.connection.remoteAddress;
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
@@ -245,7 +245,7 @@ export default {
 
       const { commentId } = req.params;
 
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const ip = req.ip || req.connection.remoteAddress;
 
       if (req.method === 'PUT') {
         const existingLike = await models.CommentLike.findOne({
