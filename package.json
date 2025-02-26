@@ -10,7 +10,7 @@
     "prodFunctionName": "StreetlivesApiProdFunction"
   },
   "scripts": {
-    "dev": "NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
+    "dev": "PORT=3001 NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
     "build": "babel src -s -D -d dist",
     "start": "NODE_ENV=production node dist",
     "prestart": "npm run build",
