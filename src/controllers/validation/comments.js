@@ -41,4 +41,28 @@ export default {
       hidden: Joi.boolean().required(),
     }).required(),
   },
+  report: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+  },
+  like: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+  },
+  setEmail: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      email: Joi.string().email().required(),
+    }).required(),
+  },
+
+  editReply: {
+    body: Joi.object().keys({
+      content: Joi.string().required(),
+    }).required(),
+  },
 };

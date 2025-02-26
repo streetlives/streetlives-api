@@ -76,21 +76,32 @@ module.exports = (sequelize, DataTypes, Op) => {
     }, { override: true });
   };
 
-  const getLevenshteinCondition = (col, searchString) =>
-    sequelize.where(
-      sequelize.fn(
-        'levenshtein',
-        sequelize.fn('lower', sequelize.col(col)),
-        searchString.toLowerCase(),
-      ),
-      { [Op.lte]: 2 },
-    );
-
-  const getSoundexCondition = (col, searchString) =>
-    sequelize.where(
-      sequelize.fn('difference', sequelize.col(col), searchString),
-      4,
-    );
+  const getCombinedFuzzySearchCondition = (col, searchString) => {
+    // Break the search string into individual words (tokens)
+    const searchTokens = searchString.split(' ').map(token => token.toLowerCase());
+    // Create a condition that checks phonetic similarity and edit distance for each token
+    const conditions = searchTokens.map(token =>
+      sequelize.or(
+        // Soundex-based condition (phonetic similarity)
+        sequelize.where(
+          sequelize.fn(
+            'difference',
+            sequelize.fn('soundex', sequelize.col(col)),
+            sequelize.fn('soundex', token),
+          ),
+          4, // Maximum similarity score for Soundex
+        ),
+        // Levenshtein-based condition (edit distance <= 2)
+        sequelize.where(
+          sequelize.fn('levenshtein', sequelize.fn('lower', sequelize.col(col)), token),
+          { [Op.lte]: 2 }, // Allowing for up to 2-character differences
+        ),
+        // Like operator for partial matches
+        sequelize.where(sequelize.fn('lower', sequelize.col(col)), { [Op.like]: `%${token}%` }),
+      ));
+    // Combine all conditions into one using Sequelize's `or` and `and`
+    return sequelize.and(...conditions);
+  };
 
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
@@ -167,7 +178,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         select
           -- either no age eligibility criteria are listed for service, OR
           ${ageAgg} is null OR
-          -- age eligibility is listed AND 
+          -- age eligibility is listed AND
           -- exists at least one eligibility that fulfills the following criteria:
           EXISTS (
             select *
@@ -340,7 +351,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         subQuery: false,
         include: [
           sequelize.models.Organization,
-          ...(zipcodes ? [sequelize.models.PhysicalAddress] : []),
+          sequelize.models.PhysicalAddress,
           {
             model: sequelize.models.Service,
             required: true,
@@ -381,6 +392,8 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
+      // whereConditions.push(getZipcodesCondition([searchString]));
+
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
@@ -388,13 +401,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
+
       locations = [
+        await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition }),
         await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
-
-        // exact match
         await findWithCondition({ '$Organization.name$': exactMatchCondition }),
         await findWithCondition({ '$Location.name$': exactMatchCondition }),
         await findWithCondition({ '$Services.name$': exactMatchCondition }),
@@ -414,18 +427,13 @@ module.exports = (sequelize, DataTypes, Op) => {
           '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
         }),
 
-        // levenshtein fuzzy match
-        await findWithCondition(getLevenshteinCondition('Organization.name', searchString)),
-        await findWithCondition(getLevenshteinCondition('Location.name', searchString)),
-        await findWithCondition(getLevenshteinCondition('Services.name', searchString)),
-        await findWithCondition(getLevenshteinCondition('Services->Taxonomies.name', searchString)),
-
-        // soundex fuzzy match
-        await findWithCondition(getSoundexCondition('Organization.name', searchString)),
-        await findWithCondition(getSoundexCondition('Location.name', searchString)),
-        await findWithCondition(getSoundexCondition('Services.name', searchString)),
-        await findWithCondition(getSoundexCondition('Services->Taxonomies.name', searchString)),
-
+        await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
+        await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
+        await findWithCondition(getCombinedFuzzySearchCondition('Services.name', searchString)),
+        await findWithCondition(getCombinedFuzzySearchCondition(
+          'Services->Taxonomies.name',
+          searchString,
+        )),
         // full text search on the description
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 

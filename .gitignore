@@ -53,3 +53,5 @@ jspm_packages/
 # AWS Serverless
 lambda-invoke-response.json
 packaged-sam.yaml
+
+.idea
