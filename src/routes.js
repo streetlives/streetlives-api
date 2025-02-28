@@ -5,6 +5,7 @@ import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import geocode from './controllers/geocode';
 import comments from './controllers/comments';
+import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
@@ -55,6 +56,9 @@ export default (app) => {
   app.delete('/comments/:commentId', getUser, comments.delete);
   app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
   app.put('/comments/replies/:replyId', getUser, comments.editReply);
+
+  app.get('/comment-highlights', commentHighlights.getHighlights);
+  app.post('/generate-highlights', commentHighlights.generateHighlights);
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);
