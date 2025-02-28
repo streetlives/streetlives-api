@@ -20,6 +20,12 @@ export default (app) => {
   app.post('/organizations', getUser, dataEntryAuth, organizations.create);
   app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
+  console.log('process.env.NODE_ENV', process.env.NODE_ENV)
+  if (process.env.NODE_ENV === 'development'){ 
+    // dev environment gets a special endpoint to dump the database to JSON
+    // this won't even work in deployed environment due lambda's maximum response size
+    app.get('/organizations/dump-database', organizations.dumpDatabase);
+  }
 
   app.get('/locations', locations.find);
 

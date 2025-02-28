@@ -1,4 +1,8 @@
 import Joi from 'joi';
+import {
+  getInfoAssociations,
+  getNeighborhoodAttributeSubquery
+} from './locations';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
@@ -104,4 +108,16 @@ export default {
       next(err);
     }
   },
+
+  dumpDatabase: async (req, res, next) => {
+    const organizations = await models.Organization.findAll({
+      include: [{
+        model: models.Location,
+        include: getInfoAssociations.include,
+        attributes: getNeighborhoodAttributeSubquery.attributes,
+      }]
+    });
+    res.send(organizations);
+  },
+
 };

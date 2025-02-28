@@ -27,7 +27,7 @@ const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
 };
 
-const getInfoAssociations = {
+export const getInfoAssociations = {
   include: [
     {
       model: models.Service,
@@ -62,7 +62,7 @@ const getInfoAssociations = {
   ],
 };
 
-const getNeighborhoodAttributeSubquery = {
+export const getNeighborhoodAttributeSubquery = {
   attributes: {
     include: [
       [
