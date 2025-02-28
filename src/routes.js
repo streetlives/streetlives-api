@@ -60,6 +60,7 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
 
+
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);
   app.delete('/errorreports/:errorReportId', getUser, errorReports.delete);

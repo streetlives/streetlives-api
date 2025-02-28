@@ -16,6 +16,7 @@ function getClientIp(req) {
   return ip.replace(/^::ffff:/, '');
 }
 
+
 export default {
   get: async (req, res, next) => {
     try {
@@ -23,6 +24,7 @@ export default {
 
       const { locationId } = req.query;
       const ipAddress = getClientIp(req);
+
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
@@ -173,6 +175,7 @@ export default {
         throw new ForbiddenError('Not authorized to reply on behalf of this organization');
       }
 
+
       await updateInstance(req.user, reply, { content });
       res.sendStatus(204);
     } catch (err) {
@@ -257,6 +260,7 @@ export default {
       const { commentId } = req.params;
 
       const ip = getClientIp(req);
+
 
       if (req.method === 'PUT') {
         const existingLike = await models.CommentLike.findOne({
