@@ -7,6 +7,12 @@ export default {
     }).required(),
   },
 
+  getHighlights: {
+    query: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+  },
+
   create: {
     body: Joi.object().keys({
       locationId: Joi.string().guid().required(),
