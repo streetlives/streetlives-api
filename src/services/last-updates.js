@@ -1,7 +1,6 @@
 import models from '../models';
 
-export const getLastValidatedDateForLocation = async locationId => models.sequelize.query(
-  `
+const LAST_VALIDATED_DATE_FOR_LOCATION_BASE_QUERY = ` 
     select max(metadata.created_at) as "lastValidatedDateForLocation"
     from locations
     left join service_at_locations sal on sal.location_id = locations.id
@@ -47,6 +46,25 @@ export const getLastValidatedDateForLocation = async locationId => models.sequel
         metadata.resource_id = services.id)
     )
     where locations.id = $1
+`;
+
+export const getLastValidatedDateForLocation = async locationId => models.sequelize.query(
+  // Here's what's going on with this query:
+  // We use CTE in order to execute a less expensive query,
+  // by adding AND clause to the where statement.
+  // Then we use case expression,
+  // so that we execute more expensive query conditionally
+  // if the less expensive query failed to find a result.
+  `
+  with last_validated_date_for_location as (
+    ${LAST_VALIDATED_DATE_FOR_LOCATION_BASE_QUERY}
+    AND metadata.created_at > now() - interval '1 year'
+  ) select 
+    case 
+      when "lastValidatedDateForLocation" is not null then "lastValidatedDateForLocation" 
+      else (${LAST_VALIDATED_DATE_FOR_LOCATION_BASE_QUERY})
+    end
+  from last_validated_date_for_location
     `,
   {
     bind: [locationId],
