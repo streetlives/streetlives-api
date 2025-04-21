@@ -2,56 +2,71 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI();
 
-const responseJsonSchema = {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "array",
-  "items": {
-    "type": "object",
-    "properties": {
-      "comment": {
-        "type": "string"
+const commentsSchema = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      comment: {
+        type: 'string',
       },
-      "sentiment": {
-        "type": "string",
-        "enum": [
-          "Strongly Positive",
-          "Positive",
-          "Mixed",
-          "Negative",
-          "Strongly Negative"
-        ]
+      sentiment: {
+        type: 'string',
+        enum: [
+          'Strongly Positive',
+          'Positive',
+          'Mixed',
+          'Negative',
+          'Strongly Negative',
+        ],
       },
-      "informativeness_score": {
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 5
+      informativeness_score: {
+        type: 'integer',
       },
-      "key_positive_sentiment_takeaways": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
+      key_positive_sentiment_takeaways: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
       },
-      "key_negative_sentiment_takeaways": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      }
+      key_negative_sentiment_takeaways: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+      },
     },
-    "required": [
-      "comment",
-      "sentiment",
-      "informativeness_score",
-      "key_positive_sentiment_takeaways",
-      "key_negative_sentiment_takeaways"
+    required: [
+      'comment',
+      'sentiment',
+      'informativeness_score',
+      'key_positive_sentiment_takeaways',
+      'key_negative_sentiment_takeaways',
     ],
-    "additionalProperties": false
-  }
+    additionalProperties: false,
+  },
+};
+
+const responseJsonSchema = {
+  type: 'json_schema',
+  json_schema: {
+    strict: true,
+    name: 'ReviewCommentKeyTakeaways',
+    schema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        top_positive_comments: commentsSchema,
+        top_negative_comments: commentsSchema,
+        top_mixed_comments: commentsSchema,
+      },
+      required: ['top_positive_comments', 'top_negative_comments', 'top_mixed_comments'],
+      additionalProperties: false,
+    },
+  },
 };
 
 const defaultPrompt = `
-
 Find the top 5 comments with NEGATIVE, the top 5 comments with POSITIVE sentiment and the top 5 comments with MIXED from the following list of comments that are the most informative and have the strongest sentiment.
 
 For each comment, identify:
@@ -62,85 +77,56 @@ For each comment, identify:
 * Key Positive Sentiment Takeaways: A meaningful excerpt extracted verbatim from the comment that has positive sentiment and is around five words long. Don't excerpt the entire comment.
 * Key Negative Sentiment Takeaways: A meaningful excerpt extracted verbatim from the comment that has negative sentiment and is around five words long. Don't excerpt the entire comment.
 
-Here are example outputs showing some example comments and takeaways
+Here are example outputs showing some example comments and takeaways.
+
+Example Inputs:
+
+* They actively keep the site safe and don't allow violence or weapons on site
+* I was pursued by another participant and the staff told them to stop. The staff was aware of the space and what was happening. I felt safe
+* The area was clean, the floors looked very clean, the blue seats looked clean as well. But the beige seating area looks like it is due for a deep clean
+
+Example Output as JSON:
 
 \`\`\`json
-[
-	{
-    	"comment": "lgbtq friendly, group activities and events, entertainment for clients like video games and television, giftcards and parties for",
-    	"sentiment": "Strongly Positive",
-    	"informativeness_score": 2,
-    	"key_positive_sentiment_takeaways": [
-        	"lgbtq friendly",
-        	"entertainment for clients"
-    	],
-    	"key_negative_sentiment_takeaways": []
-	},
-	{
-    	"comment": "everything is cleaned but they need more staff to maintain the cleaniness",
-    	"sentiment": "Mixed",
-    	"informativeness_score": 2,
-    	"key_positive_sentiment_takeaways": [
-        	"everything is cleaned"
-    	],
-    	"key_negative_sentiment_takeaways": [
-        	"need more staff to maintain the cleaniness"
-    	]
-	},
-	{
-    	"comment": "helped with my housing journey and even provided furniture giftcards after assistance with housing. received medical care and connection to OBGYN",
-    	"sentiment": "Strongly Positive",
-    	"informativeness_score": 3,
-    	"key_positive_sentiment_takeaways": [
-        	"helped with my housing journey",
-        	"provided furniture giftcards",
-        	"received medical care and connection to OBGYN"
-    	],
-    	"key_negative_sentiment_takeaways": []
-	},
-	{
-    	"comment": "i feel safe here but sometimes since it's an LGBTQ safe space they are targeted .i. the person came back trying to kick down the door and harm people. luckily however the door was secured by a code and it was sturdy.",
-    	"sentiment": "Mixed",
-    	"informativeness_score": 4,
-    	"key_positive_sentiment_takeaways": [
-        	"i feel safe here",
-        	"."
-    	],
-    	"key_negative_sentiment_takeaways": [
-        	"the person came back trying to kick down the door and harm people"
-    	]
-	},
-	{
-    	"comment": "the bathrooms have the label and the pajamas provided to overnight clients are non binary",
-    	"sentiment": "Strongly Positive",
-    	"informativeness_score": 2,
-    	"key_positive_sentiment_takeaways": [
-        	"bathrooms have the label",
-        	"pajamas provided to overnight clients are non binary"
-    	],
-    	"key_negative_sentiment_takeaways": []
-	},
-	{
-    	"comment": "The staff are nice and respectful of pronouns",
-    	"sentiment": "Strongly Positive",
-    	"informativeness_score": 1,
-    	"key_positive_sentiment_takeaways": [
-        	"staff are nice and respectful of pronouns"
-    	],
-    	"key_negative_sentiment_takeaways": []
-	},
-	{
-    	"comment": "The place is a little old and sometimes unsanitary bathrooms.",
-    	"sentiment": "Strongly Negative",
-    	"informativeness_score": 1,
-    	"key_positive_sentiment_takeaways": [],
-    	"key_negative_sentiment_takeaways": [
-        	"place is a little old",
-        	"sometimes unsanitary"
-    	]
-	}
-]
-
+{
+  "top_positive_comments": [
+    {
+      "comment": "They actively keep the site safe and don't allow violence or weapons on site",
+      "sentiment": "Strongly Positive",
+      "informativeness_score": 3,
+      "key_positive_sentiment_takeaways": [
+        "They actively keep the site safe"
+      ],
+      "key_negative_sentiment_takeaways": []
+    }
+  ],
+  "top_negative_comments": [
+    {
+      "comment": "I was pursued by another participant and the staff told them to stop. The staff was aware of the space and what was happening. I felt safe",
+      "sentiment": "Strongly Negative",
+      "informativeness_score": 5,
+      "key_positive_sentiment_takeaways": [
+        "I felt safe"
+      ],
+      "key_negative_sentiment_takeaways": [
+        "I was pursued by another participant"
+      ]
+    }
+  ],
+  "top_mixed_comments": [
+    {
+      "commment": "The area was clean, the floors looked very clean, the blue seats looked clean as well. But the beige seating area looks like it is due for a deep clean",
+      "sentiment": "Mixed",
+      "informativeness_score": 5,
+      "key_positive_entiment_takeaways": [
+        "area was clean"
+      ],
+      "key_negative_sentiment_takeaways": [
+        "looks like it is due for a deep clean"
+      ]
+    }
+  ]
+}
 \`\`\`
 
 Here are more examples of extracting negative and positive sentiments from comments. In the below examples, positive comments are wrapped in square brackets, like this "[positive comment]", and negative comments are wrapped in curly brackets, like this "{negative comment}":
