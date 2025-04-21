@@ -59,6 +59,7 @@ export default (app) => {
 
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
+  app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
 
 
   app.get('/errorreports', getUser, errorReports.get);
