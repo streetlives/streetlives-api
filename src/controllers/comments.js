@@ -4,6 +4,8 @@ import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
+import commentEmail from '../services/comment-email';
+import { extractCommentContent } from '../utils/helpers';
 
 function getClientIp(req) {
   const forwardedIp = req.headers['x-forwarded-for']
@@ -73,6 +75,14 @@ export default {
         posted_by: postedBy,
         contact_info: contactInfo,
       });
+      const extractedContent = extractCommentContent(postedComment.content);
+
+      commentEmail({
+        locationName: location.name,
+        servicesUsed: extractedContent.whatServicesDidYouUse,
+        whatCouldBeImproved: extractedContent.whatCouldBeImproved,
+        whatWentWell: extractedContent.whatCouldBeImproved,
+      }).catch(console.error);
 
       res.status(201)
         .send(postedComment);
