@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { getCommentsHighlights } from './openai';
+import getCommentsHighlights from './openai';
 import models, { sequelize } from '../models';
 import commentSchemas from './validation/comments';
 
@@ -23,7 +23,7 @@ async function doGenerateHighlights(results) {
     console.log(`Generating highlights for ${location.name}...`);
 
     const comments = await models.Comment.findAll({
-      where: { location_id: location.id },
+      where: { location_id: location.id, reply_to_id: null },
       attributes: ["content"],
     });
 
@@ -74,6 +74,7 @@ export default {
              OR (SELECT MAX(c2.created_at)
                  FROM comments c2
                  WHERE c2.location_id = l.id) > lch.last_comment_timestamp
+             AND c.reply_to_id is null
           GROUP BY l.id;
       `, {
         models: models.Location,
@@ -99,6 +100,7 @@ export default {
           SELECT l.id, l.name
           FROM locations l
           INNER JOIN comments c ON l.id = c.location_id
+          and c.reply_to_id is null
       `, {
         models: models.Location,
       });
