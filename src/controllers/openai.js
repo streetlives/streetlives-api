@@ -129,7 +129,7 @@ Example Output as JSON:
 }
 \`\`\`
 
-Here are more examples of extracting negative and positive sentiments from comments. 
+Here are more examples of extracting negative and positive sentiments from comments. DO NOT include the example inputs in the response.
 
 Example Inputs:
 
@@ -1374,18 +1374,21 @@ Please analyze the following user comments:
 `;
 
 const renderPrompt = (comments) => {
-  const commentsString = comments.map(comment => `* ${comment.content}`).join('\n');
-  return `${defaultPrompt}\n \n${commentsString}`;
+  return comments.map(comment => `* ${comment}`).join('\n');
 };
 
-export const getCommentsHighlights = async (comments) => {
+const getCommentsHighlights = async (comments) => {
+  const commentContents = comments.map(comment => (
+    comment.content.replaceAll('\n', ' ').replaceAll('\r', ' ').trim()
+  ));
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'user', content: renderPrompt(comments) },
+        { role: 'system', content: defaultPrompt },
+        { role: 'user', content: renderPrompt(commentContents) },
       ],
-      response_format: responseJsonSchema 
+      response_format: responseJsonSchema,
     });
 
     return completion.choices[0].message;
@@ -1394,3 +1397,5 @@ export const getCommentsHighlights = async (comments) => {
     return null;
   }
 };
+
+export default getCommentsHighlights;
