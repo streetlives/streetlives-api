@@ -78,7 +78,7 @@ export default {
       const extractedContent = extractCommentContent(postedComment.content);
 
       commentEmail({
-        locationName: location.name,
+        locationName: location.Organization.name,
         servicesUsed: extractedContent.whatServicesDidYouUse,
         whatCouldBeImproved: extractedContent.whatCouldBeImproved,
         whatWentWell: extractedContent.whatCouldBeImproved,

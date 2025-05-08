@@ -12,11 +12,11 @@ const nodemailer = require('nodemailer');
 
 // Looking to send emails in production? Check out our Email API/SMTP product!
 const transporter = nodemailer.createTransport({
-  host: 'sandbox.smtp.mailtrap.io',
-  port: 2525,
+  host: 'live.smtp.mailtrap.io',
+  port: 587,
   auth: {
-    user: '6a0d5e74c6a2a4',
-    pass: 'e4fd744e6caba8',
+    user: 'api',
+    pass: '35fa92c4ed33c045e5cd86b963c37638',
   },
 });
 
@@ -26,8 +26,8 @@ async function commentEmail({
   console.log('sending mail...');
   // send mail with defined transport object
   const info = await transporter.sendMail({
-    from: '"Streetlives" <example@streetlives.com>', // sender address
-    to: 'bar@example.com, baz@example.com', // list of receivers
+    from: '"Streetlives" <shakil@demomailtrap.co>', // sender address
+    to: 'shakil@streetlives.nyc', // list of receivers
     subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
     html: `
       <!DOCTYPE html>
@@ -59,7 +59,7 @@ async function commentEmail({
     .comment-box {
       background-color: #f1f5f9;
       padding: 16px;
-      border-left: 4px solid #3b82f6;
+      border-left: 4px solid #FFDC00;
       border-radius: 6px;
       margin-bottom: 24px;
       white-space: pre-wrap;
@@ -67,7 +67,7 @@ async function commentEmail({
     .cta-button {
       display: inline-block;
       padding: 12px 20px;
-      background-color: #3b82f6;
+      background-color: #171717;
       color: white;
       text-decoration: none;
       font-weight: 600;
@@ -88,15 +88,12 @@ async function commentEmail({
     <p>Hi <strong>${locationName}</strong>,</p>
     <p>Someone just left you a new comment on YourPeer. Here’s what they shared:</p>
 
-    <div class="comment-box">
-      “${servicesUsed ? `Services used: ${servicesUsed.join(', ')}` : ''}
-       ${whatWentWell ? `What went well: ${whatWentWell}` : ''}
-       ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}
-       ”
-    </div>
+    <div class="comment-box">“${servicesUsed ? `Services used: ${servicesUsed.join(', ')}` : ''}
+${whatWentWell ? `What went well: ${whatWentWell}` : ''}
+${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}”</div>
 
     <p>Want to keep the conversation going?</p>
-    <p><a href="https://yourpeer.nyc/login" class="cta-button">👉 Log in here to reply to the review</a></p>
+    <p><a href="https://yourpeer.nyc/login" class="cta-button" style="color: #ffffff !important;">👉 Log in here to reply to the review</a></p>
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>
