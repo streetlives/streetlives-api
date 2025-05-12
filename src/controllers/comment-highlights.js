@@ -23,8 +23,10 @@ async function doGenerateHighlights(results) {
     console.log(`Generating highlights for ${location.name}...`);
 
     const comments = await models.Comment.findAll({
-      where: { location_id: location.id, reply_to_id: null },
-      attributes: ["content"],
+      where: {
+        location_id: location.id, reply_to_id: null, hidden: null, exclude: false,
+      },
+      attributes: ['content'],
     });
 
     const openAIOutput = await getCommentsHighlights(comments);
@@ -38,7 +40,7 @@ async function doGenerateHighlights(results) {
     `,
       {
         replacements: { location_id: location.id },
-      }
+      },
     );
 
     // find if the highlight exists
