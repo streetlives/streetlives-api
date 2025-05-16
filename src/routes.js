@@ -37,6 +37,7 @@ export default (app) => {
   app.delete('/phones/:phoneId', getUser, locations.deletePhone);
 
   app.post('/services', getUser, dataEntryAuth, services.create);
+  app.get('/services/get-count', services.getCount);
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
   app.delete('/services/:serviceId', getUser, services.delete);
 
