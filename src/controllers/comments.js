@@ -27,7 +27,7 @@ export default {
 
 
       const publicAttributes = [
-        'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
+        'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count', 'exclude',
         [cast(fn('COUNT', col('likes.id')), 'integer'), 'likes_count'],
         [
           literal(`
@@ -232,6 +232,29 @@ export default {
       next(err);
     }
   },
+  excludeFromHighlights: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.setExclude, { allowUnknown: true });
+
+      const { commentId } = req.params;
+      const { exclude } = req.body;
+
+      const comment = await models.Comment.findByPk(commentId, { include: models.Location });
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      if (!req.userIsAdmin) {
+        throw new ForbiddenError('Not authorized to hide comments');
+      }
+
+      await updateInstance(req.user, comment, { exclude });
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
 
   report: async (req, res, next) => {
     try {
