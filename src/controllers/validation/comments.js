@@ -47,6 +47,14 @@ export default {
       hidden: Joi.boolean().required(),
     }).required(),
   },
+  setExclude: {
+    params: Joi.object().keys({
+      commentId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      exclude: Joi.boolean().required(),
+    }).required(),
+  },
   report: {
     params: Joi.object().keys({
       commentId: Joi.string().guid().required(),
