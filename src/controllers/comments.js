@@ -117,7 +117,6 @@ export default {
             const email = user.Attributes.find(attr => attr.Name === 'email').Value;
             return email;
           });
-          console.log(emails);
           if (emails.length !== 0) {
             commentEmail({
               locationName: location.Organization.name,

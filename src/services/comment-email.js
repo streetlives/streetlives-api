@@ -21,13 +21,13 @@ const transporter = nodemailer.createTransport({
 });
 
 async function commentEmail({
-  whatCouldBeImproved, whatWentWell, servicesUsed, locationName,
+  whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail
 }) {
   console.log('sending mail...');
   // send mail with defined transport object
   const info = await transporter.sendMail({
     from: '"Streetlives" <shakil@demomailtrap.co>', // sender address
-    to: 'shakil@streetlives.nyc', // list of receivers
+    to: providersEmail, // list of receivers
     subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
     html: `
       <!DOCTYPE html>
