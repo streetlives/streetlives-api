@@ -7,6 +7,37 @@ import { ForbiddenError, NotFoundError } from '../utils/errors';
 import commentEmail from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
+const { fromIni } = require('@aws-sdk/credential-provider-ini');
+
+import {
+  CognitoIdentityProviderClient,
+  ListUsersCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
+
+const client = new CognitoIdentityProviderClient({
+  region: 'us-east-1',
+  credentials: fromIni({ profile: 'streetlives' }),
+});
+
+const getAllUsers = async (userPoolId) => {
+  let users = [];
+  let paginationToken;
+
+  do {
+    const command = new ListUsersCommand({
+      UserPoolId: userPoolId,
+      PaginationToken: paginationToken,
+      Limit: 60, // Maximum allowed per request
+    });
+
+    const response = await client.send(command);
+    users = users.concat(response.Users);
+    paginationToken = response.PaginationToken;
+  } while (paginationToken);
+
+  return users;
+};
+
 function getClientIp(req) {
   const forwardedIp = req.headers['x-forwarded-for']
     ? req.headers['x-forwarded-for'].split(',')[0]
@@ -18,7 +49,6 @@ function getClientIp(req) {
   return ip.replace(/^::ffff:/, '');
 }
 
-
 export default {
   get: async (req, res, next) => {
     try {
@@ -26,7 +56,6 @@ export default {
 
       const { locationId } = req.query;
       const ipAddress = getClientIp(req);
-
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count',
@@ -77,12 +106,31 @@ export default {
       });
       const extractedContent = extractCommentContent(postedComment.content);
 
-      commentEmail({
-        locationName: location.Organization.name,
-        servicesUsed: extractedContent.whatServicesDidYouUse,
-        whatCouldBeImproved: extractedContent.whatCouldBeImproved,
-        whatWentWell: extractedContent.whatCouldBeImproved,
-      }).catch(console.error);
+      getAllUsers('us-east-1_EvBbozIjd')
+        .then((users) => {
+          const matchedUsers = users.filter(user =>
+            user.Attributes.some(attr =>
+              attr.Name === 'custom:orgs' &&
+              attr.Value.split(',').includes(location.Organization.id)));
+
+          const emails = matchedUsers.map((user) => {
+            const email = user.Attributes.find(attr => attr.Name === 'email').Value;
+            return email;
+          });
+          console.log(emails);
+          if (emails.length !== 0) {
+            commentEmail({
+              locationName: location.Organization.name,
+              servicesUsed: extractedContent.whatServicesDidYouUse,
+              whatCouldBeImproved: extractedContent.whatCouldBeImproved,
+              whatWentWell: extractedContent.whatCouldBeImproved,
+              providersEmail: emails.join(','),
+            }).catch(console.error);
+          }
+        })
+        .catch((err) => {
+          console.error('Error listing users:', err);
+        });
 
       res.status(201)
         .send(postedComment);
@@ -185,7 +233,6 @@ export default {
         throw new ForbiddenError('Not authorized to reply on behalf of this organization');
       }
 
-
       await updateInstance(req.user, reply, { content });
       res.sendStatus(204);
     } catch (err) {
@@ -271,7 +318,6 @@ export default {
 
       const ip = getClientIp(req);
 
-
       if (req.method === 'PUT') {
         const existingLike = await models.CommentLike.findOne({
           where: {
@@ -311,3 +357,4 @@ export default {
     }
   },
 };
+
