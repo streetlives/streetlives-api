@@ -11,7 +11,7 @@ const nodemailer = require('nodemailer');
 // });
 
 // Looking to send emails in production? Check out our Email API/SMTP product!
-const transporter = nodemailer.createTransport({
+const transport = nodemailer.createTransport({
   host: 'live.smtp.mailtrap.io',
   port: 587,
   auth: {
@@ -21,11 +21,11 @@ const transporter = nodemailer.createTransport({
 });
 
 async function commentEmail({
-  whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail
+  whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail, locationSlug,
 }) {
   console.log('sending mail...');
   // send mail with defined transport object
-  const info = await transporter.sendMail({
+  const info = await transport.sendMail({
     from: '"Streetlives" <shakil@demomailtrap.co>', // sender address
     to: providersEmail, // list of receivers
     subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
@@ -93,7 +93,8 @@ ${whatWentWell ? `What went well: ${whatWentWell}` : ''}
 ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}”</div>
 
     <p>Want to keep the conversation going?</p>
-    <p><a href="https://yourpeer.nyc/login" class="cta-button" style="color: #ffffff !important;">👉 Log in here to reply to the review</a></p>
+    <p>Click <a href="https://yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
+    <p>(If you’re not logged in, click <a href="https://yourpeer.nyc/login">here</a> to log in)</p>
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>

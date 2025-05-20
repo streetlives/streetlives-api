@@ -124,6 +124,7 @@ export default {
               whatCouldBeImproved: extractedContent.whatCouldBeImproved,
               whatWentWell: extractedContent.whatCouldBeImproved,
               providersEmail: emails.join(','),
+              locationSlug: location.slug,
             }).catch(console.error);
           }
         })
