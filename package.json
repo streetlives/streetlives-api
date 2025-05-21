@@ -44,6 +44,8 @@
     "streetlives"
   ],
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.812.0",
+    "@aws-sdk/credential-provider-ini": "^3.812.0",
     "aws-serverless-express": "^3.1.3",
     "axios": "^0.21.2",
     "body-parser": "^1.18.2",
@@ -52,6 +54,7 @@
     "joi": "^13.1.2",
     "minimist": "^1.2.6",
     "morgan": "^1.9.1",
+    "nodemailer": "^6.10.1",
     "openai": "^4.85.4",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.2",
