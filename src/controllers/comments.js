@@ -4,6 +4,8 @@ import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
+import axios from 'axios';
+import { doRegenerateHighlights } from './comment-highlights';
 
 function getClientIp(req) {
   const forwardedIp = req.headers['x-forwarded-for']
@@ -16,7 +18,6 @@ function getClientIp(req) {
   return ip.replace(/^::ffff:/, '');
 }
 
-
 export default {
   get: async (req, res, next) => {
     try {
@@ -24,7 +25,6 @@ export default {
 
       const { locationId } = req.query;
       const ipAddress = getClientIp(req);
-
 
       const publicAttributes = [
         'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count', 'exclude',
@@ -175,7 +175,6 @@ export default {
         throw new ForbiddenError('Not authorized to reply on behalf of this organization');
       }
 
-
       await updateInstance(req.user, reply, { content });
       res.sendStatus(204);
     } catch (err) {
@@ -250,11 +249,18 @@ export default {
 
       await updateInstance(req.user, comment, { exclude });
       res.sendStatus(204);
+
+      try {
+        console.log('Regenerating highlights...');
+        await doRegenerateHighlights();
+        console.log('Highlight regerated successfully');
+      } catch (error) {
+        console.log(error);
+      }
     } catch (err) {
       next(err);
     }
   },
-
 
   report: async (req, res, next) => {
     try {
@@ -283,7 +289,6 @@ export default {
       const { commentId } = req.params;
 
       const ip = getClientIp(req);
-
 
       if (req.method === 'PUT') {
         const existingLike = await models.CommentLike.findOne({

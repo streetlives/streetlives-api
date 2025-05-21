@@ -63,6 +63,25 @@ async function doGenerateHighlights(results) {
   }
 }
 
+export function doRegenerateHighlights() {
+  return new Promise((resolve, reject) => {
+    sequelize.query(`
+      SELECT l.id, l.name
+      FROM locations l
+      INNER JOIN comments c ON l.id = c.location_id
+      and c.reply_to_id is null
+    `)
+      .then(async (results) => {
+        await doGenerateHighlights(results);
+        resolve();
+      })
+      .catch((err) => {
+        console.error('Error regenerating highlights:', err);
+        reject(err);
+      });
+  });
+}
+
 export default {
   generateHighlights: async (req, res, next) => {
     try {
