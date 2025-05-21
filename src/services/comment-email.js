@@ -1,3 +1,5 @@
+import config from '../config';
+
 const nodemailer = require('nodemailer');
 
 // const transporter = nodemailer.createTransport({
@@ -12,11 +14,11 @@ const nodemailer = require('nodemailer');
 
 // Looking to send emails in production? Check out our Email API/SMTP product!
 const transport = nodemailer.createTransport({
-  host: 'live.smtp.mailtrap.io',
-  port: 587,
+  host: config.mail.host,
+  port: config.mail.port,
   auth: {
-    user: 'api',
-    pass: '35fa92c4ed33c045e5cd86b963c37638',
+    user: config.mail.username,
+    pass: config.mail.password,
   },
 });
 
