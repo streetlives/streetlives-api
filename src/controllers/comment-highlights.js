@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import Sequelize from 'sequelize';
 import getCommentsHighlights from './openai';
 import models, { sequelize } from '../models';
 import commentSchemas from './validation/comments';
@@ -63,14 +64,16 @@ async function doGenerateHighlights(results) {
   }
 }
 
-export function doRegenerateHighlights() {
+export function regenerateHighlightsForLocation(locationId) {
   return new Promise((resolve, reject) => {
     sequelize.query(`
       SELECT l.id, l.name
       FROM locations l
-      INNER JOIN comments c ON l.id = c.location_id
-      and c.reply_to_id is null
-    `)
+      WHERE l.id = :locationId
+    `, {
+      replacements: { locationId },
+      type: Sequelize.QueryTypes.SELECT,
+    })
       .then(async (results) => {
         await doGenerateHighlights(results);
         resolve();

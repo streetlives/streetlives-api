@@ -5,7 +5,7 @@ import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 import axios from 'axios';
-import { doRegenerateHighlights } from './comment-highlights';
+import { doRegenerateHighlights, regenerateHighlightsForLocation } from './comment-highlights';
 
 function getClientIp(req) {
   const forwardedIp = req.headers['x-forwarded-for']
@@ -242,21 +242,23 @@ export default {
       if (!comment) {
         throw new NotFoundError('Comment not found');
       }
-
+      //
       if (!req.userIsAdmin) {
         throw new ForbiddenError('Not authorized to hide comments');
       }
 
       await updateInstance(req.user, comment, { exclude });
-      res.sendStatus(204);
 
       try {
         console.log('Regenerating highlights...');
-        await doRegenerateHighlights();
+        await regenerateHighlightsForLocation(comment.location_id);
         console.log('Highlight regerated successfully');
       } catch (error) {
         console.log(error);
       }
+
+      res.sendStatus(204);
+
     } catch (err) {
       next(err);
     }
