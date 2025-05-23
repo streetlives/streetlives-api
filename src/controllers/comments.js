@@ -4,6 +4,7 @@ import commentSchemas from './validation/comments';
 import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
+import { regenerateHighlightsForLocation } from './comment-highlights';
 import commentEmail from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
@@ -300,18 +301,27 @@ export default {
       if (!comment) {
         throw new NotFoundError('Comment not found');
       }
-
+      //
       if (!req.userIsAdmin) {
         throw new ForbiddenError('Not authorized to hide comments');
       }
 
       await updateInstance(req.user, comment, { exclude });
+
+      try {
+        console.log('Regenerating highlights...');
+        await regenerateHighlightsForLocation(comment.location_id);
+        console.log('Highlight regerated successfully');
+      } catch (error) {
+        console.log(error);
+      }
+
       res.sendStatus(204);
+
     } catch (err) {
       next(err);
     }
   },
-
 
   report: async (req, res, next) => {
     try {
@@ -380,4 +390,5 @@ export default {
     }
   },
 };
+
 
