@@ -2,16 +2,6 @@ import config from '../config';
 
 const nodemailer = require('nodemailer');
 
-// const transporter = nodemailer.createTransport({
-//   host: 'smtp.ethereal.email',
-//   port: 587,
-//   secure: false, // true for port 465, false for other ports
-//   auth: {
-//     user: 'maddison53@ethereal.email',
-//     pass: 'jn7jnAPss4f63QBp6D',
-//   },
-// });
-
 // Looking to send emails in production? Check out our Email API/SMTP product!
 const transport = nodemailer.createTransport({
   host: config.mail.host,
@@ -28,7 +18,7 @@ async function commentEmail({
   console.log('sending mail...');
   // send mail with defined transport object
   const info = await transport.sendMail({
-    from: '"Streetlives" <shakil@demomailtrap.co>', // sender address
+    from: `"YourPeer Feedback" <${config.mail.from}>`, // sender address
     to: providersEmail, // list of receivers
     subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
     html: `
