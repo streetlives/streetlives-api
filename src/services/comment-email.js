@@ -18,7 +18,7 @@ async function commentEmail({
   console.log('sending mail...');
   // send mail with defined transport object
   const info = await transport.sendMail({
-    from: `"Streetlives" <${config.mail.from}>`, // sender address
+    from: `"YourPeer Feedback" <${config.mail.from}>`, // sender address
     to: providersEmail, // list of receivers
     subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
     html: `
