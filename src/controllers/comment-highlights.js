@@ -4,30 +4,18 @@ import getCommentsHighlights from './openai';
 import models, { sequelize } from '../models';
 import commentSchemas from './validation/comments';
 
-function parseOpenAIOutput(response) {
-  if (!response || !response.content) {
-    console.error('Invalid response object.');
-    return null;
-  }
-
-  // Extract JSON content from the response
-  try {
-    return JSON.parse(response.content);
-  } catch (error) {
-    console.error('Failed to parse JSON:', error);
-    return null;
-  }
-}
-
 async function doGenerateHighlights(results) {
   for (const location of results) {
     console.log(`Generating highlights for ${location.name}...`);
 
     const comments = await models.Comment.findAll({
       where: {
-        location_id: location.id, reply_to_id: null, hidden: null, exclude: false,
+        location_id: location.id,
+        reply_to_id: null,
+        hidden: { [Sequelize.Op.or]: [null, false] },
+        exclude: false,
       },
-      attributes: ['content'],
+      attributes: ['id', 'content'],
     });
 
     const openAIOutput = await getCommentsHighlights(comments);
@@ -153,7 +141,7 @@ export default {
         return;
       }
 
-      const output = parseOpenAIOutput(highlights.openai_output_json);
+      const output = highlights.openai_output_json;
 
       res.send(output);
     } catch (err) {
