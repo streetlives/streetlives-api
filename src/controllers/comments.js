@@ -123,7 +123,7 @@ export default {
               locationName: location.Organization.name,
               servicesUsed: extractedContent.whatServicesDidYouUse,
               whatCouldBeImproved: extractedContent.whatCouldBeImproved,
-              whatWentWell: extractedContent.whatCouldBeImproved,
+              whatWentWell: extractedContent.whatWentWell,
               providersEmail: emails.join(','),
               locationSlug: location.slug,
             }).catch(console.error);
