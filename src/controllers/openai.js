@@ -1,3 +1,5 @@
+/* eslint-disable max-len, no-console */
+
 import OpenAI from 'openai';
 
 const openai = new OpenAI();
@@ -64,7 +66,11 @@ const responseJsonSchema = {
         top_negative_comments: commentsSchema,
         top_mixed_comments: commentsSchema,
       },
-      required: ['top_positive_comments', 'top_negative_comments', 'top_mixed_comments'],
+      required: [
+        'top_positive_comments',
+        'top_negative_comments',
+        'top_mixed_comments',
+      ],
       additionalProperties: false,
     },
   },
@@ -612,7 +618,7 @@ Example Inputs:
     },
     {
         "id": 113,
-        "comment": "Because I went to the bathroom and saw for my self\""
+        "comment": "Because I went to the bathroom and saw for my self"
     },
     {
         "id": 114,
@@ -1887,10 +1893,12 @@ function normalizeComment(comment) {
     return toReturn;
   } catch (e) {
     // instead we have a string comment
-    return [{
-      id: comment.id,
-      comment: comment.content,
-    }];
+    return [
+      {
+        id: comment.id,
+        comment: comment.content,
+      },
+    ];
   }
 }
 
@@ -1904,13 +1912,20 @@ function checkExistenceOfExcerptsInOriginalComments(commentLookupMap, excerpt) {
     // replace the comment from the LLM with the original comment
     comment: commentLookupMap[excerpt.id],
     // validate the excerpts
-    key_negative_sentiment_takeaways: excerpt.key_negative_sentiment_takeaways.filter(s => commentLookupMap[excerpt.id].includes(s)),
-    key_positive_sentiment_takeaways: excerpt.key_positive_sentiment_takeaways.filter(s => commentLookupMap[excerpt.id].includes(s)),
+    key_negative_sentiment_takeaways:
+      excerpt.key_negative_sentiment_takeaways.filter(s =>
+        commentLookupMap[excerpt.id].includes(s)),
+    key_positive_sentiment_takeaways:
+      excerpt.key_positive_sentiment_takeaways.filter(s =>
+        commentLookupMap[excerpt.id].includes(s)),
   };
 }
 
 function filterOutCommentsWithoutExcerpts(excerpt) {
-  return excerpt.key_negative_sentiment_takeaways.length || excerpt.key_positive_sentiment_takeaways.length;
+  return (
+    excerpt.key_negative_sentiment_takeaways.length ||
+    excerpt.key_positive_sentiment_takeaways.length
+  );
 }
 
 const getCommentsHighlights = async (comments) => {
@@ -1929,7 +1944,16 @@ const getCommentsHighlights = async (comments) => {
     // use the new id property to refer back to the original comment and lookup the comment text verbatim
     // parse the results back out
     const parsedResponse = JSON.parse(completion.choices[0].message.content);
-    const validatedOutput = Object.fromEntries(Object.entries(parsedResponse).map(([k, v]) => [k, v.filter(filterModelOutput.bind(null, commentLookupMap)).map(checkExistenceOfExcerptsInOriginalComments.bind(null, commentLookupMap)).filter(filterOutCommentsWithoutExcerpts)]));
+    const validatedOutput = Object.fromEntries(Object.entries(parsedResponse).map(([k, v]) => [
+      k,
+      v
+        .filter(filterModelOutput.bind(null, commentLookupMap))
+        .map(checkExistenceOfExcerptsInOriginalComments.bind(
+          null,
+          commentLookupMap,
+        ))
+        .filter(filterOutCommentsWithoutExcerpts),
+    ]));
     return validatedOutput;
   } catch (err) {
     console.log(err);
