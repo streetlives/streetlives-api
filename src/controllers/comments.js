@@ -8,8 +8,6 @@ import { regenerateHighlightsForLocation } from './comment-highlights';
 import commentEmail from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
-const { fromIni } = require('@aws-sdk/credential-provider-ini');
-
 import {
   CognitoIdentityProviderClient,
   ListUsersCommand,
@@ -17,7 +15,6 @@ import {
 
 const client = new CognitoIdentityProviderClient({
   region: 'us-east-1',
-  credentials: fromIni({ profile: 'streetlives' }),
 });
 
 const getAllUsers = async (userPoolId) => {
