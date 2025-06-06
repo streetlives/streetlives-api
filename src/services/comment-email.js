@@ -85,8 +85,8 @@ ${whatWentWell ? `What went well: ${whatWentWell}` : ''}
 ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}”</div>
 
     <p>Want to keep the conversation going?</p>
-    <p>Click <a href="https://yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
-    <p>(If you’re not logged in, click <a href="https://yourpeer.nyc/login">here</a> to log in)</p>
+    <p>Click <a href="https://staging.yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
+    <p>(If you’re not logged in, click <a href="https://staging.yourpeer.nyc/login">here</a> to log in)</p>
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>
