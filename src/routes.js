@@ -49,6 +49,7 @@ export default (app) => {
   app.post('/comments', comments.create);
   app.put('/comments/email/:commentId', comments.setEmail);
   app.put('/comments/report/:commentId', comments.report);
+  app.put('/comments/unreport/:commentId', comments.unReport);
   app.put('/comments/like/:commentId', comments.like);
   app.delete('/comments/like/:commentId', comments.like);
 
