@@ -2,7 +2,7 @@ import uuid from 'uuid/v4';
 
 const serviceTaxonomyMappings = [
   // Mental Health
-{ service_id: 'f24252b9-f60f-4a53-93f4-100dcfa08f05', taxonomy_name: 'Mental Health' },
+  { service_id: 'f24252b9-f60f-4a53-93f4-100dcfa08f05', taxonomy_name: 'Mental Health' },
   { service_id: '4e0023d7-720e-472c-aae7-1e44460fbde4', taxonomy_name: 'Mental Health' },
   { service_id: 'deb3e3ab-a795-4a87-8305-b0e4825d76e7', taxonomy_name: 'Mental Health' },
   { service_id: 'ace0b846-81e3-401a-9ef4-bc70d0d11c55', taxonomy_name: 'Mental Health' },
@@ -130,7 +130,7 @@ const serviceTaxonomyMappings = [
   { service_id: '9c831dda-b512-4e09-b44a-c0424529709b', taxonomy_name: 'Mental Health' },
 
   // Employment
- { service_id: '8317abb5-3d95-4277-aa52-0830ed1e7d75', taxonomy_name: 'Employment' },
+  { service_id: '8317abb5-3d95-4277-aa52-0830ed1e7d75', taxonomy_name: 'Employment' },
   { service_id: '8471af7a-5164-43e2-8358-89efa6ee32b5', taxonomy_name: 'Employment' },
   { service_id: '04dda825-21ef-492b-b3d4-95b52664d889', taxonomy_name: 'Employment' },
   { service_id: '0bac026f-9bd9-4433-b262-b00471c589f4', taxonomy_name: 'Employment' },
@@ -161,7 +161,7 @@ const serviceTaxonomyMappings = [
   { service_id: 'd92b9e8b-a52d-4545-a33b-94d9b87b720a', taxonomy_name: 'Employment' },
 
   //   Legal Services
-{ service_id: 'd5a6ae91-55b4-44ad-9242-15a84e1b77a0', taxonomy_name: 'Legal Services' },
+  { service_id: 'd5a6ae91-55b4-44ad-9242-15a84e1b77a0', taxonomy_name: 'Legal Services' },
   { service_id: 'cd308ba7-ecea-42cc-8abb-f2fe18b4726d', taxonomy_name: 'Legal Services' },
   { service_id: '773320c6-7bb3-4e65-aafc-1636917cc263', taxonomy_name: 'Legal Services' },
   { service_id: '7e0a83a0-2302-4f7b-b2a8-b70dddf00361', taxonomy_name: 'Legal Services' },
@@ -198,7 +198,7 @@ const serviceTaxonomyMappings = [
   { service_id: '32e78d50-9093-4798-8ce2-0c526945cbf4', taxonomy_name: 'Legal Services' },
   { service_id: '2e5ebebd-17b7-4401-b1c2-ec1e282c1f37', taxonomy_name: 'Legal Services' },
   { service_id: '7d595a08-93c7-4180-b888-008d303dd710', taxonomy_name: 'Legal Services' },
-   { service_id: '7438f7ff-90b8-4b0e-820b-681044c4646c', taxonomy_name: 'Legal Services' },
+  { service_id: '7438f7ff-90b8-4b0e-820b-681044c4646c', taxonomy_name: 'Legal Services' },
   { service_id: '5dc330cb-7772-4921-adcc-f80d73552090', taxonomy_name: 'Legal Services' },
   { service_id: 'fca6d951-50e8-44e2-8097-2b78e100ffe7', taxonomy_name: 'Legal Services' },
   { service_id: 'ed9dec29-8662-4727-ab72-dbd606a30126', taxonomy_name: 'Legal Services' },
@@ -243,7 +243,7 @@ const serviceTaxonomyMappings = [
   { service_id: '11550ec6-4c30-4b3f-8b7c-1c179199da99', taxonomy_name: 'Legal Services' },
   { service_id: '184646b6-8032-425f-a5db-ff3ba111b16c', taxonomy_name: 'Legal Services' },
   { service_id: '03f8a0d6-8a0a-444b-82f0-ccabb5b8c2c2', taxonomy_name: 'Legal Services' },
-  { service_id: '7da03408-416e-4129-a2e2-8cb66bd028b4', taxonomy_name: 'Legal Services' }
+  { service_id: '7da03408-416e-4129-a2e2-8cb66bd028b4', taxonomy_name: 'Legal Services' },
 ];
 
 module.exports = {
@@ -276,7 +276,33 @@ module.exports = {
       service_id: { [Sequelize.Op.in]: serviceIds },
     });
 
+    // add to the metadata table
+    const metadata = serviceTaxonomyRecords.flatMap(record => [{
+      id: uuid(),
+      resource_id: record.id,
+      resource_table: 'service_taxonomy',
+      last_action_date: new Date(),
+      last_action_type: 'create',
+      field_name: 'service_id',
+      replacement_value: record.service_id,
+      created_at: new Date(),
+      updated_at: new Date(),
+    },
+    {
+      id: uuid(),
+      resource_id: record.id,
+      resource_table: 'service_taxonomy',
+      last_action_date: new Date(),
+      last_action_type: 'create',
+      field_name: 'taxonomy_id',
+      replacement_value: record.taxonomy_id,
+      created_at: new Date(),
+      updated_at: new Date(),
+    },
+    ]);
+
     await queryInterface.bulkInsert('service_taxonomy', serviceTaxonomyRecords);
+    await queryInterface.bulkInsert('metadata', metadata);
   },
 
   async down(queryInterface, Sequelize) {
@@ -293,6 +319,10 @@ module.exports = {
 
     await queryInterface.bulkDelete('service_taxonomy', {
       taxonomy_id: { [Sequelize.Op.in]: taxonomyIds },
+    });
+    await queryInterface.bulkDelete('metadata', {
+      resource_table: 'service_taxonomy',
+      replacement_value: { [Sequelize.Op.in]: [...taxonomyIds, ...serviceTaxonomyMappings.map(s => s.service_id)] },
     });
   },
 };

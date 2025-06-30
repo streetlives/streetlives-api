@@ -14,7 +14,22 @@ module.exports = {
       },
     ];
 
+    const metadata = taxonomies.map((t => (
+      {
+        id: uuid(),
+        resource_id: t.id,
+        resource_table: 'taxonomies',
+        last_action_date: new Date(),
+        last_action_type: 'create',
+        field_name: 'name',
+        replacement_value: t.name,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }
+    )));
+
     await queryInterface.bulkInsert('taxonomies', taxonomies);
+    queryInterface.bulkInsert('metadata', metadata);
   },
 
   async down(queryInterface, Sequelize) {
@@ -22,6 +37,10 @@ module.exports = {
 
     await queryInterface.bulkDelete('taxonomies', {
       name: { [Sequelize.Op.in]: taxonomyNames },
+    });
+    await queryInterface.bulkDelete('metadata', {
+      resource_table: 'taxonomies',
+      replacement_value: { [Sequelize.Op.in]: taxonomyNames },
     });
   },
 };
