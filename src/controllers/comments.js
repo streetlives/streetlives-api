@@ -314,7 +314,6 @@ export default {
       }
 
       res.sendStatus(204);
-
     } catch (err) {
       next(err);
     }
@@ -333,6 +332,30 @@ export default {
       }
 
       await updateInstance(req.user, comment, { report_count: comment.report_count + 1 });
+
+      res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  unReport: async (req, res, next) => {
+    try {
+      await Joi.validate(req, commentSchemas.report, { allowUnknown: true });
+
+      const { commentId } = req.params;
+
+      const comment = await models.Comment.findByPk(commentId);
+
+      if (!comment) {
+        throw new NotFoundError('Comment not found');
+      }
+
+      if (comment.report_count <= 0) {
+        throw Error('Cannot be unreported because report count already 0');
+      }
+
+      await updateInstance(req.user, comment, { report_count: comment.report_count - 1 });
 
       res.sendStatus(204);
     } catch (err) {
@@ -387,5 +410,4 @@ export default {
     }
   },
 };
-
 
