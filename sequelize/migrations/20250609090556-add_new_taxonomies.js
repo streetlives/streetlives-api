@@ -14,18 +14,30 @@ module.exports = {
       },
     ];
 
-    const metadata = taxonomies.map((t => (
+    const metadata = taxonomies.flatMap((record => ([
       {
         id: uuid(),
-        resource_id: t.id,
+        resource_id: record.id,
         resource_table: 'taxonomies',
         last_action_date: new Date(),
         last_action_type: 'create',
         field_name: 'name',
-        replacement_value: t.name,
+        replacement_value: record.name,
         created_at: new Date(),
         updated_at: new Date(),
-      }
+      },
+      {
+        id: uuid(),
+        resource_id: record.id,
+        resource_table: 'taxonomies',
+        last_action_date: new Date(),
+        last_action_type: 'create',
+        field_name: 'parent_name',
+        replacement_value: record.parent_name,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ]
     )));
 
     await queryInterface.bulkInsert('taxonomies', taxonomies);
