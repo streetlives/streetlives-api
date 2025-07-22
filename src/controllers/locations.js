@@ -59,6 +59,7 @@ const getInfoAssociations = {
     models.PhysicalAddress,
     models.AccessibilityForDisabilities,
     models.EventRelatedInfo,
+    models.Streetview,
   ],
 };
 
@@ -70,7 +71,7 @@ const getNeighborhoodAttributeSubquery = {
             SELECT neighborhood
             FROM nyc_neighborhood_geometries
             WHERE ST_Contains(
-              nyc_neighborhood_geometries.geometry, 
+              nyc_neighborhood_geometries.geometry,
               ST_SetSRID(position,4326)
             )
         )`),
