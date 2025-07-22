@@ -287,6 +287,7 @@ module.exports = {
       replacement_value: record.service_id,
       created_at: new Date(),
       updated_at: new Date(),
+      updated_by: '<System>',
     },
     {
       id: uuid(),
@@ -298,6 +299,7 @@ module.exports = {
       replacement_value: record.taxonomy_id,
       created_at: new Date(),
       updated_at: new Date(),
+      updated_by: '<System>',
     },
     ]);
 
@@ -322,7 +324,7 @@ module.exports = {
     });
     await queryInterface.bulkDelete('metadata', {
       resource_table: 'service_taxonomy',
-      replacement_value: { [Sequelize.Op.in]: [...taxonomyIds, ...serviceTaxonomyMappings.map(s => s.service_id)] },
+      updated_by: '<System>',
     });
   },
 };

@@ -37,6 +37,17 @@ module.exports = {
         created_at: new Date(),
         updated_at: new Date(),
       },
+      {
+        id: uuid(),
+        resource_id: record.id,
+        resource_table: 'taxonomies',
+        last_action_date: new Date(),
+        last_action_type: 'create',
+        field_name: 'parent_id',
+        replacement_value: record.parent_id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
     ]
     )));
 
