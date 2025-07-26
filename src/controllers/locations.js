@@ -59,7 +59,6 @@ const getInfoAssociations = {
     models.PhysicalAddress,
     models.AccessibilityForDisabilities,
     models.EventRelatedInfo,
-    models.Streetview,
   ],
 };
 
@@ -394,6 +393,7 @@ export default {
     const updateLocation = (location, updateParams, metadata) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
+      if (updateParams.streetview_url != null) { locationUpdate.streetview_url = updateParams.streetview_url; }
       if (updateParams.description != null) {
         locationUpdate.description = updateParams.description;
       }
