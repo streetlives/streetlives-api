@@ -131,7 +131,6 @@ const serviceTaxonomyMappings = [
   { service_id: '01c386c3-dddc-4a66-aa4e-3cb88bd72862', taxonomy_name: 'Employment' },
   { service_id: '12ad77a0-cdce-4a36-960f-7a89bbbcc0a8', taxonomy_name: 'Employment' },
   { service_id: '902bdf92-db20-469f-897f-e9be83efca35', taxonomy_name: 'Employment' },
-  { service_id: 'fdf7522c-b4b5-41ee-98a7-9d5c49b48409', taxonomy_name: 'Employment' },
   { service_id: 'd298df83-8597-40dd-b0c2-d202f933c061', taxonomy_name: 'Employment' },
   { service_id: 'e653681f-1277-4573-a60a-fb1d78e496d2', taxonomy_name: 'Employment' },
   { service_id: 'd818027a-4ecd-4746-b925-c00e13524be4', taxonomy_name: 'Employment' },
