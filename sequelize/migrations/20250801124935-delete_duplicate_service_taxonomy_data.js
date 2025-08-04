@@ -241,7 +241,7 @@ module.exports = {
       });
 
       if (serviceTaxonomy && serviceTaxonomy.taxonomy_id === healthTaxonomy.id) {
-        await destroyInstance(serviceTaxonomy);
+        await destroyInstance('System',serviceTaxonomy);
       }
     }
   },
