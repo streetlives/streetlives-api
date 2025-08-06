@@ -233,15 +233,21 @@ module.exports = {
       where: { name: 'Health' },
     });
 
-    for (const { service_id, taxonomy_name } of serviceTaxonomyMappings) {
-      const serviceTaxonomy = await models.ServiceTaxonomy.findOne({
+    const otherServicesTaxonomy = await models.Taxonomy.findOne({
+      where: { name: 'Other service' },
+    });
+
+    for (const { service_id } of serviceTaxonomyMappings) {
+      const serviceTaxonomies = await models.ServiceTaxonomy.findAll({
         where: {
           service_id,
         },
       });
 
-      if (serviceTaxonomy && serviceTaxonomy.taxonomy_id === healthTaxonomy.id) {
-        await destroyInstance('System',serviceTaxonomy);
+      for (const serviceTaxonomy of serviceTaxonomies) {
+        if (serviceTaxonomy.taxonomy_id === healthTaxonomy.id || serviceTaxonomy.taxonomy_id === otherServicesTaxonomy.id) {
+          await destroyInstance('System', serviceTaxonomy);
+        }
       }
     }
   },
