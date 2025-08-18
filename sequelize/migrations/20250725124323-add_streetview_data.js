@@ -226,6 +226,10 @@ const streetviews = [
     slug: 'morris-heights-health-center-mhhc-melrose',
     streetview_url: 'https://www.google.com/maps/@40.8221606,-73.9149594,3a,75y,296h,90t/data=!3m7!1e1!3m5!1sWgetCO3kV1aLU-WyhwOJAw!2e0!6shttps:%2F%2Fstreetviewpixels-pa.googleapis.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D0%26panoid%3DWgetCO3kV1aLU-WyhwOJAw%26yaw%3D296!7i16384!8i8192?entry=ttu&g_ep=EgoyMDI1MDcyMy4wIKXMDSoASAFQAw%3D%3D',
   },
+  {
+    slug: 'covenant-house-hells-kitchen',
+    streetview_url: 'https://www.google.com/maps/@40.7588027,-73.9954885,3a,75y,210.1h,95.41t/data=!3m7!1e1!3m5!1shNKJMNg_j0wAFR6tBt1s_g!2e0!6shttps:%2F%2Fstreetviewpixels-pa.googleapis.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D-5.413832753770677%26panoid%3DhNKJMNg_j0wAFR6tBt1s_g%26yaw%3D210.09500496606574!7i16384!8i8192?entry=ttu&g_ep=EgoyMDI1MDgwNS4wIKXMDSoASAFQAw%3D%3D',
+  },  
 ];
 
 /** @type {import('sequelize-cli').Migration} */
