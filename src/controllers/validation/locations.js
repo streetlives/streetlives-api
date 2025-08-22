@@ -139,6 +139,15 @@ export default {
     }).required(),
   },
 
+  updateStreetview: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      streetview_url: Joi.string(),
+    }).required(),
+  },
+
   suggestNew: {
     body: Joi.object().keys({
       name: Joi.string().required(),
