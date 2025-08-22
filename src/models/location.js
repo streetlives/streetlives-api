@@ -18,6 +18,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     slug: DataTypes.TEXT,
     last_validated_at: DataTypes.DATE,
     name_vector: DataTypes.TSVECTOR,
+    streetview_url: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
