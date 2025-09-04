@@ -8528,13 +8528,13 @@ const ageData = [
     population_served: null,
     service_id: 'a0508aa9-f9b3-4431-bde6-cb2d00b2e92c',
   },
-  {
-    age_max: null,
-    age_min: 21,
-    all_ages: false,
-    population_served: null,
-    service_id: '7475720-a1a4-437d-83a4-6ec8f5952bbd ',
-  },
+  // {
+  //   age_max: null,
+  //   age_min: 21,
+  //   all_ages: false,
+  //   population_served: null,
+  //   service_id: '7475720-a1a4-437d-83a4-6ec8f5952bbd', // this is an invalid uuid
+  // },
   {
     age_max: null,
     age_min: 21,
@@ -9333,13 +9333,13 @@ const ageData = [
     population_served: null,
     service_id: '3142db76-9c24-46cd-8ae5-6b2993d0e9e6',
   },
-  {
-    age_max: 29,
-    age_min: 13,
-    all_ages: false,
-    population_served: null,
-    service_id: '0fd519a-6e7f-45d2-9af9-f96bc1797ce5/',
-  },
+  // {
+  //   age_max: 29,
+  //   age_min: 13,
+  //   all_ages: false,
+  //   population_served: null,
+  //   service_id: '0fd519a-6e7f-45d2-9af9-f96bc1797ce5', // Invalid uuid
+  // },
   {
     age_max: null,
     age_min: 14,
@@ -11727,13 +11727,13 @@ const ageData = [
     population_served: null,
     service_id: 'e232b28a-cacc-42ed-87b2-8a64fc4937ef',
   },
-  {
-    age_max: 23,
-    age_min: 18,
-    all_ages: false,
-    population_served: null,
-    service_id: '28ab50e-9c14-414e-923c-0cd08b86742d/',
-  },
+  // {
+  //   age_max: 23,
+  //   age_min: 18,
+  //   all_ages: false,
+  //   population_served: null,
+  //   service_id: '28ab50e-9c14-414e-923c-0cd08b86742d/', // appears to be an invalid UUID
+  // },
   {
     age_max: null,
     age_min: 18,
@@ -13823,6 +13823,16 @@ module.exports = {
     });
 
     for (const age of ageData) {
+      const service = await models.Service.findByPk(age.service_id);
+      if (!service) {
+        // Skip if the service does not exist
+        // This is to handle cases where the service was deleted after the data was exported
+        // but before this migration is run
+        // This is expected to be rare
+        // so we are okay with just skipping it
+        // and not logging it
+        continue;
+      }
       const eligibilityParamValue = await models.Eligibility.findOne({
         where: {
           service_id: age.service_id,
