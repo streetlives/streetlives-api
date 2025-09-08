@@ -69,6 +69,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     Location.hasMany(models.EventRelatedInfo, { foreignKey: 'location_id' });
     Location.hasMany(models.Comment, { foreignKey: 'location_id' });
     Location.hasMany(models.ErrorReport, { foreignKey: 'location_id' });
+    Location.hasMany(models.LocationSlugRedirect, { foreignKey: 'location_id' });
 
     // Can't just set defaultScope on the initial model definition:
     // https://github.com/sequelize/sequelize/issues/6245.
