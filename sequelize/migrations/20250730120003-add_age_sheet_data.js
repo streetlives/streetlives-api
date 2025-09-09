@@ -13841,23 +13841,26 @@ module.exports = {
       });
 
       if (eligibilityParamValue) {
-        await updateInstance(
-          '<System>',
-          eligibilityParamValue,
-          {
-            eligible_values: {
-              age_max: age.age_max,
-              age_min: age.age_min,
-              all_ages: age.all_ages,
-              population_served: age.population_served,
+        const {age_max, age_min, all_ages, population_served} = eligibilityParamValue.eligible_values
+        if (age_max !== age.age_max || age_min !== age.age_min || all_ages !== age.all_ages, population_served !== age.population_served) {
+          await updateInstance(
+            '<System>',
+            eligibilityParamValue,
+            {
+              eligible_values: {
+                age_max: age.age_max,
+                age_min: age.age_min,
+                all_ages: age.all_ages,
+                population_served: age.population_served,
+              },
             },
-          },
-          {
-            metadata: {
-              source: 'migration',
+            {
+              metadata: {
+                source: 'migration',
+              },
             },
-          },
-        );
+          );
+      }
       } else {
         await createInstance(
           '<System>',
