@@ -70,7 +70,7 @@ const getNeighborhoodAttributeSubquery = {
             SELECT neighborhood
             FROM nyc_neighborhood_geometries
             WHERE ST_Contains(
-              nyc_neighborhood_geometries.geometry, 
+              nyc_neighborhood_geometries.geometry,
               ST_SetSRID(position,4326)
             )
         )`),
@@ -319,25 +319,27 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      const locationSlugs = await models.LocationSlugRedirects.findAll({
+      const locationSlugs = await models.LocationSlugRedirect.findAll({
         where: {
           slug: req.params.slug,
         },
-        include: [
-          {
-            model: models.Location,
-          },
-        ],
+        attributes: ['slug', 'location_id'],
       });
 
       if (locationSlugs.length) {
-        const locationSlug = locationSlugs[0];
+
+        const location = await models.Location.findByPk(locationSlugs[0].location_id);
+        if (!location) {
+          res.status(404).send({ error: 'Location not found' });
+          return;
+        }
+
         res.send({
-          id: locationSlug.location_id,
-          slug: locationSlug.Location.slug,
+          id: location.id,
+          slug: location.slug,
         });
       } else {
-        res.status(404).send({ status: 404 });
+        res.status(404).send({ error: 'Location slug not found' });
       }
     } catch (err) {
       next(err);
@@ -393,6 +395,7 @@ export default {
     const updateLocation = (location, updateParams, metadata) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
+      if (updateParams.streetview_url != null) { locationUpdate.streetview_url = updateParams.streetview_url; }
       if (updateParams.description != null) {
         locationUpdate.description = updateParams.description;
       }
