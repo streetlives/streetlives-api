@@ -13828,7 +13828,7 @@ module.exports = {
 
       if (eligibilityParamValue) {
         const {age_max, age_min, all_ages, population_served} = Array.isArray(eligibilityParamValue.eligible_values) ? eligibilityParamValue.eligible_values[0] : eligibilityParamValue.eligible_values;
-        if (age_max !== age.age_max || age_min !== age.age_min || all_ages !== age.all_ages, population_served !== age.population_served) {
+        if (age_max !== age.age_max || age_min !== age.age_min || all_ages !== age.all_ages || population_served !== age.population_served) {
           await updateInstance(
             '<System>',
             eligibilityParamValue,
@@ -13859,12 +13859,12 @@ module.exports = {
           {
             service_id: age.service_id,
             parameter_id: eligibilityParam.id,
-            eligible_values: {
+            eligible_values: [{
               age_max: age.age_max,
               age_min: age.age_min,
               all_ages: age.all_ages,
               population_served: age.population_served,
-            },
+            }],
           },
           {
             metadata: {
