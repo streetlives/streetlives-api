@@ -7630,13 +7630,6 @@ const ageData = [
     age_min: null,
     all_ages: true,
     population_served: null,
-    service_id: '188ec1ee-4334-4877-80a8-1dca27cfc1bf',
-  },
-  {
-    age_max: null,
-    age_min: null,
-    all_ages: true,
-    population_served: null,
     service_id: 'c21b2d13-b92c-4534-a644-78a8bee0b750',
   },
   {
@@ -12929,13 +12922,6 @@ const ageData = [
     age_min: null,
     all_ages: true,
     population_served: null,
-    service_id: 'dc2e434a-9acf-41bd-9553-903cb004490f',
-  },
-  {
-    age_max: null,
-    age_min: null,
-    all_ages: true,
-    population_served: null,
     service_id: 'e6f29dc7-1d23-42e8-9aaf-c716aa82df36',
   },
   {
@@ -13841,18 +13827,18 @@ module.exports = {
       });
 
       if (eligibilityParamValue) {
-        const {age_max, age_min, all_ages, population_served} = eligibilityParamValue.eligible_values
+        const {age_max, age_min, all_ages, population_served} = Array.isArray(eligibilityParamValue.eligible_values) ? eligibilityParamValue.eligible_values[0] : eligibilityParamValue.eligible_values;
         if (age_max !== age.age_max || age_min !== age.age_min || all_ages !== age.all_ages, population_served !== age.population_served) {
           await updateInstance(
             '<System>',
             eligibilityParamValue,
             {
-              eligible_values: {
+              eligible_values: [{
                 age_max: age.age_max,
                 age_min: age.age_min,
                 all_ages: age.all_ages,
                 population_served: age.population_served,
-              },
+              }],
             },
             {
               metadata: {
@@ -13860,7 +13846,9 @@ module.exports = {
               },
             },
           );
-      }
+        } else {
+          console.log('skipping record', age.service_id);
+        }
       } else {
         await createInstance(
           '<System>',
