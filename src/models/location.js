@@ -77,32 +77,6 @@ module.exports = (sequelize, DataTypes, Op) => {
     }, { override: true });
   };
 
-  const getCombinedFuzzySearchCondition = (col, searchString) => {
-    // Break the search string into individual words (tokens)
-    const searchTokens = searchString.split(' ').map(token => token.toLowerCase());
-    // Create a condition that checks phonetic similarity and edit distance for each token
-    const conditions = searchTokens.map(token =>
-      sequelize.or(
-        // Soundex-based condition (phonetic similarity)
-        sequelize.where(
-          sequelize.fn(
-            'difference',
-            sequelize.fn('soundex', sequelize.col(col)),
-            sequelize.fn('soundex', token),
-          ),
-          4, // Maximum similarity score for Soundex
-        ),
-        // Levenshtein-based condition (edit distance <= 2)
-        sequelize.where(
-          sequelize.fn('levenshtein', sequelize.fn('lower', sequelize.col(col)), token),
-          { [Op.lte]: 2 }, // Allowing for up to 2-character differences
-        ),
-        // Like operator for partial matches
-        sequelize.where(sequelize.fn('lower', sequelize.col(col)), { [Op.like]: `%${token}%` }),
-      ));
-    // Combine all conditions into one using Sequelize's `or` and `and`
-    return sequelize.and(...conditions);
-  };
 
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
@@ -387,9 +361,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       });
     }
 
-    async function findWithCondition(condition) {
-      return findAll(whereConditions.concat(condition));
-    }
 
     let locations;
     if (searchString) {
@@ -403,45 +374,48 @@ module.exports = (sequelize, DataTypes, Op) => {
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
 
-      locations = [
-        await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition }),
-        await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Organization.name$': exactMatchCondition }),
-        await findWithCondition({ '$Location.name$': exactMatchCondition }),
-        await findWithCondition({ '$Services.name$': exactMatchCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': exactMatchCondition }),
-
-        // prefix match
-        await findWithCondition({ '$Organization.name$': prefixCondition }),
-        await findWithCondition({ '$Location.name$': prefixCondition }),
-        await findWithCondition({ '$Services.name$': prefixCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
-
-        // full-text search
-        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition({
-          '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
-        }),
-
-        await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
-        await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
-        await findWithCondition(getCombinedFuzzySearchCondition('Services.name', searchString)),
-        await findWithCondition(getCombinedFuzzySearchCondition(
-          'Services->Taxonomies.name',
-          searchString,
-        )),
-        // full text search on the description
-        await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
-
-      ].reduce((a, b) => a.concat(b));
-    } else {
-      locations = await findAll(whereConditions);
+      whereConditions.push({
+        [Op.or]: [
+          sequelize.where(
+            sequelize.fn(
+              "levenshtein",
+              sequelize.fn("lower", sequelize.col("Organization.name")),
+              searchString.toLowerCase()
+            ),
+            { [Op.lte]: 2 } 
+          ),
+          sequelize.where(
+            sequelize.fn(
+              "levenshtein",
+              sequelize.fn("lower", sequelize.col("Location.name")),
+              searchString.toLowerCase()
+            ),
+            { [Op.lte]: 2 } 
+          ),
+          { '$PhysicalAddresses.postal_code$': exactExactMatchCondition },
+          { '$Organization.name$': exactExactMatchCondition },
+          { '$Location.name$': exactExactMatchCondition },
+          { '$Services.name$': exactExactMatchCondition },
+          { '$Services.Taxonomies.name$': exactExactMatchCondition },
+          { '$Organization.name$': exactMatchCondition },
+          { '$Location.name$': exactMatchCondition },
+          { '$Services.name$': exactMatchCondition },
+          { '$Services.Taxonomies.name$': exactMatchCondition },
+          { '$Organization.name$': prefixCondition },
+          { '$Location.name$': prefixCondition },
+          { '$Services.name$': prefixCondition },
+          { '$Services.Taxonomies.name$': prefixCondition },
+          { '$Organization.name_vector$': websearchToTsqueryCondition },
+          { '$Location.name_vector$': websearchToTsqueryCondition },
+          { '$Services.name_vector$': websearchToTsqueryCondition },
+          {'$Services.Taxonomies.name_vector$': websearchToTsqueryCondition},
+          { '$Services.description_vector$': websearchToTsqueryCondition }
+        ]
+      })
     }
+      console.log('where conditions');
+      console.log(whereConditions);
+      locations = await findAll(whereConditions);
 
     return locations.map(location => location.id);
   };
