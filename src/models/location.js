@@ -413,9 +413,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         ]
       })
     }
-      console.log('where conditions');
-      console.log(whereConditions);
-      locations = await findAll(whereConditions);
+
+    locations = await findAll(whereConditions);
 
     return locations.map(location => location.id);
   };
