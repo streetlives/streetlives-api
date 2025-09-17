@@ -327,6 +327,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         include: [
           sequelize.models.Organization,
           sequelize.models.PhysicalAddress,
+          sequelize.models.Phone,
           {
             model: sequelize.models.Service,
             required: true,
@@ -361,55 +362,24 @@ module.exports = (sequelize, DataTypes, Op) => {
       });
     }
 
-
     let locations;
     if (searchString) {
-      // whereConditions.push(getZipcodesCondition([searchString]));
 
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
-      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
-      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
 
       whereConditions.push({
         [Op.or]: [
-          sequelize.where(
-            sequelize.fn(
-              "levenshtein",
-              sequelize.fn("lower", sequelize.col("Organization.name")),
-              searchString.toLowerCase()
-            ),
-            { [Op.lte]: 2 } 
-          ),
-          sequelize.where(
-            sequelize.fn(
-              "levenshtein",
-              sequelize.fn("lower", sequelize.col("Location.name")),
-              searchString.toLowerCase()
-            ),
-            { [Op.lte]: 2 } 
-          ),
-          { '$PhysicalAddresses.postal_code$': exactExactMatchCondition },
-          { '$Organization.name$': exactExactMatchCondition },
-          { '$Location.name$': exactExactMatchCondition },
-          { '$Services.name$': exactExactMatchCondition },
-          { '$Services.Taxonomies.name$': exactExactMatchCondition },
-          { '$Organization.name$': exactMatchCondition },
-          { '$Location.name$': exactMatchCondition },
-          { '$Services.name$': exactMatchCondition },
-          { '$Services.Taxonomies.name$': exactMatchCondition },
-          { '$Organization.name$': prefixCondition },
-          { '$Location.name$': prefixCondition },
-          { '$Services.name$': prefixCondition },
-          { '$Services.Taxonomies.name$': prefixCondition },
-          { '$Organization.name_vector$': websearchToTsqueryCondition },
-          { '$Location.name_vector$': websearchToTsqueryCondition },
-          { '$Services.name_vector$': websearchToTsqueryCondition },
+          {'$PhysicalAddresses.postal_code$': exactExactMatchCondition},
+          {'$Phones.number$': exactExactMatchCondition},
+          {'$Organization.name_vector$': websearchToTsqueryCondition},
+          {'$Location.name_vector$': websearchToTsqueryCondition},
+          {'$Services.name_vector$': websearchToTsqueryCondition},
           {'$Services.Taxonomies.name_vector$': websearchToTsqueryCondition},
-          { '$Services.description_vector$': websearchToTsqueryCondition }
+          {'$Services.description_vector$': websearchToTsqueryCondition}
         ]
       })
     }
