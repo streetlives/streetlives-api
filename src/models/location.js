@@ -370,11 +370,27 @@ module.exports = (sequelize, DataTypes, Op) => {
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
+      const normalizedNumber = searchString.replace(/[^0-9]/g, "");
+
+      function parseZipCodes(searchString) {
+          return searchString
+            .split(/[,\s]+/) // split by comma or space
+            .map(z => z.trim())
+            .filter(z => z.length > 0);
+      }
+
+      const zipCodeCondition = {[Op.in]: parseZipCodes(searchString)} 
+
 
       whereConditions.push({
         [Op.or]: [
-          {'$PhysicalAddresses.postal_code$': exactExactMatchCondition},
-          {'$Phones.number$': exactExactMatchCondition},
+          {'$PhysicalAddresses.postal_code$': zipCodeCondition},
+          sequelize.where(
+            sequelize.fn("regexp_replace", sequelize.col("Phones.number"), "[^0-9]", "", "g"),
+            {
+              [Op.like]: `%${normalizedNumber}%`
+            }
+          ),
           {'$Organization.name_vector$': websearchToTsqueryCondition},
           {'$Location.name_vector$': websearchToTsqueryCondition},
           {'$Services.name_vector$': websearchToTsqueryCondition},
