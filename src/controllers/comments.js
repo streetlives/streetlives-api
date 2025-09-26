@@ -305,15 +305,18 @@ export default {
 
       await updateInstance(req.user, comment, { exclude });
 
-      try {
-        console.log('Regenerating highlights...');
-        await regenerateHighlightsForLocation(comment.location_id);
-        console.log('Highlight regerated successfully');
-      } catch (error) {
-        console.log(error);
-      }
-
       res.sendStatus(204);
+
+      process.nextTick(async () => {
+        try {
+          console.log('Regenerating highlights...');
+          await regenerateHighlightsForLocation(comment.location_id);
+          console.log('Highlight regerated successfully');
+        } catch (error) {
+          console.log(error);
+        }
+      });
+
     } catch (err) {
       next(err);
     }
