@@ -1886,7 +1886,7 @@ function normalizeComment(comment) {
       if (key in parsedComment && parsedComment[key]) {
         toReturn.push({
           id: `${comment.id}#${key}`,
-          comment: parsedComment.whatWentWell,
+          comment: parsedComment[key],
         });
       }
     }
@@ -1930,13 +1930,14 @@ function filterOutCommentsWithoutExcerpts(excerpt) {
 
 const getCommentsHighlights = async (comments) => {
   const commentContents = comments.flatMap(normalizeComment);
+  // console.log('commentContents', JSON.stringify(commentContents, null, 2));
   const commentLookupMap = Object.fromEntries(commentContents.map(({ id, comment }) => [id, comment]));
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5',
       messages: [
-        { role: 'system', content: defaultPrompt },
-        { role: 'user', content: renderPrompt(commentContents) },
+        { role: "system", content: defaultPrompt },
+        { role: "user", content: renderPrompt(commentContents) },
       ],
       response_format: responseJsonSchema,
     });
@@ -1944,6 +1945,7 @@ const getCommentsHighlights = async (comments) => {
     // use the new id property to refer back to the original comment and lookup the comment text verbatim
     // parse the results back out
     const parsedResponse = JSON.parse(completion.choices[0].message.content);
+    console.log('parsedResponse', JSON.stringify(parsedResponse, null, 2));
     const validatedOutput = Object.fromEntries(Object.entries(parsedResponse).map(([k, v]) => [
       k,
       v
@@ -1954,6 +1956,7 @@ const getCommentsHighlights = async (comments) => {
         ))
         .filter(filterOutCommentsWithoutExcerpts),
     ]));
+    console.log('validatedOutput', JSON.stringify(validatedOutput, null, 2));
     return validatedOutput;
   } catch (err) {
     console.log(err);
