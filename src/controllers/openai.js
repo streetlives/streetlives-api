@@ -1933,14 +1933,16 @@ const getCommentsHighlights = async (comments) => {
   // console.log('commentContents', JSON.stringify(commentContents, null, 2));
   const commentLookupMap = Object.fromEntries(commentContents.map(({ id, comment }) => [id, comment]));
   try {
+    const tic = new Date();
     const completion = await openai.chat.completions.create({
       model: 'gpt-5',
       messages: [
-        { role: "system", content: defaultPrompt },
-        { role: "user", content: renderPrompt(commentContents) },
+        { role: 'system', content: defaultPrompt },
+        { role: 'user', content: renderPrompt(commentContents) },
       ],
       response_format: responseJsonSchema,
     });
+    console.log('completion took', (new Date()) - tic, 'ms');
 
     // use the new id property to refer back to the original comment and lookup the comment text verbatim
     // parse the results back out
