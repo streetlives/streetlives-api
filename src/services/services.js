@@ -263,6 +263,19 @@ export const updateService = (
   if (area) {
     updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
   }
+ 
+  if(whoDoesItServe) {
+
+    updatePromises.push(updateEligibilityParam(
+      service,
+      'age',
+      {
+        eligible_values: whoDoesItServe,
+        description: ''
+      },
+      { t, user, metadata },
+    ));
+  }
 
   serviceTaxonomySpecificAttributeNames.forEach((attr) => {
     if (attr in otherUpdateProps) {
