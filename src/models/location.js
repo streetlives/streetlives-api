@@ -385,12 +385,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push({
         [Op.or]: [
           {'$PhysicalAddresses.postal_code$': zipCodeCondition},
-          sequelize.where(
-            sequelize.fn("regexp_replace", sequelize.col("Phones.number"), "[^0-9]", "", "g"),
-            {
-              [Op.like]: `%${normalizedNumber}%`
-            }
-          ),
+          // sequelize.where(
+          //   sequelize.fn("regexp_replace", sequelize.col("Phones.number"), "[^0-9]", "", "g"),
+          //   {
+          //     [Op.like]: `%${normalizedNumber}%`
+          //   }
+          // ),
           {'$Organization.name_vector$': websearchToTsqueryCondition},
           {'$Location.name_vector$': websearchToTsqueryCondition},
           {'$Services.name_vector$': websearchToTsqueryCondition},
