@@ -224,6 +224,16 @@ module.exports = (sequelize, DataTypes, Op) => {
     ]);
   };
 
+  function getPhoneNumberCondition(text) {
+      const digits = text.replace(/[^0-9]/g, "");
+      if (!digits) return null;
+
+      return sequelize.where(sequelize.fn("regexp_replace", sequelize.col('Phones.number'), "[^0-9]", "", "g"), {
+        [Op.like]: `%${digits}%`
+      });
+    }
+
+
   const getRequiredDocumentsCondition = (documents) => {
     const serviceRequiredDocuments = sequelize.cast(
       sequelize.fn(
@@ -369,8 +379,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
+
       const exactExactMatchCondition = { [Op.iLike]: searchString };
-      const normalizedNumber = searchString.replace(/[^0-9]/g, "");
 
       function parseZipCodes(searchString) {
           return searchString
@@ -381,16 +391,10 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       const zipCodeCondition = {[Op.in]: parseZipCodes(searchString)} 
 
-
       whereConditions.push({
         [Op.or]: [
           {'$PhysicalAddresses.postal_code$': zipCodeCondition},
-          // sequelize.where(
-          //   sequelize.fn("regexp_replace", sequelize.col("Phones.number"), "[^0-9]", "", "g"),
-          //   {
-          //     [Op.like]: `%${normalizedNumber}%`
-          //   }
-          // ),
+          getPhoneNumberCondition(searchString),
           {'$Organization.name_vector$': websearchToTsqueryCondition},
           {'$Location.name_vector$': websearchToTsqueryCondition},
           {'$Services.name_vector$': websearchToTsqueryCondition},
