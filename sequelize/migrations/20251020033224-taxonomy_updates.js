@@ -201,7 +201,7 @@ const taxonomies = [
     ],
   },
   {
-    name: "Transitional Independent Living",
+    name: "Transitional Independent Living (TIL)",
     parent_name: "Shelter",
     parent_id: "228d5932-634e-48b4-a2bd-d5f0a74730c7",
     services: [
@@ -228,15 +228,6 @@ const taxonomies = [
     services: [
       "bc2056c2-c14e-4a58-a351-4cc37eb861a0",
       "9e821bc0-0a9f-43ca-b2b6-4628e81ca2fc",
-    ],
-  },
-  {
-    name: "Transitional Independent Living",
-    parent_name: "Shelter",
-    parent_id: "228d5932-634e-48b4-a2bd-d5f0a74730c7",
-    services: [
-      "dd733e25-1442-4306-b745-db3c2dc9b2da",
-      "e943b886-1005-49a5-9e71-3825ac87877e",
     ],
   },
   {
@@ -275,13 +266,13 @@ const taxonomies = [
     name: "Warming Center",
     parent_name: "Shelter",
     parent_id: "228d5932-634e-48b4-a2bd-d5f0a74730c7",
-    services: ['d024c089-4ab5-4428-8d04-5adbe8d02e6d'],
+    services: ["d024c089-4ab5-4428-8d04-5adbe8d02e6d"],
   },
   {
     name: "Veterans",
     parent_name: "Shelter",
     parent_id: "228d5932-634e-48b4-a2bd-d5f0a74730c7",
-    services: ['f467f727-6e59-4e32-bbbb-3edd66ab6c07'],
+    services: ["f467f727-6e59-4e32-bbbb-3edd66ab6c07"],
   },
 ];
 
@@ -300,11 +291,24 @@ module.exports = {
         }
       );
 
-      taxonomy.services.forEach(async (serviceId) => {
+      for (const serviceId of taxonomy.services) {
         const service = await models.Service.findByPk(serviceId);
         if (!service) return;
 
-        // NOTE: We need to also check if its already associated to other taxonomy. we probably want to delete this record. for now I'm skipping that.
+        const serviceTaxonomy = await models.ServiceTaxonomy.findOne({
+          where: {
+            service_id: serviceId,
+          },
+        });
+
+        if (serviceTaxonomy) {
+          await destroyInstance("System", serviceTaxonomy, {
+            metadata: {
+              source: "migration",
+            },
+          });
+        }
+
 
         await createInstance(
           "System",
@@ -316,7 +320,7 @@ module.exports = {
             },
           }
         );
-      });
+      }
     }
   },
 
