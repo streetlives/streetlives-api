@@ -293,7 +293,7 @@ module.exports = {
 
       for (const serviceId of taxonomy.services) {
         const service = await models.Service.findByPk(serviceId);
-        if (!service) return;
+        if (!service) continue;
 
         const serviceTaxonomy = await models.ServiceTaxonomy.findOne({
           where: {
