@@ -78,7 +78,6 @@ module.exports = (sequelize, DataTypes, Op) => {
     }, { override: true });
   };
 
-
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
   });
@@ -132,6 +131,55 @@ module.exports = (sequelize, DataTypes, Op) => {
       },
     },
   );
+
+  const asArray = (value) => {
+    if (!value) {
+      return [];
+    }
+
+    return Array.isArray(value) ? value : [value];
+  };
+
+  const buildSearchOrdering = (searchString) => {
+    const escapedSearch = sequelize.escape(searchString);
+    const searchQuery = sequelize.fn('websearch_to_tsquery', 'english', searchString);
+
+    const exactMatchPriority = [
+      sequelize.literal(`
+        CASE
+          WHEN lower("Location"."name") = lower(${escapedSearch}) THEN 0
+          WHEN lower("Organization"."name") = lower(${escapedSearch}) THEN 0
+          ELSE 1
+        END
+      `),
+      'search_exact_match_priority',
+    ];
+
+    const locationRank = sequelize.fn(
+      'COALESCE',
+      sequelize.fn('ts_rank', sequelize.col('"Location"."name_vector"'), searchQuery),
+      0,
+    );
+    const organizationRank = sequelize.fn(
+      'COALESCE',
+      sequelize.fn('ts_rank', sequelize.col('"Organization"."name_vector"'), searchQuery),
+      0,
+    );
+
+    const relevanceRank = [
+      sequelize.fn('GREATEST', locationRank, organizationRank),
+      'search_rank',
+    ];
+
+    return {
+      attributes: [exactMatchPriority, relevanceRank],
+      order: [
+        [sequelize.col('search_exact_match_priority'), 'ASC'],
+        [sequelize.col('search_rank'), 'DESC'],
+        [sequelize.col('Location.id'), 'ASC'],
+      ],
+    };
+  };
 
   const getOccasionCondition = occasion => ({
     '$Services.HolidaySchedules.occasion$': occasion,
@@ -225,15 +273,23 @@ module.exports = (sequelize, DataTypes, Op) => {
     ]);
   };
 
-  function getPhoneNumberCondition(text) {
-      const digits = text.replace(/[^0-9]/g, "");
-      if (!digits) return null;
-
-      return sequelize.where(sequelize.fn("regexp_replace", sequelize.col('Phones.number'), "[^0-9]", "", "g"), {
-        [Op.like]: `%${digits}%`
-      });
+  const getPhoneNumberCondition = (text) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    if (!digits) {
+      return null;
     }
 
+    return sequelize.where(
+      sequelize.fn(
+        'regexp_replace',
+        sequelize.col('Phones.number'),
+        '[^0-9]',
+        '',
+        'g',
+      ),
+      { [Op.like]: `%${digits}%` },
+    );
+  };
 
   const getRequiredDocumentsCondition = (documents) => {
     const serviceRequiredDocuments = sequelize.cast(
@@ -259,10 +315,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationIds = async (filterParameters,
+  Location.findUniqueLocationIds = async (
+    filterParameters,
     additionalConditions,
     queryProps = {},
-    selectedAttributeForOrderBy) => {
+    selectedAttributeForOrderBy,
+  ) => {
     const {
       searchString,
       organizationName,
@@ -279,6 +337,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     const areRequiredDocsSpecified = documents && Object.keys(documents).length;
     const areTaxonomyAttributesSpecified =
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
+
+    let scopedQueryProps = { ...queryProps };
+    let scopedSelectedAttributeForOrderBy = selectedAttributeForOrderBy;
 
     const whereConditions = [];
     if (organizationName) {
@@ -317,13 +378,15 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
 
     async function findAll(_whereConditions) {
+      const selectedAttributes = asArray(scopedSelectedAttributeForOrderBy);
+
       return Location.findAll({
-        ...queryProps,
+        ...scopedQueryProps,
         where: sequelize.and(..._whereConditions, ...additionalConditions),
         attributes: [
           sequelize.fn('DISTINCT', sequelize.col('Location.id')),
           // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-          ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+          ...selectedAttributes,
         ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -373,39 +436,44 @@ module.exports = (sequelize, DataTypes, Op) => {
       });
     }
 
-    let locations;
     if (searchString) {
-
       const websearchToTsqueryCondition = {
-        [Op.match]:
-        sequelize.fn('websearch_to_tsquery', 'english', searchString),
+        [Op.match]: sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
 
-      const exactExactMatchCondition = { [Op.iLike]: searchString };
+      const parseZipCodes = text => text
+        .split(/[,\s]+/)
+        .map(zip => zip.trim())
+        .filter(zip => zip.length > 0);
 
-      function parseZipCodes(searchString) {
-          return searchString
-            .split(/[,\s]+/) // split by comma or space
-            .map(z => z.trim())
-            .filter(z => z.length > 0);
+      const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
+
+      const { attributes: searchOrderAttributes, order: searchOrder } =
+        buildSearchOrdering(searchString);
+
+      scopedQueryProps = { ...scopedQueryProps, order: searchOrder };
+      scopedSelectedAttributeForOrderBy = searchOrderAttributes;
+
+      const phoneCondition = getPhoneNumberCondition(searchString);
+      const searchConditions = [
+        { '$PhysicalAddresses.postal_code$': zipCodeCondition },
+        { '$Organization.name_vector$': websearchToTsqueryCondition },
+        { '$Location.name_vector$': websearchToTsqueryCondition },
+        { '$Services.name_vector$': websearchToTsqueryCondition },
+        { '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition },
+        { '$Services.description_vector$': websearchToTsqueryCondition },
+      ];
+
+      if (phoneCondition) {
+        searchConditions.splice(1, 0, phoneCondition);
       }
 
-      const zipCodeCondition = {[Op.in]: parseZipCodes(searchString)} 
-
       whereConditions.push({
-        [Op.or]: [
-          {'$PhysicalAddresses.postal_code$': zipCodeCondition},
-          getPhoneNumberCondition(searchString),
-          {'$Organization.name_vector$': websearchToTsqueryCondition},
-          {'$Location.name_vector$': websearchToTsqueryCondition},
-          {'$Services.name_vector$': websearchToTsqueryCondition},
-          {'$Services.Taxonomies.name_vector$': websearchToTsqueryCondition},
-          {'$Services.description_vector$': websearchToTsqueryCondition}
-        ]
-      })
+        [Op.or]: searchConditions,
+      });
     }
 
-    locations = await findAll(whereConditions);
+    const locations = await findAll(whereConditions);
 
     return locations.map(location => location.id);
   };
@@ -443,9 +511,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
       selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
     } else if (filterParameters.searchString) {
-      // if search string is specified, use default sort order
-      order = null;
-      selectedAttributeForOrderBy = null;
+      const { attributes: searchOrderAttributes, order: searchOrder } =
+        buildSearchOrdering(filterParameters.searchString);
+
+      order = searchOrder;
+      selectedAttributeForOrderBy = searchOrderAttributes;
     } else if (!sortBy || sortBy === SORT_ORDER.MOST_RECENTLY_VALIDATED) {
       order = [['last_validated_at', 'DESC']];
       selectedAttributeForOrderBy = 'last_validated_at';
@@ -515,9 +585,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       sequelize.models.PhysicalAddress,
     ];
 
+    const selectedOrderAttributes = asArray(selectedAttributeForOrderBy);
+
     const locationsWithAssociations = await Location.findAll({
       attributes: {
-        include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+        include: selectedOrderAttributes.length ? selectedOrderAttributes : undefined,
       },
       where: { id: { [Op.in]: locationIds } },
       include: additionalLocationData,
