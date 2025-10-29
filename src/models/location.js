@@ -140,20 +140,17 @@ module.exports = (sequelize, DataTypes, Op) => {
     return Array.isArray(value) ? value : [value];
   };
 
-  const buildSearchOrdering = (searchString) => {
+  const buildSearchOrdering = (searchString, { forDistinctQuery = false } = {}) => {
     const escapedSearch = sequelize.escape(searchString);
     const searchQuery = sequelize.fn('websearch_to_tsquery', 'english', searchString);
 
-    const exactMatchPriority = [
-      sequelize.literal(`
-        CASE
-          WHEN lower("Location"."name") = lower(${escapedSearch}) THEN 0
-          WHEN lower("Organization"."name") = lower(${escapedSearch}) THEN 0
-          ELSE 1
-        END
-      `),
-      'search_exact_match_priority',
-    ];
+    const exactMatchLiteral = sequelize.literal(`
+      CASE
+        WHEN lower("Location"."name") = lower(${escapedSearch}) THEN 0
+        WHEN lower("Organization"."name") = lower(${escapedSearch}) THEN 0
+        ELSE 1
+      END
+    `);
 
     const locationRank = sequelize.fn(
       'COALESCE',
@@ -166,9 +163,22 @@ module.exports = (sequelize, DataTypes, Op) => {
       0,
     );
 
-    const relevanceRank = [
-      sequelize.fn('GREATEST', locationRank, organizationRank),
+    const relevanceExpression = sequelize.fn('GREATEST', locationRank, organizationRank);
+
+    const relevanceRank = forDistinctQuery ? [
+      sequelize.fn('MAX', relevanceExpression),
       'search_rank',
+    ] : [
+      relevanceExpression,
+      'search_rank',
+    ];
+
+    const exactMatchPriority = forDistinctQuery ? [
+      sequelize.fn('MIN', exactMatchLiteral),
+      'search_exact_match_priority',
+    ] : [
+      exactMatchLiteral,
+      'search_exact_match_priority',
     ];
 
     return {
@@ -449,7 +459,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
 
       const { attributes: searchOrderAttributes, order: searchOrder } =
-        buildSearchOrdering(searchString);
+        buildSearchOrdering(searchString, { forDistinctQuery: true });
 
       scopedQueryProps = { ...scopedQueryProps, order: searchOrder };
       scopedSelectedAttributeForOrderBy = searchOrderAttributes;
