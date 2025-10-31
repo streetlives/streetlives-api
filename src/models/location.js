@@ -148,6 +148,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       CASE
         WHEN lower("Location"."name") = lower(${escapedSearch}) THEN 0
         WHEN lower("Organization"."name") = lower(${escapedSearch}) THEN 0
+        WHEN lower("Services"."name") = lower(${escapedSearch}) THEN 0
         ELSE 1
       END
     `);
@@ -162,8 +163,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       sequelize.fn('ts_rank', sequelize.col('"Organization"."name_vector"'), searchQuery),
       0,
     );
+    const servicesRank = sequelize.fn(
+      'COALESCE',
+      sequelize.fn('ts_rank', sequelize.col('"Services"."name_vector"'), searchQuery),
+      0,
+    );
 
-    const relevanceExpression = sequelize.fn('GREATEST', locationRank, organizationRank);
+    const relevanceExpression = sequelize.fn('GREATEST', locationRank, organizationRank, servicesRank);
 
     const relevanceRank = forDistinctQuery ? [
       sequelize.fn('MAX', relevanceExpression),
