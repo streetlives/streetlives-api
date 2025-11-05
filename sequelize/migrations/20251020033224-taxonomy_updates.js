@@ -124,8 +124,8 @@ const taxonomies = [
   },
   {
     name: "Drop-in Center",
-    parent_name: "Personal Care",
-    parent_id: "238a2f38-1ec9-478f-9066-fcef03feeb98",
+    parent_name: "Shelter",
+    parent_id: "228d5932-634e-48b4-a2bd-d5f0a74730c7",
     services: ["15a5cb70-2a08-4065-af88-5318aaf5c41c"],
   },
   {
@@ -158,8 +158,8 @@ const taxonomies = [
   },
   {
     name: "Support Groups",
-    parent_name: "Personal Care",
-    parent_id: "238a2f38-1ec9-478f-9066-fcef03feeb98",
+    parent_name: "Health",
+    parent_id: "e838dbf0-21f8-47c2-b17d-57543e8dbffb",
     services: [
       "064c76c0-02d8-4f3e-bfbc-89c61e015ae3",
       "1f2e084f-cc12-48fa-9f17-8fd14a03428c",
