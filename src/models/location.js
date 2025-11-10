@@ -137,7 +137,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       return [];
     }
 
-    return Array.isArray(value) ? value : [value];
+    if (Array.isArray(value)) {
+      return Array.isArray(value[0]) ? value : [value];
+    }
+
+    return [value];
   };
 
   const buildSearchOrdering = (searchString, { forDistinctQuery = false } = {}) => {
@@ -524,7 +528,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       order = [[distance, 'ASC']];
       selectedAttributeForOrderBy = distance;
     } else if (sortBy === SORT_ORDER.MOST_SERVICES) {
-      order = [[sequelize.literal(SERVICE_COUNT_COLUMN_ALIAS), 'DESC']];
+      order = [[sequelize.literal(`"${SERVICE_COUNT_COLUMN_ALIAS}"`), 'DESC']];
       selectedAttributeForOrderBy = SERVICE_COUNT_SUBQUERY;
     } else if (filterParameters.searchString) {
       const { attributes: searchOrderAttributes, order: searchOrder } =
