@@ -1,6 +1,7 @@
 import assert from 'assert';
 import { SORT_ORDER } from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
+import { get } from 'http';
 
 module.exports = (sequelize, DataTypes, Op) => {
   const Location = sequelize.define('Location', {
@@ -259,6 +260,21 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
+  function getLevenshteinCondition(columnName, searchString, maxDistance = 2) {
+    return sequelize.where(
+      sequelize.fn('levenshtein', sequelize.col(columnName), searchString),
+      '<=',
+      maxDistance
+    );
+  }
+  function getSoundexCondition(columnName, searchString) {
+    return sequelize.where(
+      sequelize.fn('soundex', sequelize.col(columnName)),
+      '=',
+      sequelize.fn('soundex', searchString)
+    );
+  }
+
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     queryProps = {},
@@ -376,12 +392,23 @@ module.exports = (sequelize, DataTypes, Op) => {
     let locations;
     if (searchString) {
 
-      const websearchToTsqueryCondition = {
-        [Op.match]:
-        sequelize.fn('websearch_to_tsquery', 'english', searchString),
-      };
+      function makePrefixTsQuery(searchString) {
+        return searchString
+          .trim()
+          .split(/\s+/)
+          .map(term => {
+            // strip characters that break tsquery syntax
+            const safe = term.replace(/[':]/g, '');
+            return `${safe}:*`;
+          })
+          .join(' & ');
+      }
 
-      const exactExactMatchCondition = { [Op.iLike]: searchString };
+      const prefixTsQuery = makePrefixTsQuery(searchString);
+
+      const tsQueryCondition = {
+        [Op.match]: sequelize.fn('to_tsquery', 'english', prefixTsQuery),
+      };
 
       function parseZipCodes(searchString) {
           return searchString
@@ -392,15 +419,23 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       const zipCodeCondition = {[Op.in]: parseZipCodes(searchString)} 
 
+      const similarityThreshold = 0.3; // tune this
+
       whereConditions.push({
         [Op.or]: [
           {'$PhysicalAddresses.postal_code$': zipCodeCondition},
           getPhoneNumberCondition(searchString),
-          {'$Organization.name_vector$': websearchToTsqueryCondition},
-          {'$Location.name_vector$': websearchToTsqueryCondition},
-          {'$Services.name_vector$': websearchToTsqueryCondition},
-          {'$Services.Taxonomies.name_vector$': websearchToTsqueryCondition},
-          {'$Services.description_vector$': websearchToTsqueryCondition}
+          {'$Organization.name_vector$': tsQueryCondition},
+          {'$Location.name_vector$': tsQueryCondition},
+          {'$Services.name_vector$': tsQueryCondition},
+          {'$Services.Taxonomies.name_vector$': tsQueryCondition},
+          {'$Services.description_vector$': tsQueryCondition},
+          getLevenshteinCondition('Organization.name', searchString),
+          getLevenshteinCondition('Location.name', searchString),
+          getLevenshteinCondition('Services.name', searchString),
+          getSoundexCondition('Organization.name', searchString),
+          getSoundexCondition('Location.name', searchString),
+          getSoundexCondition('Services.name', searchString),
         ]
       })
     }
