@@ -433,9 +433,6 @@ module.exports = (sequelize, DataTypes, Op) => {
           getLevenshteinCondition('Organization.name', searchString),
           getLevenshteinCondition('Location.name', searchString),
           getLevenshteinCondition('Services.name', searchString),
-          getSoundexCondition('Organization.name', searchString),
-          getSoundexCondition('Location.name', searchString),
-          getSoundexCondition('Services.name', searchString),
         ]
       })
     }
