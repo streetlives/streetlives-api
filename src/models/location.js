@@ -277,8 +277,11 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
-    queryProps = {},
+    originalQueryProps = {},
     selectedAttributeForOrderBy) => {
+    const queryProps = originalQueryProps.order;
+    const limit = originalQueryProps.limit;
+    const offset = originalQueryProps.offset;
     const {
       searchString,
       organizationName,
@@ -404,10 +407,19 @@ module.exports = (sequelize, DataTypes, Op) => {
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
 
+      // TODO: optimize this by stepping through the conditions until we have enough results
+      // TODO: add support for matching phone number
       locations = [
         await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition }),
         await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Organization.name$': prefixCondition }),
+        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
+        await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
         await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
+        await findWithCondition({ '$Location.name$': prefixCondition }),
+        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
+        //await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
+
         await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Organization.name$': exactMatchCondition }),
@@ -416,21 +428,15 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition({ '$Services.Taxonomies.name$': exactMatchCondition }),
 
         // prefix match
-        await findWithCondition({ '$Organization.name$': prefixCondition }),
-        await findWithCondition({ '$Location.name$': prefixCondition }),
         await findWithCondition({ '$Services.name$': prefixCondition }),
         await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
 
         // full-text search
-        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
         await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
         await findWithCondition({
           '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
         }),
 
-        await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
-        await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
         await findWithCondition(getCombinedFuzzySearchCondition('Services.name', searchString)),
         await findWithCondition(getCombinedFuzzySearchCondition(
           'Services->Taxonomies.name',
@@ -443,6 +449,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     } else {
       locations = await findAll(whereConditions);
     }
+
+    // apply limit and offset in memory here
+    locations = locations.slice(offset || 0, limit ? (offset || 0) + limit : undefined);
 
     return locations.map(location => location.id);
   };
