@@ -85,14 +85,14 @@ module.exports = (sequelize, DataTypes, Op) => {
     const conditions = searchTokens.map(token =>
       sequelize.or(
         // Soundex-based condition (phonetic similarity)
-        sequelize.where(
-          sequelize.fn(
-            'difference',
-            sequelize.fn('soundex', sequelize.col(col)),
-            sequelize.fn('soundex', token),
-          ),
-          4, // Maximum similarity score for Soundex
-        ),
+        // sequelize.where(
+        //   sequelize.fn(
+        //     'difference',
+        //     sequelize.fn('soundex', sequelize.col(col)),
+        //     sequelize.fn('soundex', token),
+        //   ),
+        //   4, // Maximum similarity score for Soundex
+        // ),
         // Levenshtein-based condition (edit distance <= 2)
         sequelize.where(
           sequelize.fn('levenshtein', sequelize.fn('lower', sequelize.col(col)), token),
@@ -104,6 +104,16 @@ module.exports = (sequelize, DataTypes, Op) => {
     // Combine all conditions into one using Sequelize's `or` and `and`
     return sequelize.and(...conditions);
   };
+
+  function getPhoneNumberCondition(text) {
+    const digits = text.replace(/[^0-9]/g, '');
+    if (!digits) return { '$Phones.number$': text };
+
+    // eslint-disable-next-line max-len
+    return sequelize.where(sequelize.fn('regexp_replace', sequelize.col('Phones.number'), '[^0-9]', '', 'g'), {
+      [Op.like]: `%${digits}%`,
+    });
+  }
 
   const getOrganizationNameCondition = organizationName => ({
     '$Organization.name$': { [Op.iLike]: `%${organizationName}%` },
@@ -280,7 +290,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     originalQueryProps = {},
     selectedAttributeForOrderBy) => {
     const queryProps = originalQueryProps.order;
+    // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
+    // eslint-disable-next-line prefer-destructuring
     const offset = originalQueryProps.offset;
     const {
       searchString,
@@ -357,6 +369,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         include: [
           sequelize.models.Organization,
           sequelize.models.PhysicalAddress,
+          sequelize.models.Phone,
           {
             model: sequelize.models.Service,
             required: true,
@@ -407,10 +420,21 @@ module.exports = (sequelize, DataTypes, Op) => {
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
 
+      // eslint-disable-next-line no-inner-declarations, no-shadow
+      function parseZipCodes(searchString) {
+        return searchString
+          .split(/[,\s]+/)
+          .map(z => z.trim())
+          .filter(z => z.length > 0);
+      }
+
+      const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
+
       // TODO: optimize this by stepping through the conditions until we have enough results
-      // TODO: add support for matching phone number
       locations = [
-        await findWithCondition({ '$PhysicalAddresses.postal_code$': exactExactMatchCondition }),
+        await findWithCondition({ '$PhysicalAddresses.postal_code$': zipCodeCondition }),
+        await findWithCondition(getPhoneNumberCondition(searchString)),
+
         await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Organization.name$': prefixCondition }),
         await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
@@ -418,7 +442,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Location.name$': prefixCondition }),
         await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
-        //await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
+        await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
 
         await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
         await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
