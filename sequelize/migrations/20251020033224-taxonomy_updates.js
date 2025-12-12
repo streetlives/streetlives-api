@@ -35,7 +35,7 @@ const taxonomies = [
     ],
   },
   {
-    name: "Employment/Internship",
+    name: "Internship",
     parent_name: "Other service",
     parent_id: "1fad2545-15d0-4613-b34c-1407b8b7e74e",
     services: [
