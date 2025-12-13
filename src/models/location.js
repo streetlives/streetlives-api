@@ -182,9 +182,21 @@ module.exports = (sequelize, DataTypes, Op) => {
     )
   `;
 
-  const getAgeCondition = (age) => {
-    // I believe this type check makes the subsequent literal replacement safe wrt sql injection
-    assert(typeof age === 'number', 'age parameter must be a number');
+  const getAgeCondition = ({ ageMin, ageMax }) => {
+    assert(
+      ageMin != null || ageMax != null,
+      'age filter must include at least a minimum or maximum value',
+    );
+    if (ageMin != null) {
+      assert(typeof ageMin === 'number', 'ageMin parameter must be a number');
+    }
+    if (ageMax != null) {
+      assert(typeof ageMax === 'number', 'ageMax parameter must be a number');
+    }
+
+    const requestedMin = ageMin != null ? ageMin : 'NULL';
+    const requestedMax = ageMax != null ? ageMax : 'NULL';
+
     return sequelize.literal(`
       (
         select
@@ -202,15 +214,15 @@ module.exports = (sequelize, DataTypes, Op) => {
                -- age is greater than min age and max age is null
                (all_ages is not null and all_ages) OR
                (
-                 (age_min is null OR ${age} >= age_min) AND
-                 (age_max is null OR ${age} <= age_max)
+                 (age_min is null OR ${requestedMax} is null OR age_min <= ${requestedMax}) AND
+                 (age_max is null OR ${requestedMin} is null OR age_max >= ${requestedMin})
                )
           )
       )
     `);
   };
 
-  const getEligibilityCondition = ({ age, ...eligibility }) => {
+  const getEligibilityCondition = ({ age, ageRange, ...eligibility }) => {
     const serviceEligibilities = sequelize.cast(
       sequelize.fn(
         'json_object_agg',
@@ -306,7 +318,8 @@ module.exports = (sequelize, DataTypes, Op) => {
       documents,
       taxonomySpecificAttributes,
     } = filterParameters;
-    const isEligibilitySpecified = eligibility && Object.keys(eligibility).length;
+    const isEligibilitySpecified = eligibility &&
+      Object.keys(eligibility).some(param => !['age', 'ageRange'].includes(param));
     const areRequiredDocsSpecified = documents && Object.keys(documents).length;
     const areTaxonomyAttributesSpecified =
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
@@ -334,9 +347,16 @@ module.exports = (sequelize, DataTypes, Op) => {
     // we put empty object in the having array to work around this bug in sequelize:
     // https://github.com/sequelize/sequelize/issues/10142
     const havingConditions = [{}];
-    if (eligibility.age != null) {
-      havingConditions.push(getAgeCondition(eligibility.age));
+    // eslint-disable-next-line no-nested-ternary
+    const ageFilter = eligibility && eligibility.age != null
+      ? { ageMin: eligibility.age, ageMax: eligibility.age }
+      : (eligibility && eligibility.ageRange ? eligibility.ageRange : null);
+
+    if (ageFilter && (ageFilter.ageMin != null || ageFilter.ageMax != null)) {
+      havingConditions.push(getAgeCondition(ageFilter));
     }
+    const shouldJoinEligibilities = isEligibilitySpecified || !!ageFilter;
+
     if (isEligibilitySpecified) {
       havingConditions.push(getEligibilityCondition(eligibility));
     }
@@ -379,7 +399,7 @@ module.exports = (sequelize, DataTypes, Op) => {
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
               ...(occasion ? [sequelize.models.HolidaySchedule] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
-              ...(isEligibilitySpecified ? [{
+              ...(shouldJoinEligibilities ? [{
                 model: sequelize.models.Eligibility,
                 include: {
                   model: sequelize.models.EligibilityParameter,
