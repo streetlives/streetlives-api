@@ -290,6 +290,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     originalQueryProps = {},
     selectedAttributeForOrderBy) => {
     const queryProps = { order: originalQueryProps.order };
+
     // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
     // eslint-disable-next-line prefer-destructuring
