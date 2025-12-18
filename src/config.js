@@ -15,9 +15,15 @@ export default {
       dialect: 'postgres',
       operatorsAliases: false,
       pool: {
-        max: parseNumber(process.env.DATABASE_POOL_MAX, 100),
+        max: parseNumber(process.env.DATABASE_POOL_MAX, 1),
         min: parseNumber(process.env.DATABASE_POOL_MIN, 0),
-        idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000),
+        // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000), // let the RDS proxy handle timeout
+      },
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
+        },
       },
     },
   },
