@@ -21,7 +21,7 @@ export default {
         // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000), // let the RDS proxy handle timeout
       },
       dialectOptions: {
-        clientMinMessages: false, // avoid issuing SET client_min_messages
+        clientMinMessages: 'ignore', // avoid issuing SET client_min_messages
         ssl: {
           require: true,
           rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
