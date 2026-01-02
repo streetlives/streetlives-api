@@ -26,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    script_updated_at: DataTypes.DATE,
   }, {
     underscored: true,
     underscoredAll: true,
