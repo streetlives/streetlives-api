@@ -273,6 +273,42 @@ export default {
     }
   },
 
+  getWithoutServices: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getWithoutServices, { allowUnknown: true });
+
+      const { limit: limitParam, offset: offsetParam } = req.query;
+      const limit = limitParam
+        ? parseInt(limitParam, 10)
+        : DEFAULT_MAX_LOCATIONS_RETURNED;
+      const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+
+      const locations = await models.Location.findAll({
+        where: { '$Services.id$': { [models.Sequelize.Op.is]: null } },
+        include: [
+          models.Organization,
+          models.PhysicalAddress,
+          models.Phone,
+          {
+            model: models.Service,
+            required: false,
+            attributes: [],
+            through: { attributes: [] },
+          },
+        ],
+        subQuery: false,
+        distinct: true,
+        limit,
+        offset,
+        order: [['name', 'ASC']],
+      });
+
+      res.send(locations);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   getInfo: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });

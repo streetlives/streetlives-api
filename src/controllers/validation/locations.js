@@ -46,6 +46,18 @@ export default {
       .required(),
   },
 
+  getWithoutServices: {
+    query: Joi.object().keys({
+      limit: Joi.number()
+        .integer()
+        .positive()
+        .max(1000),
+      offset: Joi.number()
+        .integer()
+        .min(0),
+    }).required(),
+  },
+
   getInfo: {
     params: Joi.object().keys({
       locationId: Joi.string().guid().required(),
