@@ -16,6 +16,7 @@ export default {
     body: Joi.object().keys({
       name: Joi.string().required(),
       description: Joi.string(),
+      email: Joi.string().allow('', null),
       url: Joi.string(),
       metadata: updateMetadataSchema,
     }).required(),
@@ -28,8 +29,15 @@ export default {
     body: Joi.object().keys({
       name: Joi.string(),
       description: Joi.string(),
+      email: Joi.string().allow('', null),
       url: Joi.string().allow(''),
       metadata: updateMetadataSchema,
+    }).required(),
+  },
+
+  get: {
+    params: Joi.object().keys({
+      organizationId: Joi.string().guid().required(),
     }).required(),
   },
 

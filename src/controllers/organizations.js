@@ -26,6 +26,7 @@ export default {
       const {
         name,
         description,
+        email,
         url,
         metadata,
       } = req.body;
@@ -34,6 +35,7 @@ export default {
       const createdOrganization = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
+        email,
         url,
       }, { metadata });
 
@@ -54,7 +56,7 @@ export default {
         throw new NotFoundError('Organization not found');
       }
 
-      const editableFields = ['name', 'description', 'url'];
+      const editableFields = ['name', 'description', 'email', 'url'];
       const { metadata, ...updateParams } = req.body;
       await updateInstance(
         req.user,
@@ -100,6 +102,22 @@ export default {
       });
 
       res.send(locations);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  get: async (req, res, next) => {
+    try {
+      await Joi.validate(req, organizationSchemas.get, { allowUnknown: true });
+
+      const { organizationId } = req.params;
+      const organization = await models.Organization.findByPk(organizationId);
+      if (!organization) {
+        throw new NotFoundError('Organization not found');
+      }
+
+      res.send(organization);
     } catch (err) {
       next(err);
     }
