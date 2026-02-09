@@ -23,7 +23,6 @@ export default (app) => {
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
-  app.get('/locations/no-services', locations.getWithoutServices);
 
   app.post('/locations/suggestions', locations.suggestNew);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);

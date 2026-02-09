@@ -288,7 +288,7 @@ module.exports = (sequelize, DataTypes, Op) => {
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     originalQueryProps = {},
-    selectedAttributeForOrderBy) => {
+    selectedAttributeForOrderBy, noServices) => {
     const queryProps = originalQueryProps.order;
     // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
@@ -372,7 +372,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.models.Phone,
           {
             model: sequelize.models.Service,
-            required: true,
+            required: !noServices,
             include: [
               sequelize.models.Taxonomy,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
@@ -489,6 +489,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     limit,
     offset,
     sortBy,
+    noServices,
   }) => {
     let locationIds;
     let distance;
@@ -531,12 +532,13 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
-        [distanceCondition], {
+        [distanceCondition].filter(Boolean), {
           order,
           limit,
           offset,
         },
         selectedAttributeForOrderBy,
+        noServices,
       );
 
       // Note: We could avoid having 2 separate queries if we were to first order by distance
@@ -551,7 +553,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           order,
           limit: minResults,
           offset,
-        }, selectedAttributeForOrderBy);
+        }, selectedAttributeForOrderBy, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
