@@ -164,6 +164,8 @@ export default {
         gender,
         servesZipcode,
         age: _age,
+        ageMin: _ageMin,
+        ageMax: _ageMax,
         taxonomySpecificAttributes,
         locationFieldsOnly,
         pageNumber: _pageNumber,
@@ -174,6 +176,12 @@ export default {
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
       const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
       const age = _age ? parseInt(_age, 10) : undefined;
+      const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
+      const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
+
+      if (ageMin != null && ageMax != null && ageMin > ageMax) {
+        throw new ValidationError('ageMin cannot be greater than ageMax');
+      }
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -193,6 +201,8 @@ export default {
       }
       if (age != null) {
         eligibility.age = age;
+      } else if (ageMin != null || ageMax != null) {
+        eligibility.ageRange = { ageMin, ageMax };
       }
 
       const documents = {};

@@ -40,6 +40,8 @@ export default {
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
       age: Joi.number(),
+      ageMin: Joi.number(),
+      ageMax: Joi.number(),
       sortBy: Joi.string().valid(SORT_OPTIONS),
     })
       .with('radius', ['latitude', 'longitude'])
