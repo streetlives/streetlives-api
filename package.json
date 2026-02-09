@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "PORT=3001 NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
     "build": "babel src -s -D -d dist",
-    "start": "NODE_ENV=production node dist",
+    "start": "NODE_ENV=development node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
     "test": "NODE_ENV=test jest --runInBand --coverage",
