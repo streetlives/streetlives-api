@@ -9,6 +9,7 @@ jobs:
   deploy-test:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: CI_CD_PIPELINE
 
     steps:
       - name: Checkout develop branch
