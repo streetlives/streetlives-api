@@ -430,8 +430,6 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
-      // whereConditions.push(getZipcodesCondition([searchString]));
-
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
@@ -451,7 +449,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
 
       // TODO: optimize this by stepping through the conditions until we have enough results
-      locations = [
+      const searchResults = [
         await findWithCondition({ '$PhysicalAddresses.postal_code$': zipCodeCondition }),
         await findWithCondition(getPhoneNumberCondition(searchString)),
 
@@ -490,6 +488,9 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 
       ].reduce((a, b) => a.concat(b));
+
+      // Remove duplicates
+      locations = Array.from(new Map(searchResults.map(item => [item.id, item])).values());
     } else {
       locations = await findAll(whereConditions);
     }
