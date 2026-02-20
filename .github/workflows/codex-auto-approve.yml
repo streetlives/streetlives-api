@@ -1,0 +1,99 @@
+name: Codex auto-approve (guarded)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  codex_auto_approve:
+    # Guardrails: only run for non-fork PRs, and not for drafts
+    if: >
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    environment: CI_CD_PIPELINE
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+
+      - name: Trust check - PR author has write+ permission
+        id: trust
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const username = context.payload.pull_request.user.login;
+
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner, repo, username
+            });
+
+            core.info(`PR author ${username} permission: ${data.permission}`);
+            const trusted = ["admin", "maintain", "write"].includes(data.permission);
+            core.setOutput("trusted", trusted ? "true" : "false");
+
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          # Optional but often helps: ensures history exists locally
+          fetch-depth: 0
+
+      - name: Pre-fetch base and head refs
+        run: |
+          git fetch --no-tags origin \
+            ${{ github.event.pull_request.base.ref }} \
+            +refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Materialize protected prompt/schema from develop branch head
+        run: |
+          set -euo pipefail
+          mkdir -p .codex-protected
+
+          git fetch --no-tags origin develop:refs/remotes/origin/develop --depth=1
+
+          git show origin/develop:.github/codex/prompts/pr-approval.md \
+            > .codex-protected/pr-approval.md
+
+          git show origin/develop:.github/codex/schemas/pr-approval.schema.json \
+            > .codex-protected/pr-approval.schema.json
+
+      - name: Run Codex (structured decision using protected prompt)
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .codex-protected/pr-approval.md
+          output-schema-file: .codex-protected/pr-approval.schema.json
+          output-file: codex-review.json
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+      - name: Parse decision
+        id: parse
+        run: |
+          echo "decision=$(jq -r .decision codex-review.json)" >> "$GITHUB_OUTPUT"
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          jq -r .summary codex-review.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Approve PR if Codex says APPROVE and author has write access to the repository
+        if: steps.parse.outputs.decision == 'APPROVE' && steps.trust.outputs.trusted == 'true'
+        uses: actions/github-script@v7
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "APPROVE",
+              body: process.env.SUMMARY || "Codex: approved.",
+              commit_id: context.payload.pull_request.head.sha,
+            });
