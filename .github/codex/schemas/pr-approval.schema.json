@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "decision": { "type": "string", "enum": ["APPROVE", "REQUEST_CHANGES"] },
+    "summary": { "type": "string" },
+    "blocking_issues": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["decision", "summary", "blocking_issues"],
+  "additionalProperties": false
+}
