@@ -19,7 +19,7 @@ jobs:
 
     steps:
 
-      - name: Trust check: PR author has write+ permission
+      - name: Trust check - PR author has write+ permission
         id: trust
         uses: actions/github-script@v7
         with:
