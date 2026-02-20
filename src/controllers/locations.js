@@ -148,6 +148,7 @@ export default {
       const {
         latitude,
         longitude,
+        noServices,
         radius,
         minResults,
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
@@ -249,6 +250,7 @@ export default {
         minResults,
         filterParameters,
         locationFieldsOnly,
+        noServices: parseBoolean(noServices),
         limit,
         offset,
         sortBy,
