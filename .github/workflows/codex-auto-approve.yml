@@ -31,14 +31,26 @@ jobs:
             ${{ github.event.pull_request.base.ref }} \
             +refs/pull/${{ github.event.pull_request.number }}/head
 
-      - name: Run Codex (structured decision)
-        id: codex
+      - name: Materialize protected prompt/schema from develop branch head
+        run: |
+          set -euo pipefail
+          mkdir -p .codex-protected
+
+          git fetch --no-tags origin develop:refs/remotes/origin/develop --depth=1
+
+          git show origin/develop:.github/codex/prompts/pr-approval.md \
+            > .codex-protected/pr-approval.md
+
+          git show origin/develop:.github/codex/schemas/pr-approval.schema.json \
+            > .codex-protected/pr-approval.schema.json
+
+      - name: Run Codex (structured decision using protected prompt)
+        id: run_codex
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/codex/prompts/pr-approval.md
-          output-file: codex-review.json
-          codex-args: '["--output-schema",".github/codex/schemas/pr-approval.schema.json"]'
+          prompt-file: .codex-protected/pr-approval.md
+          output-schema-file: .codex-protected/pr-approval.schema.json
           sandbox: read-only
           safety-strategy: drop-sudo
 
