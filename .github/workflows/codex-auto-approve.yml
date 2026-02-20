@@ -1,0 +1,58 @@
+name: Codex auto-approve (guarded)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  codex_auto_approve:
+    # Guardrails: only run for non-fork PRs, and not for drafts
+    if: >
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+
+      - name: Run Codex (structured decision)
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-approval.md
+          output-file: codex-review.json
+          codex-args: '["--output-schema",".github/codex/schemas/pr-approval.schema.json"]'
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+      - name: Parse decision
+        id: parse
+        run: |
+          echo "decision=$(jq -r .decision codex-review.json)" >> "$GITHUB_OUTPUT"
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          jq -r .summary codex-review.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Approve PR if Codex says APPROVE
+        if: steps.parse.outputs.decision == 'APPROVE'
+        uses: actions/github-script@v7
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "APPROVE",
+              body: process.env.SUMMARY || "Codex: approved.",
+              commit_id: context.payload.pull_request.head.sha,
+            });
