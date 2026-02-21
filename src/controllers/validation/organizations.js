@@ -28,7 +28,7 @@ export default {
     }).required(),
     body: Joi.object().keys({
       name: Joi.string(),
-      description: Joi.string(),
+      description: Joi.string().allow(''),
       url: Joi.string().allow(''),
       metadata: updateMetadataSchema,
     }).required(),

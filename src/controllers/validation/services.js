@@ -37,9 +37,9 @@ export default {
     }).required(),
     body: Joi.object().keys({
       name: Joi.string(),
-      description: Joi.string(),
+      description: Joi.string().allow(''),
       url: Joi.string(),
-      additionalInfo: Joi.string(),
+      additionalInfo: Joi.string().allow(''),
       taxonomyId: Joi.string().guid(),
       hours: Joi.array().items(Joi.object().keys({
         weekday: Joi.string().valid(weekdays).required(),
@@ -65,9 +65,9 @@ export default {
       languageIds: Joi.array().items(Joi.string().guid().required()),
       documents: Joi.object().keys({
         proofs: Joi.array().items(Joi.string()),
-        recertificationTime: Joi.string(),
-        gracePeriod: Joi.string(),
-        additionalInfo: Joi.string(),
+        recertificationTime: Joi.string().allow(''),
+        gracePeriod: Joi.string().allow(''),
+        additionalInfo: Joi.string().allow(''),
       }),
       eventRelatedInfo: Joi.object().keys({
         event: Joi.string().required(),

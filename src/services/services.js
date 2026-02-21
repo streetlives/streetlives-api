@@ -37,13 +37,16 @@ const updateHours = async (service, hours, { t, user, metadata }) => {
 
 const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
   const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
+
+  const whereClause = { service_id: service.id };
+  if (hours.length) whereClause.occasion = { [Op.in]: relevantOccasions };
+
   await models.HolidaySchedule.destroy({
-    where: {
-      service_id: service.id,
-      occasion: { [Op.in]: relevantOccasions },
-    },
+    where: whereClause,
     transaction: t,
   });
+
+  if (hours.length === 0) return;
 
   const modelCreateFunction = models.HolidaySchedule.create.bind(models.HolidaySchedule);
   await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
