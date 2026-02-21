@@ -27,30 +27,10 @@ const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
 };
 
-const getInfoAssociations = {
+// Get location and service associations separately to reduce SQL size
+// (avoids 16KB+ queries, which would result in session pinning)
+const locationAssociations = {
   include: [
-    {
-      model: models.Service,
-      include: [
-        {
-          model: models.Eligibility,
-          include: [models.EligibilityParameter],
-        },
-        {
-          model: models.ServiceTaxonomySpecificAttribute,
-          include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
-        },
-        models.Taxonomy,
-        models.RegularSchedule,
-        models.HolidaySchedule,
-        models.Language,
-        models.RequiredDocument,
-        models.DocumentsInfo,
-        models.Phone,
-        models.EventRelatedInfo,
-        models.ServiceArea,
-      ],
-    },
     {
       model: models.Organization,
       include: [models.Phone],
@@ -59,6 +39,27 @@ const getInfoAssociations = {
     models.PhysicalAddress,
     models.AccessibilityForDisabilities,
     models.EventRelatedInfo,
+  ],
+};
+const serviceAssociations = {
+  include: [
+    {
+      model: models.Eligibility,
+      include: [models.EligibilityParameter],
+    },
+    {
+      model: models.ServiceTaxonomySpecificAttribute,
+      include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
+    },
+    models.Taxonomy,
+    models.RegularSchedule,
+    models.HolidaySchedule,
+    models.Language,
+    models.RequiredDocument,
+    models.DocumentsInfo,
+    models.Phone,
+    models.EventRelatedInfo,
+    models.ServiceArea,
   ],
 };
 
@@ -80,17 +81,15 @@ const getNeighborhoodAttributeSubquery = {
   },
 };
 
-async function handleGetInfoResponse(location, excludeMetadata) {
-  if (!location) {
-    throw new NotFoundError('Location not found');
-  }
-
+async function handleGetInfoResponse(location, locationWithServices, excludeMetadata) {
   const {
     PhysicalAddresses: addresses,
-    Services: services,
     additional_info: additionalInfo,
     ...unchangedProps
   } = location.get({ plain: true });
+  const services = locationWithServices && locationWithServices.Services
+    ? locationWithServices.Services.map(s => s.get({ plain: true }))
+    : [];
 
   if (!addresses || addresses.length !== 1) {
     throw new Error('Location does not have a valid address');
@@ -112,10 +111,10 @@ async function handleGetInfoResponse(location, excludeMetadata) {
     },
   };
 
-  const { EventRelatedInfos, Services } = location;
+  const { EventRelatedInfos } = location;
   // FIXME: we should not be hard-coding the COVID19 event here
   // this is logic that needs ot be revisited in this codebase
-  const closed = isLocationClosed('COVID19', EventRelatedInfos, Services);
+  const closed = isLocationClosed('COVID19', EventRelatedInfos, services);
 
   if (excludeMetadata) {
     const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
@@ -289,15 +288,33 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
 
-      const location = await models.Location.findByPk(
-        req.params.locationId,
-        {
-          include: getInfoAssociations.include,
-          attributes: getNeighborhoodAttributeSubquery.attributes,
-        },
-      );
+      const { locationId } = req.params;
 
-      const getInfoResponse = await handleGetInfoResponse(location, false);
+      const [location, locationWithServices] = await Promise.all([
+        models.Location.findByPk(
+          locationId,
+          {
+            include: locationAssociations.include,
+            attributes: getNeighborhoodAttributeSubquery.attributes,
+          },
+        ),
+        models.Location.findByPk(
+          locationId,
+          {
+            include: [{
+              model: models.Service,
+              include: serviceAssociations.include,
+            }],
+            attributes: ['id'],
+          },
+        ),
+      ]);
+
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, false);
       res.send(getInfoResponse);
     } catch (err) {
       next(err);
@@ -312,16 +329,30 @@ export default {
         where: {
           slug: req.params.slug,
         },
-        include: getInfoAssociations.include,
+        include: locationAssociations.include,
         attributes: getNeighborhoodAttributeSubquery.attributes,
       });
 
       if (!locations.length) {
         res.status(404).send({ status: 404 });
-      } else {
-        const getInfoResponse = await handleGetInfoResponse(locations[0], true);
-        res.send(getInfoResponse);
+        return;
       }
+
+      const location = locations[0];
+
+      const locationWithServices = await models.Location.findByPk(
+        location.id,
+        {
+          include: [{
+            model: models.Service,
+            include: serviceAssociations.include,
+          }],
+          attributes: ['id'],
+        },
+      );
+
+      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, true);
+      res.send(getInfoResponse);
     } catch (err) {
       next(err);
     }
@@ -339,7 +370,6 @@ export default {
       });
 
       if (locationSlugs.length) {
-
         const location = await models.Location.findByPk(locationSlugs[0].location_id);
         if (!location) {
           res.status(404).send({ error: 'Location not found' });
@@ -407,7 +437,9 @@ export default {
     const updateLocation = (location, updateParams, metadata) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
-      if (updateParams.streetview_url != null) { locationUpdate.streetview_url = updateParams.streetview_url; }
+      if (updateParams.streetview_url != null) {
+        locationUpdate.streetview_url = updateParams.streetview_url;
+      }
       if (updateParams.description != null) {
         locationUpdate.description = updateParams.description;
       }
