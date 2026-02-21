@@ -300,7 +300,7 @@ module.exports = (sequelize, DataTypes, Op) => {
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     originalQueryProps = {},
-    selectedAttributeForOrderBy) => {
+    selectedAttributeForOrderBy, noServices) => {
     const queryProps = { order: originalQueryProps.order };
     // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
@@ -392,7 +392,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.models.Phone,
           {
             model: sequelize.models.Service,
-            required: true,
+            required: !noServices,
             include: [
               sequelize.models.Taxonomy,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
@@ -430,8 +430,6 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
-      // whereConditions.push(getZipcodesCondition([searchString]));
-
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
@@ -451,7 +449,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
 
       // TODO: optimize this by stepping through the conditions until we have enough results
-      locations = [
+      const searchResults = [
         await findWithCondition({ '$PhysicalAddresses.postal_code$': zipCodeCondition }),
         await findWithCondition(getPhoneNumberCondition(searchString)),
 
@@ -490,6 +488,9 @@ module.exports = (sequelize, DataTypes, Op) => {
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 
       ].reduce((a, b) => a.concat(b));
+
+      // Remove duplicates
+      locations = Array.from(new Map(searchResults.map(item => [item.id, item])).values());
     } else {
       locations = await findAll(whereConditions);
     }
@@ -509,6 +510,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     limit,
     offset,
     sortBy,
+    noServices,
   }) => {
     let locationIds;
     let distance;
@@ -551,12 +553,13 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
-        [distanceCondition], {
+        [distanceCondition].filter(Boolean), {
           order,
           limit,
           offset,
         },
         selectedAttributeForOrderBy,
+        noServices,
       );
 
       // Note: We could avoid having 2 separate queries if we were to first order by distance
@@ -571,7 +574,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           order,
           limit: minResults,
           offset,
-        }, selectedAttributeForOrderBy);
+        }, selectedAttributeForOrderBy, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
