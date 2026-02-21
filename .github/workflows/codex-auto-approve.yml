@@ -104,6 +104,7 @@ jobs:
           echo "summary<<EOF" >> "$GITHUB_OUTPUT"
           jq -r .summary codex-review.json >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "blocking_issues_json=$(jq -c '.blocking_issues' codex-review.json)" >> "$GITHUB_OUTPUT"
 
       - name: Approve PR if Codex says APPROVE and author is trusted
         if: steps.parse.outputs.decision == 'APPROVE' && steps.allow.outputs.trusted == 'true'
@@ -119,5 +120,35 @@ jobs:
               pull_number: context.payload.pull_request.number,
               event: "APPROVE",
               body: process.env.SUMMARY || "Codex: approved.",
+              commit_id: context.payload.pull_request.head.sha,
+            });
+
+      - name: Request changes if Codex says REQUEST_CHANGES
+        if: steps.parse.outputs.decision == 'REQUEST_CHANGES'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
+          BLOCKING_ISSUES_JSON: ${{ steps.parse.outputs.blocking_issues_json }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const blockingIssues = JSON.parse(process.env.BLOCKING_ISSUES_JSON || "[]");
+            const issueList = blockingIssues.length
+              ? blockingIssues.map((issue) => `- ${issue}`).join("\n")
+              : "- No blocking issues were returned.";
+
+            const body = [
+              process.env.SUMMARY || "Codex: changes requested.",
+              "",
+              "### Blocking issues",
+              issueList,
+            ].join("\n");
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "REQUEST_CHANGES",
+              body,
               commit_id: context.payload.pull_request.head.sha,
             });
