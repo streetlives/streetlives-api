@@ -14,12 +14,14 @@ export default {
       logging: parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
       operatorsAliases: false,
+      keepDefaultTimezone: true, // avoid issuing SET TIME ZONE
       pool: {
         max: parseNumber(process.env.DATABASE_POOL_MAX, 1),
         min: parseNumber(process.env.DATABASE_POOL_MIN, 0),
         // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000), // let the RDS proxy handle timeout
       },
       dialectOptions: {
+        clientMinMessages: 'ignore', // avoid issuing SET client_min_messages
         ssl: {
           require: true,
           rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
