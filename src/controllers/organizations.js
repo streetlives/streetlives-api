@@ -72,6 +72,7 @@ export default {
       await Joi.validate(req, organizationSchemas.update, { allowUnknown: true });
 
       const { organizationId } = req.params;
+      assertUserCanAccessOrganization(req, organizationId);
 
       const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
