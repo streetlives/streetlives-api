@@ -2,7 +2,7 @@ import Joi from 'joi';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
-import { NotFoundError } from '../utils/errors';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
 
 const normalizeEmail = (email) => {
   if (email == null) {
@@ -11,6 +11,16 @@ const normalizeEmail = (email) => {
 
   const trimmedEmail = email.trim();
   return trimmedEmail || null;
+};
+
+const assertUserCanAccessOrganization = (req, organizationId) => {
+  if (req.userIsAdmin) {
+    return;
+  }
+
+  if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+    throw new ForbiddenError('Not authorized to view this organization');
+  }
 };
 
 export default {
@@ -128,6 +138,8 @@ export default {
       await Joi.validate(req, organizationSchemas.get, { allowUnknown: true });
 
       const { organizationId } = req.params;
+      assertUserCanAccessOrganization(req, organizationId);
+
       const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
         throw new NotFoundError('Organization not found');
