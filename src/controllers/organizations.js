@@ -4,6 +4,15 @@ import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
 import { NotFoundError } from '../utils/errors';
 
+const normalizeEmail = (email) => {
+  if (email == null) {
+    return email;
+  }
+
+  const trimmedEmail = email.trim();
+  return trimmedEmail || null;
+};
+
 export default {
   find: async (req, res, next) => {
     try {
@@ -12,7 +21,9 @@ export default {
       const { searchString } = req.query;
       const filterParameters = searchString ? { searchString: searchString.trim() } : {};
 
-      const organizations = await models.Organization.findMatching(filterParameters);
+      const organizations = await models.Organization.findMatching(filterParameters, 10, {
+        attributes: models.Organization.getPublicAttributes(),
+      });
       res.send(organizations);
     } catch (err) {
       next(err);
@@ -26,10 +37,11 @@ export default {
       const {
         name,
         description,
-        email,
+        email: rawEmail,
         url,
         metadata,
       } = req.body;
+      const email = normalizeEmail(rawEmail);
 
       const modelCreateFunction = models.Organization.create.bind(models.Organization);
       const createdOrganization = await createInstance(req.user, modelCreateFunction, {
@@ -57,11 +69,15 @@ export default {
       }
 
       const editableFields = ['name', 'description', 'email', 'url'];
-      const { metadata, ...updateParams } = req.body;
+      const { metadata, email, ...updateParams } = req.body;
+      const normalizedUpdateParams = email === undefined ? updateParams : {
+        ...updateParams,
+        email: normalizeEmail(email),
+      };
       await updateInstance(
         req.user,
         organization,
-        updateParams,
+        normalizedUpdateParams,
         { fields: editableFields, metadata },
       );
 

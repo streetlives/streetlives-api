@@ -7,7 +7,6 @@ Object {
   "Organization": Object {
     "Phones": Object {},
     "description": "An organization meant for testing purposes.",
-    "email": null,
     "name": "The Test Org",
     "url": "www.streetlives.com",
   },
