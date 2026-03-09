@@ -8,6 +8,12 @@ import config from '../config';
 const basename = path.basename(__filename);
 const db = {};
 
+console.log(
+  config.db.database,
+  config.db.username,
+  config.db.password,
+  config.db.options,
+)
 const sequelize = new Sequelize(
   config.db.database,
   config.db.username,

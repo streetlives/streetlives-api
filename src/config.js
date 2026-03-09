@@ -11,7 +11,7 @@ export default {
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
       port: parseNumber(process.env.DATABASE_PORT, 5432),
-      logging: parseBoolean(process.env.DATABASE_LOGGING, true),
+      logging: process.env.NODE_ENV === 'test' ? console.error : parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
       operatorsAliases: false,
       pool: {
@@ -19,7 +19,7 @@ export default {
         min: parseNumber(process.env.DATABASE_POOL_MIN, 0),
         // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000), // let the RDS proxy handle timeout
       },
-      dialectOptions: {
+      dialectOptions: process.env.NODE_ENV === 'test' ? {} : {
         ssl: {
           require: true,
           rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
