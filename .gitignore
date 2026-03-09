@@ -55,3 +55,4 @@ lambda-invoke-response.json
 packaged-sam.yaml
 
 .idea
+*.sql
