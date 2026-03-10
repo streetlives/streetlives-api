@@ -945,6 +945,27 @@ describe('find locations', () => {
             }))
           .then(expectNoMatchingLocations));
 
+      it(
+        'should return note-closed locations even without holiday schedules',
+        async () => {
+          await models.EventRelatedInfo.create({
+            location_id: primaryLocation.id,
+            event: 'COVID-19',
+            information: 'This location is temporarily closed.',
+          });
+
+          return request(app)
+            .get('/locations')
+            .query({
+              latitude: originLatitude,
+              longitude: originLongitude,
+              radius,
+              occasion: 'COVID-19',
+            })
+            .then(expectMatchPrimaryLocation);
+        },
+      );
+
       it('should return locations closed at the given time during the occasion', () =>
         setupHolidaySchedule()
           .then(() => request(app)

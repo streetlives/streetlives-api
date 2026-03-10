@@ -170,9 +170,25 @@ module.exports = (sequelize, DataTypes, Op) => {
     },
   );
 
-  const getOccasionCondition = occasion => ({
-    '$Services.HolidaySchedules.occasion$': occasion,
-  });
+  const getOccasionCondition = (occasion, { includeLocationEventInfo = false } = {}) => {
+    const holidayScheduleCondition = {
+      '$Services.HolidaySchedules.occasion$': occasion,
+    };
+    if (!includeLocationEventInfo) {
+      return holidayScheduleCondition;
+    }
+    return sequelize.or(
+      holidayScheduleCondition,
+      sequelize.literal(`exists (
+        select 1
+        from event_related_info eri
+        where eri.location_id = "Location"."id"
+          and eri.event = ${sequelize.escape(occasion)}
+          and eri.information is not null
+          and btrim(eri.information) <> ''
+      )`),
+    );
+  };
 
   const ageAgg = `
     (
@@ -342,7 +358,9 @@ module.exports = (sequelize, DataTypes, Op) => {
       whereConditions.push(getServiceAreaCondition(servesZipcode));
     }
     if (occasion) {
-      whereConditions.push(getOccasionCondition(occasion));
+      whereConditions.push(getOccasionCondition(occasion, {
+        includeLocationEventInfo: !openAt,
+      }));
     }
 
     // we put empty object in the having array to work around this bug in sequelize:

@@ -90,6 +90,20 @@ describe('get location info', () => {
         expect(strippedFields).toMatchSnapshot();
       }));
 
+  it('should mark a location closed when it has a non-empty location event note', async () => {
+    await models.EventRelatedInfo.create({
+      location_id: location.id,
+      event: 'COVID19',
+      information: 'This location is temporarily closed.',
+    });
+
+    const res = await request(app)
+      .get(`/locations/${location.id}`)
+      .expect(200);
+
+    expect(res.body.closed).toBe(true);
+  });
+
   it('should return a 404 status code when the given location ID isn\'t found', () => {
     const nonExistentLocationId = '11111111-1111-1111-1111-111111111111';
 

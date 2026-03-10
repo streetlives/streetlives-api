@@ -22,17 +22,20 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
-const isLocationClosed = (occasion, eventRelatedInfos, services) => {
+const hasOccasionLocationClosureNote = (occasion, eventRelatedInfos) => {
   if (!occasion) {
     return false;
   }
-  const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
-  eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
-  const locationServicesAllClosed = !services ||
-  services.every(service => service.HolidaySchedules.every(holidaySchedule =>
-    holidaySchedule.closed));
-  return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+  return eventRelatedInfos &&
+    eventRelatedInfos.some(eventRelatedInfo => (
+      eventRelatedInfo.event === occasion
+      && typeof eventRelatedInfo.information === 'string'
+      && eventRelatedInfo.information.trim() !== ''
+    ));
 };
+
+const isLocationClosed = (occasion, eventRelatedInfos) =>
+  hasOccasionLocationClosureNote(occasion, eventRelatedInfos);
 
 // Get location and service associations separately to reduce SQL size
 // (avoids 16KB+ queries, which would result in session pinning)
