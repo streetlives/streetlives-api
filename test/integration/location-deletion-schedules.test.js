@@ -105,6 +105,50 @@ describe('location deletion schedules', () => {
       await secondLocation.addService(service);
     }
 
+    await Promise.all([
+      models.DocumentsInfo.create({
+        service_id: service.id,
+        recertification_time: '30 days',
+        grace_period: '7 days',
+        additional_info: 'Bring a photo ID',
+      }),
+      models.RequiredDocument.create({
+        service_id: service.id,
+        document: 'Photo ID',
+      }),
+      models.Phone.create({
+        service_id: service.id,
+        number: '212-555-1212',
+        type: 'voice',
+        description: 'Main service line',
+      }),
+      models.RegularSchedule.create({
+        service_id: service.id,
+        weekday: 1,
+        opens_at: '09:00',
+        closes_at: '17:00',
+      }),
+      models.HolidaySchedule.create({
+        service_id: service.id,
+        closed: false,
+        opens_at: '10:00',
+        closes_at: '14:00',
+        start_date: '2026-01-01',
+        end_date: '2026-01-01',
+        occasion: 'HolidayHours',
+      }),
+      models.ServiceArea.create({
+        service_id: service.id,
+        postal_codes: ['10001', '10002'],
+        description: 'Downtown Manhattan',
+      }),
+      models.EventRelatedInfo.create({
+        service_id: service.id,
+        event: 'COVID19',
+        information: 'Masks required',
+      }),
+    ]);
+
     return {
       organization,
       location,
@@ -137,6 +181,10 @@ describe('location deletion schedules', () => {
 
     expect(await models.Service.findByPk(service.id)).toBeNull();
     expect(await models.LocationDeletionSchedule.count()).toBe(1);
+    const schedule = await models.LocationDeletionSchedule.findOne();
+    expect(schedule.service_snapshots).toHaveLength(1);
+    expect(schedule.service_snapshots[0].service.name).toBe('Case management');
+    expect(schedule.service_snapshots[0].phones).toHaveLength(1);
 
     const locationInfo = await request(app)
       .get(`/locations/${location.id}`)
@@ -183,6 +231,29 @@ describe('location deletion schedules', () => {
     const dbLocation = await models.Location.findByPk(location.id);
     expect(dbLocation.hidden_from_search).toBe(false);
     expect(await models.LocationDeletionSchedule.count()).toBe(0);
+
+    const restoredService = await models.Service.findOne({
+      include: [
+        models.Taxonomy,
+        models.DocumentsInfo,
+        models.RequiredDocument,
+        models.Phone,
+        models.RegularSchedule,
+        models.HolidaySchedule,
+        models.ServiceArea,
+        models.EventRelatedInfo,
+      ],
+    });
+    expect(restoredService.name).toBe('Case management');
+    expect(restoredService.additional_info).toBeNull();
+    expect(restoredService.Taxonomies).toHaveLength(1);
+    expect(restoredService.DocumentsInfo.recertification_time).toBe('30 days');
+    expect(restoredService.RequiredDocuments[0].document).toBe('Photo ID');
+    expect(restoredService.Phones[0].number).toBe('212-555-1212');
+    expect(restoredService.RegularSchedules[0].opens_at).toBe('09:00:00');
+    expect(restoredService.HolidaySchedules[0].occasion).toBe('HolidayHours');
+    expect(restoredService.ServiceAreas[0].postal_codes).toEqual(['10001', '10002']);
+    expect(restoredService.EventRelatedInfos[0].information).toBe('Masks required');
   });
 
   it('requires a note when scheduling a deletion', async () => {
