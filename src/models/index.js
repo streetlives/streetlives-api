@@ -32,13 +32,8 @@ const createSequelizeLogger = () => {
     if (shouldLogLargeQueries && typeof sql === 'string') {
       const sqlSizeBytes = Buffer.byteLength(sql, 'utf8');
       if (sqlSizeBytes >= thresholdBytes) {
-        const previewLength = 500;
-        const queryPreview = sql.length > previewLength
-          ? `${sql.slice(0, previewLength)}... [truncated]`
-          : sql;
-
         const warningMessage = `[sequelize] Large query ${sqlSizeBytes} bytes`
-          + ` (threshold ${thresholdBytes}). ${queryPreview}\n`;
+          + ` (threshold ${thresholdBytes}). ${sql}\n`;
         process.stderr.write(warningMessage);
       }
     }
