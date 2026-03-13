@@ -297,10 +297,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationStubs = async (filterParameters,
+  Location.findUniqueLocationStubs = async (
+    filterParameters,
     additionalConditions,
     originalQueryProps = {},
-    selectedAttributeForOrderBy, noServices) => {
+    noServices,
+  ) => {
     const queryProps = { order: originalQueryProps.order };
     // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
@@ -371,11 +373,6 @@ module.exports = (sequelize, DataTypes, Op) => {
       return Location.findAll({
         ...queryProps,
         where: sequelize.and(..._whereConditions, ...additionalConditions),
-        attributes: [
-          sequelize.fn('DISTINCT', sequelize.col('Location.id')),
-          // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-          ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
-        ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
         // https://github.com/sequelize/sequelize/issues/5481
@@ -490,14 +487,15 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       ].reduce((a, b) => a.concat(b));
 
-      // Remove duplicates
-      locations = Array.from(new Map(searchResults.map(item => [item.id, item])).values());
+      locations = searchResults;
     } else {
       locations = await findAll(whereConditions);
     }
 
-    // apply limit and offset in memory here
-    locations = locations.slice(offset || 0, limit ? (offset || 0) + limit : undefined);
+    // Remove duplicates
+    locations = Array.from(new Map(locations.map(item => [item.id, item])).values())
+      // apply limit and offset in memory here
+      .slice(offset || 0, limit ? (offset || 0) + limit : undefined);
 
     return locations;
   };
@@ -559,7 +557,6 @@ module.exports = (sequelize, DataTypes, Op) => {
           limit,
           offset,
         },
-        selectedAttributeForOrderBy,
         noServices,
       );
 
@@ -575,7 +572,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           order,
           limit: minResults,
           offset,
-        }, selectedAttributeForOrderBy, noServices);
+        }, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
@@ -583,7 +580,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         limit,
         offset,
         order,
-      }, selectedAttributeForOrderBy);
+      });
     }
 
     const locationIds = locationStubs.map(location => location.id);
