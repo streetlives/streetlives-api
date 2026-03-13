@@ -297,7 +297,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationIds = async (filterParameters,
+  Location.findUniqueLocationStubs = async (filterParameters,
     additionalConditions,
     originalQueryProps = {},
     selectedAttributeForOrderBy, noServices) => {
@@ -499,7 +499,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     // apply limit and offset in memory here
     locations = locations.slice(offset || 0, limit ? (offset || 0) + limit : undefined);
 
-    return locations.map(location => location.id);
+    return locations;
   };
 
   Location.search = async ({
@@ -513,7 +513,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     sortBy,
     noServices,
   }) => {
-    let locationIds;
+    let locationStubs;
     let distance;
     let totalNumLocations;
     // order is used to specify the attribute referenced in the ORDER BY
@@ -547,12 +547,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
-      totalNumLocations = (await Location.findUniqueLocationIds(
+      totalNumLocations = (await Location.findUniqueLocationStubs(
         filterParameters,
         [distanceCondition],
       )).length;
 
-      locationIds = await Location.findUniqueLocationIds(
+      locationStubs = await Location.findUniqueLocationStubs(
         filterParameters,
         [distanceCondition].filter(Boolean), {
           order,
@@ -569,26 +569,28 @@ module.exports = (sequelize, DataTypes, Op) => {
       // However, filtering by window functions requires nested queries, which
       // aren't natively supported by sequelize and would require a raw query.
       // For now, the simplicity and security of sequelize seems worth the slight performance hit.
-      if (minResults && locationIds.length < minResults) {
-        totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
-        locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
+      if (minResults && locationStubs.length < minResults) {
+        totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
+        locationStubs = await Location.findUniqueLocationStubs(filterParameters, [], {
           order,
           limit: minResults,
           offset,
         }, selectedAttributeForOrderBy, noServices);
       }
     } else {
-      totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
-      locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
+      totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
+      locationStubs = await Location.findUniqueLocationStubs(filterParameters, [], {
         limit,
         offset,
         order,
       }, selectedAttributeForOrderBy);
     }
 
+    const locationIds = locationStubs.map(location => location.id);
+
     let locationsWithAssociations;
     if (locationFieldsOnly) {
-      locationsWithAssociations = locationIds;
+      locationsWithAssociations = locationStubs;
     } else {
       const additionalLocationData = [
         sequelize.models.Organization,
