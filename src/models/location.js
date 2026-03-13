@@ -390,14 +390,15 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.models.Organization,
           sequelize.models.PhysicalAddress,
           sequelize.models.Phone,
+          sequelize.models.EventRelatedInfo,
           {
             model: sequelize.models.Service,
             required: !noServices,
             include: [
               sequelize.models.Taxonomy,
+              sequelize.models.HolidaySchedule,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
-              ...(occasion ? [sequelize.models.HolidaySchedule] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
               ...(shouldJoinEligibilities ? [{
                 model: sequelize.models.Eligibility,
@@ -585,37 +586,34 @@ module.exports = (sequelize, DataTypes, Op) => {
       }, selectedAttributeForOrderBy);
     }
 
-    const additionalLocationData = locationFieldsOnly ? [
-      sequelize.models.EventRelatedInfo,
-      {
-        model: sequelize.models.Service,
-        include: [
-          sequelize.models.HolidaySchedule,
-        ],
-      },
-    ] : [
-      sequelize.models.Organization,
-      sequelize.models.EventRelatedInfo,
-      {
-        model: sequelize.models.Service,
-        include: [
-          sequelize.models.Taxonomy,
-          sequelize.models.RequiredDocument,
-          sequelize.models.HolidaySchedule,
-        ],
-      },
-      sequelize.models.Phone,
-      sequelize.models.PhysicalAddress,
-    ];
+    let locationsWithAssociations;
+    if (locationFieldsOnly) {
+      locationsWithAssociations = locationIds;
+    } else {
+      const additionalLocationData = [
+        sequelize.models.Organization,
+        sequelize.models.EventRelatedInfo,
+        {
+          model: sequelize.models.Service,
+          include: [
+            sequelize.models.Taxonomy,
+            sequelize.models.RequiredDocument,
+            sequelize.models.HolidaySchedule,
+          ],
+        },
+        sequelize.models.Phone,
+        sequelize.models.PhysicalAddress,
+      ];
 
-    const locationsWithAssociations = await Location.findAll({
-      attributes: {
-        include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
-      },
-      where: { id: { [Op.in]: locationIds } },
-      include: additionalLocationData,
-      order,
-    });
+      locationsWithAssociations = await Location.findAll({
+        attributes: {
+          include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+        },
+        where: { id: { [Op.in]: locationIds } },
+        include: additionalLocationData,
+        order,
+      });
+    }
 
     function sortByLocationIds(a, b) {
       return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);

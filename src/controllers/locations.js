@@ -232,7 +232,12 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-      const limit = pageSize || maxResults;
+
+      const requestedLimit = pageSize || maxResults;
+      const maxDetailedResults = 200;
+      const limit = locationFieldsOnly
+        ? requestedLimit
+        : Math.min(requestedLimit, maxDetailedResults);
 
       const offset = pageNumber !== undefined && pageSize !== undefined ?
         pageNumber * pageSize : undefined;
