@@ -52,10 +52,16 @@ const serviceAssociations = {
       model: models.ServiceTaxonomySpecificAttribute,
       include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
     },
-    models.Taxonomy,
+    {
+      model: models.Taxonomy,
+      through: { attributes: [] },
+    },
     models.RegularSchedule,
     models.HolidaySchedule,
-    models.Language,
+    {
+      model: models.Language,
+      through: { attributes: [] },
+    },
     models.RequiredDocument,
     models.DocumentsInfo,
     models.Phone,
@@ -308,6 +314,7 @@ export default {
           {
             include: [{
               model: models.Service,
+              through: { attributes: [] },
               include: serviceAssociations.include,
             }],
             attributes: ['id'],
@@ -350,6 +357,7 @@ export default {
         {
           include: [{
             model: models.Service,
+            through: { attributes: [] },
             include: serviceAssociations.include,
           }],
           attributes: ['id'],
