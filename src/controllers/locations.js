@@ -257,7 +257,7 @@ export default {
         sortBy,
       });
       const plainLocations = await locations
-        .map(location => location.get({ plain: true }));
+        .map(location => (location.get ? location.get({ plain: true }) : location));
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
       const formattedLocations = plainLocations.map((location) => {
