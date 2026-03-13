@@ -336,6 +336,13 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
     if (openAt) {
       whereConditions.push(getOpeningHoursCondition(openAt, occasion));
+      // Exclude locations that have any event-related info when openAt is specified.
+      whereConditions.push(sequelize.where(
+        sequelize.literal(
+          'NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id")',
+        ),
+        true,
+      ));
     }
     if (servesZipcode) {
       whereConditions.push(getServiceAreaCondition(servesZipcode));
