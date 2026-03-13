@@ -14,6 +14,7 @@ import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
+const MAX_TAXONOMY_IDS = 200;
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -232,7 +233,11 @@ export default {
       }
 
       if (taxonomyId) {
-        const taxonomyIds = taxonomyId.split(',');
+        const taxonomyIds = taxonomyId.split(',').filter(Boolean);
+        if (taxonomyIds.length > MAX_TAXONOMY_IDS) {
+          const message = `taxonomyId query param may include at most ${MAX_TAXONOMY_IDS} IDs`;
+          throw new ValidationError(message);
+        }
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
       const limit = pageSize || maxResults;

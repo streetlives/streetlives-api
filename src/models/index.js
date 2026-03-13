@@ -8,11 +8,53 @@ import config from '../config';
 const basename = path.basename(__filename);
 const db = {};
 
+const createSequelizeLogger = () => {
+  const baseLogging = config.db.options.logging;
+  const thresholdBytes = config.db.largeQueryThresholdBytes;
+  const shouldLogLargeQueries = config.db.logLargeQueries;
+  let baseLogger = null;
+
+  if (typeof baseLogging === 'function') {
+    baseLogger = baseLogging;
+  } else if (baseLogging) {
+    baseLogger = sql => process.stdout.write(`${sql}\n`);
+  }
+
+  if (!baseLogger && !shouldLogLargeQueries) {
+    return false;
+  }
+
+  return (sql, ...args) => {
+    if (baseLogger) {
+      baseLogger(sql, ...args);
+    }
+
+    if (shouldLogLargeQueries && typeof sql === 'string') {
+      const sqlSizeBytes = Buffer.byteLength(sql, 'utf8');
+      if (sqlSizeBytes >= thresholdBytes) {
+        const previewLength = 500;
+        const queryPreview = sql.length > previewLength
+          ? `${sql.slice(0, previewLength)}... [truncated]`
+          : sql;
+
+        const warningMessage = `[sequelize] Large query ${sqlSizeBytes} bytes`
+          + ` (threshold ${thresholdBytes}). ${queryPreview}\n`;
+        process.stderr.write(warningMessage);
+      }
+    }
+  };
+};
+
+const sequelizeOptions = {
+  ...config.db.options,
+  logging: createSequelizeLogger(),
+};
+
 const sequelize = new Sequelize(
   config.db.database,
   config.db.username,
   config.db.password,
-  config.db.options,
+  sequelizeOptions,
 );
 
 fs

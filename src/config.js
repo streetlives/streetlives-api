@@ -8,6 +8,11 @@ export default {
     database: process.env.DATABASE_NAME || 'streetlives',
     username: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
+    largeQueryThresholdBytes: parseNumber(
+      process.env.DATABASE_LARGE_QUERY_THRESHOLD_BYTES,
+      12288,
+    ),
+    logLargeQueries: parseBoolean(process.env.DATABASE_LOG_LARGE_QUERIES, true),
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
       port: parseNumber(process.env.DATABASE_PORT, 5432),
@@ -17,7 +22,8 @@ export default {
       pool: {
         max: parseNumber(process.env.DATABASE_POOL_MAX, 1),
         min: parseNumber(process.env.DATABASE_POOL_MIN, 0),
-        // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000), // let the RDS proxy handle timeout
+        // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000),
+        // let the RDS proxy handle timeout
       },
       dialectOptions: {
         ssl: {
