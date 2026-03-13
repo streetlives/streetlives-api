@@ -608,22 +608,52 @@ module.exports = (sequelize, DataTypes, Op) => {
       sequelize.models.PhysicalAddress,
     ];
 
-    const locationsWithAssociations = await Location.findAll({
-      attributes: {
-        include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
-      },
-      where: { id: { [Op.in]: locationIds } },
-      include: additionalLocationData,
-      order,
-    });
+    // Chunk locationIds into groups of 200 to avoid large queries causing RDS proxy session pinning
+    const chunkSize = 200;
+    const chunks = [];
+    for (let i = 0; i < locationIds.length; i += chunkSize) {
+      chunks.push(locationIds.slice(i, i + chunkSize));
+    }
+
+    // Run parallel queries for each chunk, without order to combine results properly
+    const queryPromises = chunks.map((chunk) =>
+      Location.findAll({
+        attributes: {
+          include: selectedAttributeForOrderBy
+            ? [selectedAttributeForOrderBy]
+            : undefined,
+        },
+        where: { id: { [Op.in]: chunk } },
+        include: additionalLocationData,
+        // Remove order here; we'll sort in memory after
+      }),
+    );
 
     function sortByLocationIds(a, b) {
       return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);
     }
 
-    const sortedLocationsWithAssociations = order ?
-      locationsWithAssociations :
-      locationsWithAssociations.sort(sortByLocationIds);
+    // Await all parallel queries and flatten results
+    const allResults = (await Promise.all(queryPromises)).flat();
+
+    // Apply sorting in memory
+    let sortedLocationsWithAssociations;
+    if (order) {
+      // Sort by the specified order attribute (e.g., distance, service_count, last_validated_at)
+      const [sortAttr, sortDir] = order[0]; // Assuming single-level order
+      sortedLocationsWithAssociations = allResults.sort((a, b) => {
+        const aVal = a[sortAttr];
+        const bVal = b[sortAttr];
+        if (sortDir === 'ASC') {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        } else {
+          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+        }
+      });
+    } else {
+      // Sort by locationIds order
+      sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
+    }
 
     return {
       locations: sortedLocationsWithAssociations,
