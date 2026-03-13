@@ -250,7 +250,7 @@ export default {
       } = await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
-        minResults,
+        minResults: capDetailedLocations(minResults),
         filterParameters,
         locationFieldsOnly,
         noServices: parseBoolean(noServices),
