@@ -301,6 +301,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     filterParameters,
     additionalConditions,
     originalQueryProps = {},
+    selectedAttributeForOrderBy,
     noServices,
   ) => {
     const queryProps = { order: originalQueryProps.order };
@@ -373,6 +374,9 @@ module.exports = (sequelize, DataTypes, Op) => {
       return Location.findAll({
         ...queryProps,
         where: sequelize.and(..._whereConditions, ...additionalConditions),
+        attributes: {
+          include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+        },
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
         // https://github.com/sequelize/sequelize/issues/5481
@@ -557,6 +561,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           limit,
           offset,
         },
+        selectedAttributeForOrderBy,
         noServices,
       );
 
@@ -572,7 +577,7 @@ module.exports = (sequelize, DataTypes, Op) => {
           order,
           limit: minResults,
           offset,
-        }, noServices);
+        }, selectedAttributeForOrderBy, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
@@ -580,7 +585,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         limit,
         offset,
         order,
-      });
+      }, selectedAttributeForOrderBy);
     }
 
     const locationIds = locationStubs.map(location => location.id);
