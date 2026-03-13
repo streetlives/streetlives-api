@@ -169,8 +169,15 @@ export default {
         sortBy,
       } = req.query;
 
+      const capDetailedLocations = (requestedLimit) => {
+        const maxDetailedLocations = 200;
+        return locationFieldsOnly
+          ? requestedLimit
+          : Math.min(requestedLimit, maxDetailedLocations);
+      };
+
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
-      const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const pageSize = _pageNumber ? capDetailedLocations(parseInt(_pageSize, 10)) : undefined;
       const age = _age ? parseInt(_age, 10) : undefined;
       const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
       const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
@@ -232,15 +239,10 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
+      const limit = pageSize || capDetailedLocations(maxResults);
 
-      const requestedLimit = pageSize || maxResults;
-      const maxDetailedResults = 200;
-      const limit = locationFieldsOnly
-        ? requestedLimit
-        : Math.min(requestedLimit, maxDetailedResults);
-
-      const offset = pageNumber !== undefined && limit !== undefined ?
-        pageNumber * limit : undefined;
+      const offset = pageNumber !== undefined && pageSize !== undefined ?
+        pageNumber * pageSize : undefined;
 
       const {
         locations,
