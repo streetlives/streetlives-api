@@ -8,6 +8,11 @@ export default {
     database: process.env.DATABASE_NAME || 'streetlives',
     username: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
+    largeQueryThresholdBytes: parseNumber(
+      process.env.DATABASE_LARGE_QUERY_THRESHOLD_BYTES,
+      12288,
+    ),
+    logLargeQueries: parseBoolean(process.env.DATABASE_LOG_LARGE_QUERIES, true),
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
       port: parseNumber(process.env.DATABASE_PORT, 5432),
