@@ -239,8 +239,8 @@ export default {
         ? requestedLimit
         : Math.min(requestedLimit, maxDetailedResults);
 
-      const offset = pageNumber !== undefined && pageSize !== undefined ?
-        pageNumber * pageSize : undefined;
+      const offset = pageNumber !== undefined && limit !== undefined ?
+        pageNumber * limit : undefined;
 
       const {
         locations,
