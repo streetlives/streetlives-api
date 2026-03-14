@@ -15,7 +15,7 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
-const isLocationClosed = (occasion, eventRelatedInfos, services) => {
+const isLocationClosed = (occasion, eventRelatedInfos) => {
   if (!occasion) {
     return false;
   }
@@ -111,7 +111,7 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
   const { EventRelatedInfos } = location;
   // FIXME: we should not be hard-coding the COVID19 event here
   // this is logic that needs ot be revisited in this codebase
-  const closed = isLocationClosed('COVID19', EventRelatedInfos, services);
+  const closed = isLocationClosed('COVID19', EventRelatedInfos);
 
   if (excludeMetadata) {
     const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
@@ -263,8 +263,8 @@ export default {
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
       const formattedLocations = plainLocations.map((location) => {
-        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+        const { EventRelatedInfos, Services: _, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(occasion, EventRelatedInfos);
 
         if (locationFieldsOnly) {
           return {
