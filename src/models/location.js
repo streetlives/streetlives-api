@@ -39,7 +39,6 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   const SERVICE_COUNT_COLUMN_ALIAS = 'service_count';
-
   const SERVICE_COUNT_SUBQUERY = [
     sequelize.literal(`(
                 SELECT cast(COUNT(*) as integer)
@@ -47,6 +46,16 @@ module.exports = (sequelize, DataTypes, Op) => {
                 WHERE service_at_locations.location_id = "Location"."id"
             )`),
     SERVICE_COUNT_COLUMN_ALIAS,
+  ];
+
+  const EVENTS_WITH_INFO_COLUMN_ALIAS = 'events_with_info';
+  const EVENTS_WITH_INFO_COLUMN_SUBQUERY = [
+    sequelize.literal(`(
+                SELECT JSON_AGG(DISTINCT event_related_info.event)
+                FROM event_related_info
+                WHERE event_related_info.location_id = "Location".id
+            )`),
+    EVENTS_WITH_INFO_COLUMN_ALIAS,
   ];
 
   Location.associate = (models) => {
@@ -375,7 +384,10 @@ module.exports = (sequelize, DataTypes, Op) => {
         ...queryProps,
         where: sequelize.and(..._whereConditions, ...additionalConditions),
         attributes: {
-          include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+          include: [
+            EVENTS_WITH_INFO_COLUMN_SUBQUERY,
+            ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+          ],
         },
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -496,10 +508,15 @@ module.exports = (sequelize, DataTypes, Op) => {
       locations = await findAll(whereConditions);
     }
 
+    const reconstructEvents = ({
+      [EVENTS_WITH_INFO_COLUMN_ALIAS]: events, ...rest
+    }) => ({ ...rest, EventRelatedInfos: (events || []).map(event => ({ event })) });
+
     // Remove duplicates
     locations = Array.from(new Map(locations.map(item => [item.id, item])).values())
       // apply limit and offset in memory here
-      .slice(offset || 0, limit ? (offset || 0) + limit : undefined);
+      .slice(offset || 0, limit ? (offset || 0) + limit : undefined)
+      .map(reconstructEvents);
 
     return locations;
   };
