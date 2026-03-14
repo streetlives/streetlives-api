@@ -39,7 +39,6 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   const SERVICE_COUNT_COLUMN_ALIAS = 'service_count';
-
   const SERVICE_COUNT_SUBQUERY = [
     sequelize.literal(`(
                 SELECT cast(COUNT(*) as integer)
@@ -47,6 +46,16 @@ module.exports = (sequelize, DataTypes, Op) => {
                 WHERE service_at_locations.location_id = "Location"."id"
             )`),
     SERVICE_COUNT_COLUMN_ALIAS,
+  ];
+
+  const EVENTS_WITH_INFO_COLUMN_ALIAS = 'events_with_info';
+  const EVENTS_WITH_INFO_COLUMN_SUBQUERY = [
+    sequelize.literal(`(
+                SELECT JSON_AGG(DISTINCT event_related_info.event)
+                FROM event_related_info
+                WHERE event_related_info.location_id = "Location".id
+            )`),
+    EVENTS_WITH_INFO_COLUMN_ALIAS,
   ];
 
   Location.associate = (models) => {
@@ -297,10 +306,13 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
-  Location.findUniqueLocationIds = async (filterParameters,
+  Location.findUniqueLocationStubs = async (
+    filterParameters,
     additionalConditions,
     originalQueryProps = {},
-    selectedAttributeForOrderBy, noServices) => {
+    selectedAttributeForOrderBy,
+    noServices,
+  ) => {
     const queryProps = { order: originalQueryProps.order };
     // eslint-disable-next-line prefer-destructuring
     const limit = originalQueryProps.limit;
@@ -371,11 +383,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       return Location.findAll({
         ...queryProps,
         where: sequelize.and(..._whereConditions, ...additionalConditions),
-        attributes: [
-          sequelize.fn('DISTINCT', sequelize.col('Location.id')),
-          // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
-          ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
-        ],
+        attributes: {
+          include: [
+            EVENTS_WITH_INFO_COLUMN_SUBQUERY,
+            ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+          ],
+        },
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
         // https://github.com/sequelize/sequelize/issues/5481
@@ -390,14 +403,15 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.models.Organization,
           sequelize.models.PhysicalAddress,
           sequelize.models.Phone,
+          sequelize.models.EventRelatedInfo,
           {
             model: sequelize.models.Service,
             required: !noServices,
             include: [
               sequelize.models.Taxonomy,
+              sequelize.models.HolidaySchedule,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
-              ...(occasion ? [sequelize.models.HolidaySchedule] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
               ...(shouldJoinEligibilities ? [{
                 model: sequelize.models.Eligibility,
@@ -489,16 +503,22 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       ].reduce((a, b) => a.concat(b));
 
-      // Remove duplicates
-      locations = Array.from(new Map(searchResults.map(item => [item.id, item])).values());
+      locations = searchResults;
     } else {
       locations = await findAll(whereConditions);
     }
 
-    // apply limit and offset in memory here
-    locations = locations.slice(offset || 0, limit ? (offset || 0) + limit : undefined);
+    const reconstructEvents = ({
+      [EVENTS_WITH_INFO_COLUMN_ALIAS]: events, ...rest
+    }) => ({ ...rest, EventRelatedInfos: (events || []).map(event => ({ event })) });
 
-    return locations.map(location => location.id);
+    // Remove duplicates
+    locations = Array.from(new Map(locations.map(item => [item.id, item])).values())
+      // apply limit and offset in memory here
+      .slice(offset || 0, limit ? (offset || 0) + limit : undefined)
+      .map(reconstructEvents);
+
+    return locations;
   };
 
   Location.search = async ({
@@ -512,7 +532,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     sortBy,
     noServices,
   }) => {
-    let locationIds;
+    let locationStubs;
     let distance;
     let totalNumLocations;
     // order is used to specify the attribute referenced in the ORDER BY
@@ -546,12 +566,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
-      totalNumLocations = (await Location.findUniqueLocationIds(
+      totalNumLocations = (await Location.findUniqueLocationStubs(
         filterParameters,
         [distanceCondition],
       )).length;
 
-      locationIds = await Location.findUniqueLocationIds(
+      locationStubs = await Location.findUniqueLocationStubs(
         filterParameters,
         [distanceCondition].filter(Boolean), {
           order,
@@ -568,54 +588,53 @@ module.exports = (sequelize, DataTypes, Op) => {
       // However, filtering by window functions requires nested queries, which
       // aren't natively supported by sequelize and would require a raw query.
       // For now, the simplicity and security of sequelize seems worth the slight performance hit.
-      if (minResults && locationIds.length < minResults) {
-        totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
-        locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
+      if (minResults && locationStubs.length < minResults) {
+        totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
+        locationStubs = await Location.findUniqueLocationStubs(filterParameters, [], {
           order,
           limit: minResults,
           offset,
         }, selectedAttributeForOrderBy, noServices);
       }
     } else {
-      totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
-      locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
+      totalNumLocations = (await Location.findUniqueLocationStubs(filterParameters, [])).length;
+      locationStubs = await Location.findUniqueLocationStubs(filterParameters, [], {
         limit,
         offset,
         order,
       }, selectedAttributeForOrderBy);
     }
 
-    const additionalLocationData = locationFieldsOnly ? [
-      sequelize.models.EventRelatedInfo,
-      {
-        model: sequelize.models.Service,
-        include: [
-          sequelize.models.HolidaySchedule,
-        ],
-      },
-    ] : [
-      sequelize.models.Organization,
-      sequelize.models.EventRelatedInfo,
-      {
-        model: sequelize.models.Service,
-        include: [
-          sequelize.models.Taxonomy,
-          sequelize.models.RequiredDocument,
-          sequelize.models.HolidaySchedule,
-        ],
-      },
-      sequelize.models.Phone,
-      sequelize.models.PhysicalAddress,
-    ];
+    const locationIds = locationStubs.map(location => location.id);
 
-    const locationsWithAssociations = await Location.findAll({
-      attributes: {
-        include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
-      },
-      where: { id: { [Op.in]: locationIds } },
-      include: additionalLocationData,
-      order,
-    });
+    let locationsWithAssociations;
+    if (locationFieldsOnly) {
+      locationsWithAssociations = locationStubs;
+    } else {
+      const additionalLocationData = [
+        sequelize.models.Organization,
+        sequelize.models.EventRelatedInfo,
+        {
+          model: sequelize.models.Service,
+          include: [
+            sequelize.models.Taxonomy,
+            sequelize.models.RequiredDocument,
+            sequelize.models.HolidaySchedule,
+          ],
+        },
+        sequelize.models.Phone,
+        sequelize.models.PhysicalAddress,
+      ];
+
+      locationsWithAssociations = await Location.findAll({
+        attributes: {
+          include: selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : undefined,
+        },
+        where: { id: { [Op.in]: locationIds } },
+        include: additionalLocationData,
+        order,
+      });
+    }
 
     function sortByLocationIds(a, b) {
       return locationIds.indexOf(a.id) - locationIds.indexOf(b.id);

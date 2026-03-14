@@ -15,7 +15,7 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 
-const isLocationClosed = (occasion, eventRelatedInfos, services) => {
+const isLocationClosed = (occasion, eventRelatedInfos) => {
   if (!occasion) {
     return false;
   }
@@ -111,7 +111,7 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
   const { EventRelatedInfos } = location;
   // FIXME: we should not be hard-coding the COVID19 event here
   // this is logic that needs ot be revisited in this codebase
-  const closed = isLocationClosed('COVID19', EventRelatedInfos, services);
+  const closed = isLocationClosed('COVID19', EventRelatedInfos);
 
   if (excludeMetadata) {
     const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
@@ -169,8 +169,15 @@ export default {
         sortBy,
       } = req.query;
 
+      const capDetailedLocations = (requestedLimit) => {
+        const maxDetailedLocations = 200;
+        return locationFieldsOnly
+          ? requestedLimit
+          : Math.min(requestedLimit, maxDetailedLocations);
+      };
+
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
-      const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const pageSize = _pageNumber ? capDetailedLocations(parseInt(_pageSize, 10)) : undefined;
       const age = _age ? parseInt(_age, 10) : undefined;
       const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
       const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
@@ -232,7 +239,7 @@ export default {
         const taxonomyIds = taxonomyId.split(',');
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-      const limit = pageSize || maxResults;
+      const limit = pageSize || capDetailedLocations(maxResults);
 
       const offset = pageNumber !== undefined && pageSize !== undefined ?
         pageNumber * pageSize : undefined;
@@ -243,7 +250,7 @@ export default {
       } = await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
-        minResults,
+        minResults: capDetailedLocations(minResults),
         filterParameters,
         locationFieldsOnly,
         noServices: parseBoolean(noServices),
@@ -252,12 +259,12 @@ export default {
         sortBy,
       });
       const plainLocations = await locations
-        .map(location => location.get({ plain: true }));
+        .map(location => (location.get ? location.get({ plain: true }) : location));
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
       const formattedLocations = plainLocations.map((location) => {
-        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+        const { EventRelatedInfos, Services: _, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(occasion, EventRelatedInfos);
 
         if (locationFieldsOnly) {
           return {
