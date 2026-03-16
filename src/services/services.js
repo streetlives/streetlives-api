@@ -73,6 +73,28 @@ const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
   }, { transaction: t, metadata })));
 };
 
+const updateTaxonomy = async (service, taxonomy, { t, user, metadata }) => {
+  const currentTaxonomies = await models.ServiceTaxonomy.findAll({
+    where: { service_id: service.id },
+    transaction: t,
+  });
+  const currentTaxonomyIds = currentTaxonomies
+    .map(({ taxonomy_id: taxonomyId }) => taxonomyId)
+    .filter(Boolean);
+
+  if (currentTaxonomyIds.length === 1 && currentTaxonomyIds[0] === taxonomy.id) {
+    return;
+  }
+
+  await Promise.all(currentTaxonomies.map((currentTaxonomy) =>
+    destroyInstance(user, currentTaxonomy, { transaction: t })));
+
+  await createInstance(user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
+    service_id: service.id,
+    taxonomy_id: taxonomy.id,
+  }, { transaction: t, metadata });
+};
+
 const updateServiceAreas = async (service, area, { t, user, metadata }) => {
   const { postal_codes: postalCodes } = area;
 
@@ -240,7 +262,7 @@ export const updateService = (
   const updatePromises = [];
 
   if (taxonomy) {
-    updatePromises.push(service.setTaxonomies([taxonomy], { transaction: t }));
+    updatePromises.push(updateTaxonomy(service, taxonomy, { t, user, metadata }));
   }
 
   if (hours) {

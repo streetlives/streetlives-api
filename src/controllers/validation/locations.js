@@ -60,6 +60,13 @@ export default {
     }).required(),
   },
 
+  getChanges: {
+    query: Joi.object().keys({
+      cursor: Joi.string(),
+      since: Joi.date().iso(),
+      limit: Joi.number().integer().positive().max(200),
+    }).required(),
+  },
   create: {
     body: Joi.object().keys({
       name: Joi.string(),

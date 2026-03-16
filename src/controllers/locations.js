@@ -7,6 +7,7 @@ import {
   getMetadataForService,
   getLastValidatedDateForLocation,
 } from '../services/last-updates';
+import { getLocationChanges } from '../services/location-changes';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
@@ -287,6 +288,17 @@ export default {
         res.setHeader('Total-Count', totalNumLocations);
       }
       res.send(formattedLocations);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getChanges: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getChanges, { allowUnknown: true });
+
+      const changes = await getLocationChanges(req.query);
+      res.send(changes);
     } catch (err) {
       next(err);
     }
