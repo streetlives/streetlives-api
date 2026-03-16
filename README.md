@@ -58,6 +58,8 @@ All configuration options can be passed to the server using environment variable
 * `DATABASE_HOST` - The URL at which the database is hosted
 * `DATABASE_USER` - The username used to connect to the database
 * `DATABASE_PASSWORD` - The password used to connect to the database
+* `DATABASE_CLIENT_MIN_MESSAGES` - Postgres `client_min_messages` level. Keep as `ignore` with RDS Proxy to avoid connection pinning from session-level `SET` commands (Default: `ignore`)
+* `DATABASE_KEEP_DEFAULT_TIMEZONE` - When `true`, sequelize will not issue `SET TIME ZONE ...` per connection, which avoids RDS Proxy session pinning (Default: `true`)
 
 Environment variables depends on the operating system, but can generally be set in the command-line when running the server.
 
