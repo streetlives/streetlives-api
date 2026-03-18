@@ -38,20 +38,6 @@ function parseJwt(token) {
   };
 }
 
-function normalizeHost(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/:\d+$/, '');
-}
-
-function normalizeOriginPattern(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\/$/, '');
-}
-
 function normalizeValues(values) {
   return values
     .map(value => String(value || '').trim())
@@ -71,112 +57,49 @@ function getClaimValues(value) {
   return normalizeValues([value]);
 }
 
-function extractRequestOrigin(value) {
-  if (!value) return null;
-  const rawValue = String(value).trim();
-  if (!rawValue) return null;
-  if (rawValue.toLowerCase() === 'null') return 'null';
-  try {
-    const parsedUrl = new URL(rawValue);
-    if (!parsedUrl.protocol || !parsedUrl.host) {
-      return null;
-    }
-    return `${parsedUrl.protocol}//${parsedUrl.host}`.toLowerCase();
-  } catch (error) {
-    return normalizeOriginPattern(rawValue);
-  }
-}
-
-function isAllowedHost(host, allowedHosts) {
-  return allowedHosts.some((allowedHost) => {
-    const normalizedAllowedHost = normalizeHost(allowedHost);
-    if (!normalizedAllowedHost) return false;
-    if (normalizedAllowedHost.startsWith('*.')) {
-      const suffix = normalizedAllowedHost.slice(1);
-      return host.endsWith(suffix);
-    }
-    return host === normalizedAllowedHost;
-  });
-}
-
-function isAllowedOrigin(origin, allowedOriginPatterns) {
-  return allowedOriginPatterns.some((allowedOriginPattern) => {
-    const normalizedAllowedOriginPattern = normalizeOriginPattern(allowedOriginPattern);
-    if (!normalizedAllowedOriginPattern) return false;
-    if (normalizedAllowedOriginPattern.endsWith('*')) {
-      return origin.startsWith(normalizedAllowedOriginPattern.slice(0, -1));
-    }
-    return origin === normalizedAllowedOriginPattern;
-  });
-}
-
-function assertAllowedRequestOrigin(req) {
-  const allowedHosts = config.internalLocationCatalog.allowedOriginHosts || [];
-  const allowedOriginPatterns = config.internalLocationCatalog.allowedOriginPatterns || [];
-  if (!allowedHosts.length && !allowedOriginPatterns.length) return;
-
-  const requestOrigin = extractRequestOrigin(req.headers.origin);
-  const requestRefererOrigin = extractRequestOrigin(req.headers.referer || req.headers.referrer);
-  const requestOrigins = [requestOrigin, requestRefererOrigin].filter(Boolean);
-  if (!requestOrigins.length) {
-    throw new ForbiddenError('Origin not allowed for internal location catalog');
-  }
-
-  const requestHosts = requestOrigins
-    .map((origin) => {
-      try {
-        const parsedOrigin = new URL(origin);
-        if (!['http:', 'https:'].includes(parsedOrigin.protocol)) {
-          return null;
-        }
-        return normalizeHost(parsedOrigin.hostname);
-      } catch (error) {
-        return null;
-      }
-    })
-    .filter(Boolean);
-
-  if (requestHosts.some(host => isAllowedHost(host, allowedHosts))) return;
-  if (requestOrigins.some(origin => isAllowedOrigin(origin, allowedOriginPatterns))) return;
-  throw new ForbiddenError('Origin not allowed for internal location catalog');
-}
-
+// Internal catalog access is granted only from verified Cognito claims.
 function assertCatalogAuthorizationConfigured() {
-  if (!config.cognito.userPoolIssuer) {
-    throw new ForbiddenError('Internal location catalog authorization is not configured');
-  }
-}
-
-function assertCatalogAuthorizationClaims(payload) {
-  assertCatalogAuthorizationConfigured();
   const allowedClientIds = normalizeValues(
     config.internalLocationCatalog.allowedClientIds || [],
   );
   const allowedGroupNames = normalizeValues(
     config.internalLocationCatalog.allowedGroupNames || [],
   );
-  if (!allowedClientIds.length && !allowedGroupNames.length) {
+
+  if (
+    !config.cognito.userPoolIssuer
+    || !allowedClientIds.length
+    || !allowedGroupNames.length
+  ) {
     throw new ForbiddenError('Internal location catalog authorization is not configured');
   }
 
-  if (allowedClientIds.length) {
-    const tokenClientIds = getClaimValues(payload.client_id)
-      .concat(getClaimValues(payload.aud))
-      .concat(getClaimValues(payload.azp));
-    const hasAllowedClientId = tokenClientIds.some(tokenClientId =>
-      allowedClientIds.includes(tokenClientId));
-    if (!hasAllowedClientId) {
-      throw new ForbiddenError('Bearer token client is not allowed for internal location catalog');
-    }
+  return {
+    allowedClientIds,
+    allowedGroupNames,
+  };
+}
+
+function assertCatalogAuthorizationClaims(payload) {
+  const {
+    allowedClientIds,
+    allowedGroupNames,
+  } = assertCatalogAuthorizationConfigured();
+
+  const tokenClientIds = getClaimValues(payload.client_id)
+    .concat(getClaimValues(payload.aud))
+    .concat(getClaimValues(payload.azp));
+  const hasAllowedClientId = tokenClientIds.some(tokenClientId =>
+    allowedClientIds.includes(tokenClientId));
+  if (!hasAllowedClientId) {
+    throw new ForbiddenError('Bearer token client is not allowed for internal location catalog');
   }
 
-  if (allowedGroupNames.length) {
-    const tokenGroups = getClaimValues(payload['cognito:groups']);
-    const hasAllowedGroup = tokenGroups.some(groupName =>
-      allowedGroupNames.includes(groupName));
-    if (!hasAllowedGroup) {
-      throw new ForbiddenError('Bearer token group is not allowed for internal location catalog');
-    }
+  const tokenGroups = getClaimValues(payload['cognito:groups']);
+  const hasAllowedGroup = tokenGroups.some(groupName =>
+    allowedGroupNames.includes(groupName));
+  if (!hasAllowedGroup) {
+    throw new ForbiddenError('Bearer token group is not allowed for internal location catalog');
   }
 }
 
@@ -287,7 +210,6 @@ export default async function authorizeInternalLocationCatalogRequest(req) {
   if (!bearerToken) {
     throw new AuthError('Missing bearer token');
   }
-  assertAllowedRequestOrigin(req);
   const payload = await verifyCognitoJwt(bearerToken);
   assertCatalogAuthorizationClaims(payload);
   return payload;

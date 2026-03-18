@@ -1,23 +1,20 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import cors from 'cors';
 import morgan from 'morgan';
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware';
 import setupRoutes from './routes';
+import { publicApiCors, internalLocationCatalogCors } from './services/internal-location-catalog-cors';
 
 const app = express();
-const exposedHeaders = [
-  'Pagination-Count',
-  'Total-Count',
-  'Page-Number',
-  'Page-Size',
-  'Has-More',
-  'Next-Page',
-];
 
 app.use(morgan('dev'));
 
-app.use(cors({ exposedHeaders }));
+app.use((req, res, next) => {
+  if (req.path === '/locations/catalog') {
+    return internalLocationCatalogCors(req, res, next);
+  }
+  return publicApiCors(req, res, next);
+});
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 

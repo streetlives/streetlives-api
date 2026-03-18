@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { AuthError, ForbiddenError } from '../../src/utils/errors';
+import { AuthError } from '../../src/utils/errors';
 
 const mockAuthorizeInternalLocationCatalogRequest = jest.fn();
 
@@ -211,20 +211,7 @@ describe('find locations', () => {
       if (typeof authorization !== 'string' || !authorization.match(/^Bearer\s+.+$/i)) {
         throw new AuthError('Missing bearer token');
       }
-
-      const requestOrigin = req.headers.origin;
-      if (!requestOrigin) {
-        throw new ForbiddenError('Origin not allowed for internal location catalog');
-      }
-
-      if (
-        requestOrigin !== 'https://sheets.doobneek.org'
-        && requestOrigin !== 'chrome-extension://abcdefghijklmnop'
-      ) {
-        throw new ForbiddenError('Origin not allowed for internal location catalog');
-      }
-
-      return { sub: 'test-user', aud: 'allowed-client-id' };
+      return { sub: 'test-user', aud: 'allowed-client-id', 'cognito:groups': ['InternalCatalogUsers'] };
     });
 
     await setupData();
@@ -1138,19 +1125,7 @@ describe('find locations', () => {
         })
         .expect(401));
 
-    it('should reject authenticated browser requests from disallowed origins', () =>
-      request(app)
-        .get('/locations/catalog')
-        .set('Authorization', 'Bearer mocked-internal-token')
-        .set('Origin', 'https://example.com')
-        .query({
-          latitude: originLatitude,
-          longitude: originLongitude,
-          radius: 20000,
-        })
-        .expect(403));
-
-    it('should reject authenticated requests with no origin context', () =>
+    it('should allow authenticated requests with no browser origin context', () =>
       request(app)
         .get('/locations/catalog')
         .set('Authorization', 'Bearer mocked-internal-token')
@@ -1158,8 +1133,14 @@ describe('find locations', () => {
           latitude: originLatitude,
           longitude: originLongitude,
           radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
         })
-        .expect(403));
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.body).toHaveLength(1);
+        }));
 
     it('should allow authenticated extension requests from allowed extension origins', () =>
       request(app)
