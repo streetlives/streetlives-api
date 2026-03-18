@@ -257,6 +257,38 @@ describe('internal location catalog auth', () => {
     }));
   });
 
+  it('re-verifies repeated requests instead of caching raw bearer tokens', async () => {
+    const {
+      authorizeInternalLocationCatalogRequest,
+      config,
+      verify,
+      axios,
+    } = loadAuthorizeWithMocks();
+
+    const token = buildJwt({
+      iss: config.cognito.userPoolIssuer,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      token_use: 'id',
+      aud: 'allowed-client-id',
+      'cognito:groups': ['InternalCatalogUsers'],
+      sub: 'user-123',
+    });
+
+    await authorizeInternalLocationCatalogRequest({
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+    await authorizeInternalLocationCatalogRequest({
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    expect(verify.verify).toHaveBeenCalledTimes(2);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed when the Cognito issuer is not configured', async () => {
     const {
       authorizeInternalLocationCatalogRequest,

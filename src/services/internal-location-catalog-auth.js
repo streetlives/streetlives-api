@@ -7,7 +7,6 @@ const JWKS_CACHE_TTL_MS = 10 * 60 * 1000;
 const COGNITO_ISSUER_RE = /^https:\/\/cognito-idp\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9_-]+$/i;
 const SUPPORTED_TOKEN_USES = new Set(['id', 'access']);
 const jwksCache = new Map();
-const tokenCache = new Map();
 
 function decodeBase64UrlBuffer(value) {
   const normalized = String(value || '')
@@ -181,13 +180,8 @@ function getBearerToken(req) {
 }
 
 async function verifyCognitoJwt(token) {
-  const cached = tokenCache.get(token);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.payload;
-  }
-
   const parsedToken = parseJwt(token);
-  const expiresAt = assertTokenClaims(parsedToken.payload);
+  assertTokenClaims(parsedToken.payload);
   const keysByKid = await fetchIssuerJwks(parsedToken.payload.iss);
   const jwk = keysByKid.get(parsedToken.header.kid);
   if (!jwk) {
@@ -196,11 +190,6 @@ async function verifyCognitoJwt(token) {
   if (!verifyJwtSignature(parsedToken, jwk)) {
     throw new AuthError('Unable to verify bearer token');
   }
-
-  tokenCache.set(token, {
-    expiresAt,
-    payload: parsedToken.payload,
-  });
 
   return parsedToken.payload;
 }
