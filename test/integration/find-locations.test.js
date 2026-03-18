@@ -2,6 +2,15 @@
  * @jest-environment node
  */
 
+import { AuthError, ForbiddenError } from '../../src/utils/errors';
+
+const mockAuthorizeInternalLocationCatalogRequest = jest.fn();
+
+jest.mock('../../src/services/internal-location-catalog-auth', () => ({
+  __esModule: true,
+  default: (...args) => mockAuthorizeInternalLocationCatalogRequest(...args),
+}));
+
 import request from 'supertest';
 import qs from 'qs';
 import app from '../../src/app';
@@ -195,7 +204,31 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual([]);
   };
 
-  beforeEach(setupData);
+  beforeEach(async () => {
+    mockAuthorizeInternalLocationCatalogRequest.mockReset();
+    mockAuthorizeInternalLocationCatalogRequest.mockImplementation(async (req) => {
+      const authorization = req.headers.authorization || req.headers.Authorization;
+      if (typeof authorization !== 'string' || !authorization.match(/^Bearer\s+.+$/i)) {
+        throw new AuthError('Missing bearer token');
+      }
+
+      const requestOrigin = req.headers.origin;
+      if (!requestOrigin) {
+        throw new ForbiddenError('Origin not allowed for internal location catalog');
+      }
+
+      if (
+        requestOrigin !== 'https://sheets.doobneek.org'
+        && requestOrigin !== 'chrome-extension://abcdefghijklmnop'
+      ) {
+        throw new ForbiddenError('Origin not allowed for internal location catalog');
+      }
+
+      return { sub: 'test-user', aud: 'allowed-client-id' };
+    });
+
+    await setupData();
+  });
   afterAll(clearData);
 
   it('should return locations within a given radius of a given position', () =>
@@ -1108,7 +1141,7 @@ describe('find locations', () => {
     it('should reject authenticated browser requests from disallowed origins', () =>
       request(app)
         .get('/locations/catalog')
-        .set('Authorization', 'Bearer test-internal-token')
+        .set('Authorization', 'Bearer mocked-internal-token')
         .set('Origin', 'https://example.com')
         .query({
           latitude: originLatitude,
@@ -1120,7 +1153,7 @@ describe('find locations', () => {
     it('should reject authenticated requests with no origin context', () =>
       request(app)
         .get('/locations/catalog')
-        .set('Authorization', 'Bearer test-internal-token')
+        .set('Authorization', 'Bearer mocked-internal-token')
         .query({
           latitude: originLatitude,
           longitude: originLongitude,
@@ -1131,7 +1164,7 @@ describe('find locations', () => {
     it('should allow authenticated extension requests from allowed extension origins', () =>
       request(app)
         .get('/locations/catalog')
-        .set('Authorization', 'Bearer test-internal-token')
+        .set('Authorization', 'Bearer mocked-internal-token')
         .set('Origin', 'chrome-extension://abcdefghijklmnop')
         .query({
           latitude: originLatitude,
@@ -1149,7 +1182,7 @@ describe('find locations', () => {
     it('should return a slim paginated catalog for authenticated internal users', () =>
       request(app)
         .get('/locations/catalog')
-        .set('Authorization', 'Bearer test-internal-token')
+        .set('Authorization', 'Bearer mocked-internal-token')
         .set('Origin', 'https://sheets.doobneek.org')
         .query({
           latitude: originLatitude,
@@ -1185,7 +1218,7 @@ describe('find locations', () => {
     it('should return the final page without a next-page header', () =>
       request(app)
         .get('/locations/catalog')
-        .set('Authorization', 'Bearer test-internal-token')
+        .set('Authorization', 'Bearer mocked-internal-token')
         .set('Origin', 'https://sheets.doobneek.org')
         .query({
           latitude: originLatitude,

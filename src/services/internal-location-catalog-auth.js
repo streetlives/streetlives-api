@@ -288,14 +288,6 @@ export default async function authorizeInternalLocationCatalogRequest(req) {
     throw new AuthError('Missing bearer token');
   }
   assertAllowedRequestOrigin(req);
-  if (process.env.NODE_ENV === 'test' && bearerToken === 'test-internal-token') {
-    return {
-      sub: 'test-user',
-      token_use: 'test',
-      iss: config.cognito.userPoolIssuer,
-      aud: (config.internalLocationCatalog.allowedClientIds || [])[0] || null,
-    };
-  }
   const payload = await verifyCognitoJwt(bearerToken);
   assertCatalogAuthorizationClaims(payload);
   return payload;
