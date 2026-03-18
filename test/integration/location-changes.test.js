@@ -16,6 +16,11 @@ describe('location changes feed', () => {
 
   beforeAll(() => {
     app.get('/locations/changes', locations.getChanges);
+    app.delete('/phones/:phoneId', (req, res, next) => {
+      req.user = '<Anonymous>';
+      req.userName = '<Anonymous>';
+      next();
+    }, locations.deletePhone);
     app.use((err, req, res, next) => {
       if (res.headersSent) {
         return next(err);
@@ -77,7 +82,7 @@ describe('location changes feed', () => {
 
   it('resolves organization, service, and phone edits back to affected location ids', async () => {
     const now = new Date();
-    const metadataDate = new Date(now.getTime() - 60 * 1000);
+    const metadataDate = new Date(now.getTime() - (60 * 1000));
 
     await models.Metadata.bulkCreate([
       {
@@ -135,5 +140,29 @@ describe('location changes feed', () => {
     expect(response.body.changes).toEqual([]);
     expect(response.body.locationIds).toEqual([]);
     expect(typeof response.body.nextCursor).toBe('string');
+  });
+
+  it('emits location ids for deleted phones', async () => {
+    const deletedPhoneId = phone.id;
+    const deleteStartedAt = new Date();
+
+    await request(app)
+      .delete(`/phones/${deletedPhoneId}`)
+      .expect(204);
+
+    const response = await request(app)
+      .get('/locations/changes')
+      .query({ since: new Date(deleteStartedAt.getTime() - 1000).toISOString() })
+      .expect(200);
+
+    expect(response.body.locationIds).toEqual(expect.arrayContaining([location.id]));
+    expect(response.body.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        locationId: location.id,
+        resourceTable: 'phones',
+        resourceId: deletedPhoneId,
+        actionType: 'delete',
+      }),
+    ]));
   });
 });

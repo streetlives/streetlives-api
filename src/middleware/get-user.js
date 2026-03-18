@@ -13,9 +13,8 @@ export default function getUser(req, res, next) {
     req.userName = claims['cognito:username'] ||
       claims.preferred_username ||
       claims.username ||
-      claims.email ||
       claims.sub;
-    req.user = req.userName;
+    req.user = claims.sub;
 
     const organizationClaims = claims['custom:orgs'];
     if (organizationClaims && organizationClaims.length) {

@@ -7,6 +7,13 @@ const ACTION_UPDATE = 'update';
 const ACTION_DELETE = 'delete';
 const TIMELINE_PAGE_SUFFIXES = new Set(['description', 'other-info']);
 
+const sanitizeHistoryUserName = (value, fallback = 'Unknown') => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return fallback;
+  if (normalized.includes('@')) return fallback;
+  return normalized;
+};
+
 const normalizeLimit = (value) => {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -185,31 +192,45 @@ const createEntry = ({
   resourceId,
   source = null,
   actionAt = new Date(),
-}) => ({
-  location_id: locationId,
-  service_id: serviceId,
-  organization_id: organizationId,
-  phone_id: phoneId,
-  page_path: pagePath,
-  user_name: userName || 'Unknown',
-  action,
-  field,
-  label: label || humanizeField(field),
-  before_value: stringifyValue(before),
-  after_value: stringifyValue(after),
-  summary: summary || buildSummary({
-    action, label, before, after,
-  }),
-  resource_table: resourceTable,
-  resource_id: String(resourceId),
-  source,
-  action_at: actionAt,
-  copyedit: false,
-});
+}) => {
+  const safeUserName = sanitizeHistoryUserName(userName);
+
+  return {
+    location_id: locationId,
+    service_id: serviceId,
+    organization_id: organizationId,
+    phone_id: phoneId,
+    page_path: pagePath,
+    user_name: safeUserName,
+    action,
+    field,
+    label: label || humanizeField(field),
+    before_value: stringifyValue(before),
+    after_value: stringifyValue(after),
+    summary: summary || buildSummary({
+      action, label, before, after,
+    }),
+    resource_table: resourceTable,
+    resource_id: String(resourceId),
+    source,
+    action_at: actionAt,
+    copyedit: false,
+  };
+};
 
 const bulkCreateEntries = async (entries) => {
   if (!entries.length) return [];
   return models.EditHistory.bulkCreate(entries);
+};
+
+export const recordHistorySafely = async (label, writer) => {
+  try {
+    return await writer();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[edit-history] ${label} failed`, err);
+    return null;
+  }
 };
 
 const loadLocationIdsForOrganization = async (organizationId) => {
@@ -217,6 +238,7 @@ const loadLocationIdsForOrganization = async (organizationId) => {
     where: { organization_id: organizationId },
     attributes: ['id'],
     raw: true,
+    hooks: false,
   });
   return uniqueStrings(locations.map(({ id }) => id));
 };
@@ -860,6 +882,7 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
   const before = parseStoredValue(entry.before_value);
   const after = parseStoredValue(entry.after_value);
   const timestamp = new Date(entry.action_at || entry.createdAt || new Date());
+  const safeUserName = sanitizeHistoryUserName(entry.user_name, 'User');
   const event = {
     type: 'edit',
     kind: entry.action,
@@ -873,8 +896,8 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
     ts: timestamp.toISOString(),
     timestamp: timestamp.toISOString(),
     timestampMs: timestamp.getTime(),
-    userName: entry.user_name,
-    user: entry.user_name,
+    userName: safeUserName,
+    user: safeUserName,
     pagePath: entry.page_path,
     locationId: entry.location_id,
     serviceId: entry.service_id || '',
@@ -982,9 +1005,9 @@ export const getCurrentUserEditHistory = async ({ userName, limit }) => {
 
   return {
     user: {
-      key: userName,
-      name: userName,
-      normalized: userName,
+      key: sanitizeHistoryUserName(userName),
+      name: sanitizeHistoryUserName(userName),
+      normalized: sanitizeHistoryUserName(userName),
     },
     data,
   };

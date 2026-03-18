@@ -186,4 +186,53 @@ describe('edit history', () => {
       pagePath: descriptionPath,
     }));
   });
+
+  it('still updates a location when history recording fails', async () => {
+    const { location } = await buildFixture();
+    const bulkCreateSpy = jest.spyOn(models.EditHistory, 'bulkCreate')
+      .mockRejectedValueOnce(new Error('history write failed'));
+
+    await request(app)
+      .patch(`/locations/${location.id}`)
+      .send({ description: 'Location saved despite history failure.' })
+      .expect(204);
+
+    bulkCreateSpy.mockRestore();
+
+    const updatedLocation = await models.Location.findByPk(location.id);
+    expect(updatedLocation.description).toBe('Location saved despite history failure.');
+  });
+
+  it('still creates a location when history recording fails', async () => {
+    const organization = await models.Organization.create({
+      name: 'Create History Org',
+      description: 'Org for create history failure tests.',
+      url: 'https://example.org/create',
+    });
+    const bulkCreateSpy = jest.spyOn(models.EditHistory, 'bulkCreate')
+      .mockRejectedValueOnce(new Error('history write failed'));
+
+    const response = await request(app)
+      .post('/locations')
+      .send({
+        name: 'Created despite history failure',
+        description: 'Created description.',
+        latitude: 40.7128,
+        longitude: -74.0060,
+        organizationId: organization.id,
+        address: {
+          street: '789 Recovery Avenue',
+          city: 'New York',
+          state: 'NY',
+          postalCode: '10002',
+          country: 'United States',
+        },
+      })
+      .expect(201);
+
+    bulkCreateSpy.mockRestore();
+
+    const createdLocation = await models.Location.findByPk(response.body.id);
+    expect(createdLocation.name).toBe('Created despite history failure');
+  });
 });

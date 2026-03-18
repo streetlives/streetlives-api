@@ -2,6 +2,7 @@ import Joi from 'joi';
 import serviceSchemas from './validation/services';
 import models, { sequelize } from '../models';
 import {
+  recordHistorySafely,
   recordServiceCreateHistory,
   recordServiceDeleteHistory,
   recordServiceUpdateHistory,
@@ -37,14 +38,14 @@ export default {
         req.user,
         metadata,
       );
-      await recordServiceCreateHistory({
+      await recordHistorySafely('recordServiceCreateHistory', () => recordServiceCreateHistory({
         locationId,
         service: createdService,
         input: otherProps,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'service-api',
         actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
-      });
+      }));
       res.status(201).send(createdService);
     } catch (err) {
       next(err);
@@ -101,13 +102,13 @@ export default {
       }
 
       await updateService(service, { ...otherProps, taxonomy }, req.user, metadata);
-      await recordServiceUpdateHistory({
+      await recordHistorySafely('recordServiceUpdateHistory', () => recordServiceUpdateHistory({
         serviceBefore,
         input: taxonomyId ? { ...otherProps, taxonomyId } : otherProps,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'service-api',
         actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
-      });
+      }));
       res.sendStatus(204);
     } catch (err) {
       next(err);
@@ -127,12 +128,12 @@ export default {
 
       await deleteService(serviceId, req.user);
       if (service) {
-        await recordServiceDeleteHistory({
+        await recordHistorySafely('recordServiceDeleteHistory', () => recordServiceDeleteHistory({
           serviceBefore: service.get({ plain: true }),
           userName: req.userName || req.user,
           source: 'service-api',
           actionAt: new Date(),
-        });
+        }));
       }
 
       res.sendStatus(204);

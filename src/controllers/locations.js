@@ -11,6 +11,7 @@ import {
   getCurrentUserEditHistory,
   getLocationEditHistory,
   getLocationEditTimeline,
+  recordHistorySafely,
   recordLocationCreateHistory,
   recordLocationUpdateHistory,
   recordPhoneCreateHistory,
@@ -26,8 +27,53 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+const uniqueStrings = values => [...new Set(values.filter(Boolean).map(String))];
 const resolveHistoryActionAt = metadata =>
   (metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date());
+
+const loadLocationIdsForOrganization = async (organizationId) => {
+  if (!organizationId) return [];
+
+  const locations = await models.Location.findAll({
+    where: { organization_id: organizationId },
+    attributes: ['id'],
+    raw: true,
+    hooks: false,
+  });
+
+  return uniqueStrings(locations.map(({ id }) => id));
+};
+
+const loadLocationIdsForService = async (serviceId) => {
+  if (!serviceId) return [];
+
+  const serviceAtLocations = await models.ServiceAtLocation.findAll({
+    where: { service_id: serviceId },
+    attributes: ['location_id'],
+    raw: true,
+  });
+
+  return uniqueStrings(serviceAtLocations.map(({ location_id: locationId }) => locationId));
+};
+
+const loadLocationIdsForServiceAtLocation = async (serviceAtLocationId) => {
+  if (!serviceAtLocationId) return [];
+
+  const serviceAtLocation = await models.ServiceAtLocation.findByPk(serviceAtLocationId, {
+    attributes: ['location_id'],
+    raw: true,
+  });
+
+  return uniqueStrings([serviceAtLocation && serviceAtLocation.location_id]);
+};
+
+const resolvePhoneLocationIdsForDeletion = async phone =>
+  uniqueStrings([
+    phone.location_id,
+    ...(await loadLocationIdsForServiceAtLocation(phone.service_at_location_id)),
+    ...(await loadLocationIdsForService(phone.service_id)),
+    ...(await loadLocationIdsForOrganization(phone.organization_id)),
+  ]);
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -504,13 +550,13 @@ export default {
         postal_code: address.postalCode,
         country: address.country,
       }, { metadata });
-      await recordLocationCreateHistory({
+      await recordHistorySafely('recordLocationCreateHistory', () => recordLocationCreateHistory({
         location: createdLocation,
         input: req.body,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'location-api',
         actionAt: resolveHistoryActionAt(metadata),
-      });
+      }));
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -603,13 +649,13 @@ export default {
       updatePromises.push(updateLocation(location, req.body, metadata));
 
       await Promise.all(updatePromises);
-      await recordLocationUpdateHistory({
+      await recordHistorySafely('recordLocationUpdateHistory', () => recordLocationUpdateHistory({
         locationBefore,
         input: req.body,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'location-api',
         actionAt: resolveHistoryActionAt(metadata),
-      });
+      }));
 
       res.sendStatus(204);
     } catch (err) {
@@ -644,14 +690,14 @@ export default {
         language,
         description,
       }, { metadata });
-      await recordPhoneCreateHistory({
+      await recordHistorySafely('recordPhoneCreateHistory', () => recordPhoneCreateHistory({
         locationId,
         phone: createdPhone,
         input: req.body,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'phone-api',
         actionAt: resolveHistoryActionAt(metadata),
-      });
+      }));
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -674,13 +720,13 @@ export default {
       const { metadata, ...updateParams } = req.body;
       const phoneBefore = phone.get({ plain: true });
       await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
-      await recordPhoneUpdateHistory({
+      await recordHistorySafely('recordPhoneUpdateHistory', () => recordPhoneUpdateHistory({
         phoneBefore,
         input: updateParams,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'phone-api',
         actionAt: resolveHistoryActionAt(metadata),
-      });
+      }));
 
       res.sendStatus(204);
     } catch (err) {
@@ -700,13 +746,32 @@ export default {
       }
 
       const phoneBefore = phone.get({ plain: true });
-      await destroyInstance(req.user, phone);
-      await recordPhoneDeleteHistory({
+      const phoneLocationIds = await resolvePhoneLocationIdsForDeletion(phoneBefore);
+      const actionAt = new Date();
+
+      await models.sequelize.transaction(async (transaction) => {
+        await destroyInstance(req.user, phone, { transaction });
+
+        if (phoneLocationIds.length) {
+          await models.Metadata.bulkCreate(phoneLocationIds.map(locationId => ({
+            resource_table: models.Phone.tableName,
+            resource_id: phoneBefore.id,
+            last_action_date: actionAt,
+            last_action_type: models.Metadata.actionTypes.delete,
+            field_name: 'location_id',
+            previous_value: locationId,
+            updated_by: req.user,
+            source: 'phone-api',
+          })), { transaction });
+        }
+      });
+
+      await recordHistorySafely('recordPhoneDeleteHistory', () => recordPhoneDeleteHistory({
         phoneBefore,
         userName: req.userName || req.user,
         source: 'phone-api',
-        actionAt: new Date(),
-      });
+        actionAt,
+      }));
       res.sendStatus(204);
     } catch (err) {
       next(err);

@@ -2,7 +2,10 @@ import Joi from 'joi';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
-import { recordOrganizationUpdateHistory } from '../services/edit-history';
+import {
+  recordHistorySafely,
+  recordOrganizationUpdateHistory,
+} from '../services/edit-history';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -64,13 +67,16 @@ export default {
         updateParams,
         { fields: editableFields, metadata },
       );
-      await recordOrganizationUpdateHistory({
-        organization: organizationBefore,
-        input: updateParams,
-        userName: req.userName || req.user,
-        source: metadata && metadata.source ? metadata.source : 'organization-api',
-        actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
-      });
+      await recordHistorySafely(
+        'recordOrganizationUpdateHistory',
+        () => recordOrganizationUpdateHistory({
+          organization: organizationBefore,
+          input: updateParams,
+          userName: req.userName || req.user,
+          source: metadata && metadata.source ? metadata.source : 'organization-api',
+          actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
+        }),
+      );
 
       res.sendStatus(204);
     } catch (err) {

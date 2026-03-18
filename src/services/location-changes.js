@@ -99,6 +99,7 @@ const getOrganizationLocationIds = async (organizationId, context) => {
     where: { organization_id: normalizedId },
     attributes: ['id'],
     raw: true,
+    hooks: false,
   });
   const locationIds = uniqueStrings(locations.map(({ id }) => id));
   context.locationIdsByOrganizationId.set(normalizedId, locationIds);
@@ -117,7 +118,8 @@ const getServiceLocationIds = async (serviceId, context) => {
     attributes: ['location_id'],
     raw: true,
   });
-  const locationIds = uniqueStrings(serviceAtLocations.map(({ location_id: locationId }) => locationId));
+  const locationIds = uniqueStrings(serviceAtLocations
+    .map(serviceAtLocation => serviceAtLocation.location_id));
   context.locationIdsByServiceId.set(normalizedId, locationIds);
   return locationIds;
 };
@@ -138,7 +140,13 @@ const getServiceAtLocationIds = async (serviceAtLocationId, context) => {
   return locationIds;
 };
 
-const getDirectLocationIds = async (context, resourceTable, resourceId, model, foreignKey = 'location_id') =>
+const getDirectLocationIds = async (
+  context,
+  resourceTable,
+  resourceId,
+  model,
+  foreignKey = 'location_id',
+) =>
   cacheModelLookup(context, `${resourceTable}:${resourceId}`, async () => {
     const record = await model.findByPk(resourceId, {
       attributes: [foreignKey],
@@ -179,7 +187,7 @@ const getScheduleBackedLocationIds = async (context, resourceTable, resourceId, 
     ]);
   });
 
-const getPhoneLocationIds = async (resourceId, context) =>
+const getPersistedPhoneLocationIds = async (resourceId, context) =>
   cacheModelLookup(context, `phones:${resourceId}`, async () => {
     const phone = await models.Phone.findByPk(resourceId, {
       attributes: ['location_id', 'service_id', 'service_at_location_id', 'organization_id'],
@@ -193,6 +201,12 @@ const getPhoneLocationIds = async (resourceId, context) =>
       ...(await getOrganizationLocationIds(phone && phone.organization_id, context)),
     ]);
   });
+
+const getPhoneLocationIds = async (change, context) =>
+  uniqueStrings([
+    ...(await getPersistedPhoneLocationIds(change.resource_id, context)),
+    readMetadataLocationFallback(change),
+  ]);
 
 const getEventRelatedInfoLocationIds = async (resourceId, context) =>
   cacheModelLookup(context, `event_related_info:${resourceId}`, async () => {
@@ -214,7 +228,12 @@ const resolveLocationIdsForChange = async (change, context) => {
     case 'organizations':
       return getOrganizationLocationIds(change.resource_id, context);
     case 'physical_addresses':
-      return getDirectLocationIds(context, 'physical_addresses', change.resource_id, models.PhysicalAddress);
+      return getDirectLocationIds(
+        context,
+        'physical_addresses',
+        change.resource_id,
+        models.PhysicalAddress,
+      );
     case 'accessibility_for_disabilities':
       return getDirectLocationIds(
         context,
@@ -223,9 +242,14 @@ const resolveLocationIdsForChange = async (change, context) => {
         models.AccessibilityForDisabilities,
       );
     case 'location_languages':
-      return getDirectLocationIds(context, 'location_languages', change.resource_id, models.LocationLanguages);
+      return getDirectLocationIds(
+        context,
+        'location_languages',
+        change.resource_id,
+        models.LocationLanguages,
+      );
     case 'phones':
-      return getPhoneLocationIds(change.resource_id, context);
+      return getPhoneLocationIds(change, context);
     case 'event_related_info':
       return getEventRelatedInfoLocationIds(change.resource_id, context);
     case 'services':
@@ -236,13 +260,33 @@ const resolveLocationIdsForChange = async (change, context) => {
         readMetadataLocationFallback(change),
       ]);
     case 'regular_schedules':
-      return getScheduleBackedLocationIds(context, 'regular_schedules', change.resource_id, models.RegularSchedule);
+      return getScheduleBackedLocationIds(
+        context,
+        'regular_schedules',
+        change.resource_id,
+        models.RegularSchedule,
+      );
     case 'holiday_schedules':
-      return getScheduleBackedLocationIds(context, 'holiday_schedules', change.resource_id, models.HolidaySchedule);
+      return getScheduleBackedLocationIds(
+        context,
+        'holiday_schedules',
+        change.resource_id,
+        models.HolidaySchedule,
+      );
     case 'service_areas':
-      return getServiceBackedLocationIds(context, 'service_areas', change.resource_id, models.ServiceArea);
+      return getServiceBackedLocationIds(
+        context,
+        'service_areas',
+        change.resource_id,
+        models.ServiceArea,
+      );
     case 'eligibility':
-      return getServiceBackedLocationIds(context, 'eligibility', change.resource_id, models.Eligibility);
+      return getServiceBackedLocationIds(
+        context,
+        'eligibility',
+        change.resource_id,
+        models.Eligibility,
+      );
     case 'service_taxonomy_specific_attributes':
       return getServiceBackedLocationIds(
         context,
@@ -258,17 +302,37 @@ const resolveLocationIdsForChange = async (change, context) => {
         models.RequiredDocument,
       );
     case 'documents_infos':
-      return getServiceBackedLocationIds(context, 'documents_infos', change.resource_id, models.DocumentsInfo);
+      return getServiceBackedLocationIds(
+        context,
+        'documents_infos',
+        change.resource_id,
+        models.DocumentsInfo,
+      );
     case 'service_languages':
-      return getServiceBackedLocationIds(context, 'service_languages', change.resource_id, models.ServiceLanguages);
+      return getServiceBackedLocationIds(
+        context,
+        'service_languages',
+        change.resource_id,
+        models.ServiceLanguages,
+      );
     case 'service_taxonomy':
-      return getServiceBackedLocationIds(context, 'service_taxonomy', change.resource_id, models.ServiceTaxonomy);
+      return getServiceBackedLocationIds(
+        context,
+        'service_taxonomy',
+        change.resource_id,
+        models.ServiceTaxonomy,
+      );
     case 'comments':
       return getDirectLocationIds(context, 'comments', change.resource_id, models.Comment);
     case 'error_reports':
       return getDirectLocationIds(context, 'error_reports', change.resource_id, models.ErrorReport);
     case 'organization_phones':
-      return getOrganizationBackedLocationIds(context, 'organization_phones', change.resource_id, models.Phone);
+      return getOrganizationBackedLocationIds(
+        context,
+        'organization_phones',
+        change.resource_id,
+        models.Phone,
+      );
     default:
       return [];
   }
