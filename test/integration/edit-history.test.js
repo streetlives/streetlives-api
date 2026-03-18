@@ -2,13 +2,46 @@
  * @jest-environment node
  */
 
+import bodyParser from 'body-parser';
+import { randomUUID } from 'crypto';
+import express from 'express';
 import request from 'supertest';
 import app from '../../src/app';
+import locations from '../../src/controllers/locations';
+import getUser from '../../src/middleware/get-user';
 import models from '../../src/models';
+import { buildHistoryUserIdentity } from '../../src/services/edit-history';
 
 describe('edit history', () => {
   const timelineTestName =
     'returns extension-style timeline pages for service description and other info edits';
+  const buildAuthenticatedHistoryApp = (claims) => {
+    const authenticatedApp = express();
+    authenticatedApp.use(bodyParser.json());
+    authenticatedApp.use((req, res, next) => {
+      req.apiGateway = {
+        event: {
+          requestContext: {
+            authorizer: { claims },
+          },
+        },
+      };
+      next();
+    });
+    authenticatedApp.get(
+      '/locations/edit-history/user',
+      getUser,
+      locations.getCurrentUserEditHistory,
+    );
+    authenticatedApp.use((err, req, res, next) => {
+      if (res.headersSent) {
+        return next(err);
+      }
+
+      return res.status(500).send({ error: err.stack });
+    });
+    return authenticatedApp;
+  };
   const runAsProduction = async (callback) => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
@@ -217,6 +250,81 @@ describe('edit history', () => {
         .get('/locations/edit-history/user')
         .expect(401);
     });
+  });
+
+  it('keeps email-based Cognito identities isolated in current user history', async () => {
+    const locationId = randomUUID();
+    const otherLocationId = randomUUID();
+    const claims = {
+      sub: randomUUID(),
+      'cognito:username': 'editor@example.org',
+    };
+    const otherClaims = {
+      sub: randomUUID(),
+      'cognito:username': 'other@example.org',
+    };
+    const identity = buildHistoryUserIdentity({
+      userKey: claims.sub,
+      userName: claims['cognito:username'],
+    });
+    const otherIdentity = buildHistoryUserIdentity({
+      userKey: otherClaims.sub,
+      userName: otherClaims['cognito:username'],
+    });
+
+    await models.EditHistory.bulkCreate([
+      {
+        location_id: locationId,
+        page_path: `/team/location/${locationId}`,
+        user_key: identity.key,
+        user_name: identity.displayName,
+        action: 'update',
+        field: 'description',
+        label: 'Description',
+        before_value: 'Before',
+        after_value: 'After',
+        summary: 'Updated Description',
+        resource_table: 'locations',
+        resource_id: locationId,
+        source: 'location-api',
+        action_at: new Date(),
+        copyedit: false,
+      },
+      {
+        location_id: otherLocationId,
+        page_path: `/team/location/${otherLocationId}`,
+        user_key: otherIdentity.key,
+        user_name: otherIdentity.displayName,
+        action: 'update',
+        field: 'description',
+        label: 'Description',
+        before_value: 'Before',
+        after_value: 'After',
+        summary: 'Updated Description',
+        resource_table: 'locations',
+        resource_id: otherLocationId,
+        source: 'location-api',
+        action_at: new Date(),
+        copyedit: false,
+      },
+    ]);
+
+    const response = await request(buildAuthenticatedHistoryApp(claims))
+      .get('/locations/edit-history/user')
+      .expect(200);
+
+    expect(response.body.user).toEqual(expect.objectContaining({
+      key: identity.displayName,
+      name: identity.displayName,
+    }));
+    expect(response.body.user.name).not.toBe('Unknown');
+    expect(response.body.data[`/team/location/${locationId}`]).toBeDefined();
+    expect(response.body.data[`/team/location/${otherLocationId}`]).toBeUndefined();
+    expect(Object.values(response.body.data[`/team/location/${locationId}`])[0])
+      .toEqual(expect.objectContaining({
+        userName: identity.displayName,
+        pagePath: `/team/location/${locationId}`,
+      }));
   });
 
   it('still updates a location when history recording fails', async () => {

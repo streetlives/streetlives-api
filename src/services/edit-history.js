@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import models from '../models';
 
 const DEFAULT_LIMIT = 200;
@@ -7,11 +8,55 @@ const ACTION_UPDATE = 'update';
 const ACTION_DELETE = 'delete';
 const TIMELINE_PAGE_SUFFIXES = new Set(['description', 'other-info']);
 
-const sanitizeHistoryUserName = (value, fallback = 'Unknown') => {
+const UNKNOWN_HISTORY_USER = 'Unknown';
+const HISTORY_USER_DISPLAY_FALLBACK = 'User';
+
+const normalizeHistoryUserKey = (value, fallback = UNKNOWN_HISTORY_USER) => {
   const normalized = String(value || '').trim();
-  if (!normalized) return fallback;
-  if (normalized.includes('@')) return fallback;
-  return normalized;
+  return normalized || fallback;
+};
+
+const isEmailLikeUserName = value =>
+  typeof value === 'string' && value.includes('@');
+
+const hashHistoryUserKey = (userKey) => {
+  const normalizedKey = normalizeHistoryUserKey(userKey, '');
+  if (!normalizedKey) return '';
+  return createHash('sha256').update(normalizedKey).digest('hex').slice(0, 10);
+};
+
+const buildHistoryDisplayName = ({
+  userKey,
+  userName,
+  fallback = HISTORY_USER_DISPLAY_FALLBACK,
+}) => {
+  const normalizedName = String(userName || '').trim();
+  if (normalizedName && !isEmailLikeUserName(normalizedName)) {
+    return normalizedName;
+  }
+
+  const normalizedKey = normalizeHistoryUserKey(userKey, '');
+  if (!normalizedKey || normalizedKey === UNKNOWN_HISTORY_USER) {
+    return fallback;
+  }
+
+  if (normalizedKey === '<Anonymous>') {
+    return normalizedKey;
+  }
+
+  return `${fallback} ${hashHistoryUserKey(normalizedKey)}`;
+};
+
+export const buildHistoryUserIdentity = ({ userKey, userName }) => {
+  const normalizedKey = normalizeHistoryUserKey(userKey || userName);
+
+  return {
+    key: normalizedKey,
+    displayName: buildHistoryDisplayName({
+      userKey: normalizedKey,
+      userName,
+    }),
+  };
 };
 
 const normalizeLimit = (value) => {
@@ -181,6 +226,7 @@ const createEntry = ({
   organizationId = null,
   phoneId = null,
   pagePath,
+  userKey,
   userName,
   action,
   field = '',
@@ -193,7 +239,7 @@ const createEntry = ({
   source = null,
   actionAt = new Date(),
 }) => {
-  const safeUserName = sanitizeHistoryUserName(userName);
+  const identity = buildHistoryUserIdentity({ userKey, userName });
 
   return {
     location_id: locationId,
@@ -201,7 +247,8 @@ const createEntry = ({
     organization_id: organizationId,
     phone_id: phoneId,
     page_path: pagePath,
-    user_name: safeUserName,
+    user_key: identity.key,
+    user_name: identity.displayName,
     action,
     field,
     label: label || humanizeField(field),
@@ -271,6 +318,7 @@ const buildLocationFieldEntries = ({
   resourceTable,
   resourceId,
   action,
+  userKey,
   userName,
   source,
   actionAt,
@@ -278,6 +326,7 @@ const buildLocationFieldEntries = ({
 }) => fields.map(field => createEntry({
   locationId,
   pagePath: locationPagePath(locationId),
+  userKey,
   userName,
   action,
   field: field.field,
@@ -295,6 +344,7 @@ const buildServiceEntries = ({
   locationIds,
   serviceId,
   action,
+  userKey,
   userName,
   source,
   actionAt,
@@ -309,6 +359,7 @@ const buildServiceEntries = ({
         locationId,
         serviceId,
         pagePath: servicePagePath(locationId, serviceId, field.pageSuffix || ''),
+        userKey,
         userName,
         action,
         field: field.field,
@@ -351,6 +402,7 @@ const filterMeaningfulRequiredDocuments = (documents = []) =>
 export const recordLocationCreateHistory = async ({
   location,
   input,
+  userKey,
   userName,
   source = 'location-api',
   actionAt = new Date(),
@@ -367,6 +419,7 @@ export const recordLocationCreateHistory = async ({
       locationId: location.id,
       organizationId: location.organization_id,
       pagePath: locationPagePath(location.id),
+      userKey,
       userName,
       action: ACTION_CREATE,
       field: 'location',
@@ -384,6 +437,7 @@ export const recordLocationCreateHistory = async ({
 export const recordLocationUpdateHistory = async ({
   locationBefore,
   input,
+  userKey,
   userName,
   source = 'location-api',
   actionAt = new Date(),
@@ -469,6 +523,7 @@ export const recordLocationUpdateHistory = async ({
     resourceTable: 'locations',
     resourceId: locationBefore.id,
     action: ACTION_UPDATE,
+    userKey,
     userName,
     source,
     actionAt,
@@ -480,6 +535,7 @@ export const recordPhoneCreateHistory = async ({
   locationId,
   phone,
   input,
+  userKey,
   userName,
   source = 'phone-api',
   actionAt = new Date(),
@@ -488,6 +544,7 @@ export const recordPhoneCreateHistory = async ({
     locationId,
     phoneId: phone.id,
     pagePath: locationPagePath(locationId),
+    userKey,
     userName,
     action: ACTION_CREATE,
     field: 'phone',
@@ -510,6 +567,7 @@ export const recordPhoneCreateHistory = async ({
 export const recordPhoneUpdateHistory = async ({
   phoneBefore,
   input,
+  userKey,
   userName,
   source = 'phone-api',
   actionAt = new Date(),
@@ -532,6 +590,7 @@ export const recordPhoneUpdateHistory = async ({
         locationId,
         phoneId: phoneBefore.id,
         pagePath: locationPagePath(locationId),
+        userKey,
         userName,
         action: ACTION_UPDATE,
         field: field.field,
@@ -551,6 +610,7 @@ export const recordPhoneUpdateHistory = async ({
 
 export const recordPhoneDeleteHistory = async ({
   phoneBefore,
+  userKey,
   userName,
   source = 'phone-api',
   actionAt = new Date(),
@@ -560,6 +620,7 @@ export const recordPhoneDeleteHistory = async ({
     locationId,
     phoneId: phoneBefore.id,
     pagePath: locationPagePath(locationId),
+    userKey,
     userName,
     action: ACTION_DELETE,
     field: 'phone',
@@ -584,6 +645,7 @@ export const recordPhoneDeleteHistory = async ({
 export const recordOrganizationUpdateHistory = async ({
   organization,
   input,
+  userKey,
   userName,
   source = 'organization-api',
   actionAt = new Date(),
@@ -606,6 +668,7 @@ export const recordOrganizationUpdateHistory = async ({
         locationId,
         organizationId: organization.id,
         pagePath: locationPagePath(locationId),
+        userKey,
         userName,
         action: ACTION_UPDATE,
         field: field.field,
@@ -627,6 +690,7 @@ export const recordServiceCreateHistory = async ({
   locationId,
   service,
   input,
+  userKey,
   userName,
   source = 'service-api',
   actionAt = new Date(),
@@ -637,6 +701,7 @@ export const recordServiceCreateHistory = async ({
       serviceId: service.id,
       organizationId: service.organization_id,
       pagePath: servicePagePath(locationId, service.id),
+      userKey,
       userName,
       action: ACTION_CREATE,
       field: 'service',
@@ -659,6 +724,7 @@ export const recordServiceCreateHistory = async ({
       serviceId: service.id,
       organizationId: service.organization_id,
       pagePath: servicePagePath(locationId, service.id, 'description'),
+      userKey,
       userName,
       action: ACTION_CREATE,
       field: 'description',
@@ -678,6 +744,7 @@ export const recordServiceCreateHistory = async ({
 export const recordServiceUpdateHistory = async ({
   serviceBefore,
   input,
+  userKey,
   userName,
   source = 'service-api',
   actionAt = new Date(),
@@ -836,6 +903,7 @@ export const recordServiceUpdateHistory = async ({
     locationIds,
     serviceId: serviceBefore.id,
     action: ACTION_UPDATE,
+    userKey,
     userName,
     source,
     actionAt,
@@ -847,6 +915,7 @@ export const recordServiceUpdateHistory = async ({
 
 export const recordServiceDeleteHistory = async ({
   serviceBefore,
+  userKey,
   userName,
   source = 'service-api',
   actionAt = new Date(),
@@ -863,6 +932,7 @@ export const recordServiceDeleteHistory = async ({
     locationIds,
     serviceId: serviceBefore.id,
     action: ACTION_DELETE,
+    userKey,
     userName,
     source,
     actionAt,
@@ -882,7 +952,10 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
   const before = parseStoredValue(entry.before_value);
   const after = parseStoredValue(entry.after_value);
   const timestamp = new Date(entry.action_at || entry.createdAt || new Date());
-  const safeUserName = sanitizeHistoryUserName(entry.user_name, 'User');
+  const displayUserName = buildHistoryDisplayName({
+    userKey: entry.user_key,
+    userName: entry.user_name,
+  });
   const event = {
     type: 'edit',
     kind: entry.action,
@@ -896,8 +969,8 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
     ts: timestamp.toISOString(),
     timestamp: timestamp.toISOString(),
     timestampMs: timestamp.getTime(),
-    userName: safeUserName,
-    user: safeUserName,
+    userName: displayUserName,
+    user: displayUserName,
     pagePath: entry.page_path,
     locationId: entry.location_id,
     serviceId: entry.service_id || '',
@@ -980,10 +1053,11 @@ export const getLocationEditTimeline = async ({ locationId, limit, includeSegmen
   };
 };
 
-export const getCurrentUserEditHistory = async ({ userName, limit }) => {
+export const getCurrentUserEditHistory = async ({ userKey, userName, limit }) => {
   const normalizedLimit = normalizeLimit(limit);
+  const identity = buildHistoryUserIdentity({ userKey, userName });
   const entries = await models.EditHistory.findAll({
-    where: { user_name: userName },
+    where: { user_key: identity.key },
     order: [['action_at', 'DESC'], ['createdAt', 'DESC'], ['id', 'DESC']],
     limit: normalizedLimit,
   });
@@ -1005,9 +1079,9 @@ export const getCurrentUserEditHistory = async ({ userName, limit }) => {
 
   return {
     user: {
-      key: sanitizeHistoryUserName(userName),
-      name: sanitizeHistoryUserName(userName),
-      normalized: sanitizeHistoryUserName(userName),
+      key: identity.displayName,
+      name: identity.displayName,
+      normalized: identity.displayName,
     },
     data,
   };

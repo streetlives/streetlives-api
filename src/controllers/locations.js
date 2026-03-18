@@ -397,6 +397,7 @@ export default {
       await Joi.validate(req, locationSchemas.getCurrentUserEditHistory, { allowUnknown: true });
 
       const history = await getCurrentUserEditHistory({
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         limit: req.query.limit,
       });
@@ -553,6 +554,7 @@ export default {
       await recordHistorySafely('recordLocationCreateHistory', () => recordLocationCreateHistory({
         location: createdLocation,
         input: req.body,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'location-api',
         actionAt: resolveHistoryActionAt(metadata),
@@ -652,6 +654,7 @@ export default {
       await recordHistorySafely('recordLocationUpdateHistory', () => recordLocationUpdateHistory({
         locationBefore,
         input: req.body,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'location-api',
         actionAt: resolveHistoryActionAt(metadata),
@@ -694,6 +697,7 @@ export default {
         locationId,
         phone: createdPhone,
         input: req.body,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'phone-api',
         actionAt: resolveHistoryActionAt(metadata),
@@ -723,6 +727,7 @@ export default {
       await recordHistorySafely('recordPhoneUpdateHistory', () => recordPhoneUpdateHistory({
         phoneBefore,
         input: updateParams,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'phone-api',
         actionAt: resolveHistoryActionAt(metadata),
@@ -768,6 +773,7 @@ export default {
 
       await recordHistorySafely('recordPhoneDeleteHistory', () => recordPhoneDeleteHistory({
         phoneBefore,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: 'phone-api',
         actionAt,

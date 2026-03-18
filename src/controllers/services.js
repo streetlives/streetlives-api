@@ -42,6 +42,7 @@ export default {
         locationId,
         service: createdService,
         input: otherProps,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'service-api',
         actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
@@ -105,6 +106,7 @@ export default {
       await recordHistorySafely('recordServiceUpdateHistory', () => recordServiceUpdateHistory({
         serviceBefore,
         input: taxonomyId ? { ...otherProps, taxonomyId } : otherProps,
+        userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         source: metadata && metadata.source ? metadata.source : 'service-api',
         actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
@@ -130,6 +132,7 @@ export default {
       if (service) {
         await recordHistorySafely('recordServiceDeleteHistory', () => recordServiceDeleteHistory({
           serviceBefore: service.get({ plain: true }),
+          userKey: req.userSub || req.user,
           userName: req.userName || req.user,
           source: 'service-api',
           actionAt: new Date(),

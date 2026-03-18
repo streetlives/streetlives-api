@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    user_key: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
     user_name: {
       type: DataTypes.TEXT,
       allowNull: false,
@@ -57,6 +61,7 @@ module.exports = (sequelize, DataTypes) => {
     underscoredAll: true,
     indexes: [
       { fields: ['location_id', 'action_at'] },
+      { fields: ['user_key', 'action_at'] },
       { fields: ['user_name', 'action_at'] },
       { fields: ['page_path'] },
     ],

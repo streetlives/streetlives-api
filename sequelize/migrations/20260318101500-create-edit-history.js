@@ -27,6 +27,10 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: false,
       },
+      user_key: {
+        type: Sequelize.TEXT,
+        allowNull: false,
+      },
       user_name: {
         type: Sequelize.TEXT,
         allowNull: false,
@@ -90,6 +94,7 @@ module.exports = {
     });
 
     await queryInterface.addIndex('edit_history', ['location_id', 'action_at']);
+    await queryInterface.addIndex('edit_history', ['user_key', 'action_at']);
     await queryInterface.addIndex('edit_history', ['user_name', 'action_at']);
     await queryInterface.addIndex('edit_history', ['page_path']);
   },

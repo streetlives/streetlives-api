@@ -72,6 +72,7 @@ export default {
         () => recordOrganizationUpdateHistory({
           organization: organizationBefore,
           input: updateParams,
+          userKey: req.userSub || req.user,
           userName: req.userName || req.user,
           source: metadata && metadata.source ? metadata.source : 'organization-api',
           actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
