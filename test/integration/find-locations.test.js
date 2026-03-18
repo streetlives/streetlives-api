@@ -1196,6 +1196,51 @@ describe('find locations', () => {
           expect(Array.isArray(res.body[0].PhysicalAddresses)).toBe(true);
         }));
 
+    it('should paginate distinct locations when a location has multiple physical addresses', async () => {
+      await primaryLocation.createPhysicalAddress({
+        address_1: '124 W 50th St.',
+        city: 'New York',
+        state_province: 'NY',
+        postal_code: '10001',
+        country: 'US',
+      });
+
+      const firstPage = await request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
+        })
+        .expect(200);
+
+      const secondPage = await request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 1,
+          pageSize: 1,
+        })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(secondPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(1);
+      expect(secondPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(primaryLocation.id);
+      expect(firstPage.body[0].PhysicalAddresses).toHaveLength(2);
+      expect(secondPage.body[0].id).toBe(otherServiceLocation.id);
+      expect(secondPage.body[0].id).not.toBe(firstPage.body[0].id);
+    });
+
     it('should return the final page without a next-page header', () =>
       request(app)
         .get('/locations/catalog')

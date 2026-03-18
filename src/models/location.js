@@ -725,6 +725,23 @@ module.exports = (sequelize, DataTypes, Op) => {
       col: 'Location.id',
     });
 
+    const pageRows = await Location.findAll({
+      attributes: ['id'],
+      where,
+      order,
+      limit,
+      offset,
+      raw: true,
+    });
+
+    const locationIds = pageRows.map(location => location.id);
+    if (!locationIds.length) {
+      return {
+        locations: [],
+        totalNumLocations,
+      };
+    }
+
     const locations = await Location.findAll({
       attributes: [
         'id',
@@ -735,12 +752,15 @@ module.exports = (sequelize, DataTypes, Op) => {
         'last_validated_at',
         'position',
       ],
-      where,
+      where: {
+        id: { [Op.in]: locationIds },
+      },
       include,
-      order,
-      limit,
-      offset,
     });
+
+    const locationPositionById = new Map(locationIds.map((id, index) => [id, index]));
+    locations.sort((left, right) =>
+      locationPositionById.get(left.id) - locationPositionById.get(right.id));
 
     return {
       locations,
