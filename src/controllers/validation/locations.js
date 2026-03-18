@@ -67,6 +67,32 @@ export default {
       limit: Joi.number().integer().positive().max(200),
     }).required(),
   },
+
+  getEditHistory: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    query: Joi.object().keys({
+      limit: Joi.number().integer().positive().max(600),
+      includeSegments: Joi.boolean(),
+    }).required(),
+  },
+
+  getEditTimeline: {
+    query: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+      scope: Joi.string().allow(''),
+      limit: Joi.number().integer().positive().max(600),
+      includeSegments: Joi.boolean(),
+    }).required(),
+  },
+
+  getCurrentUserEditHistory: {
+    query: Joi.object().keys({
+      limit: Joi.number().integer().positive().max(600),
+    }).required(),
+  },
+
   create: {
     body: Joi.object().keys({
       name: Joi.string(),

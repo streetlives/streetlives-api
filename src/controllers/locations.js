@@ -7,6 +7,16 @@ import {
   getMetadataForService,
   getLastValidatedDateForLocation,
 } from '../services/last-updates';
+import {
+  getCurrentUserEditHistory,
+  getLocationEditHistory,
+  getLocationEditTimeline,
+  recordLocationCreateHistory,
+  recordLocationUpdateHistory,
+  recordPhoneCreateHistory,
+  recordPhoneDeleteHistory,
+  recordPhoneUpdateHistory,
+} from '../services/edit-history';
 import { getLocationChanges } from '../services/location-changes';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
@@ -16,6 +26,8 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+const resolveHistoryActionAt = metadata =>
+  (metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date());
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -304,6 +316,50 @@ export default {
     }
   },
 
+  getEditHistory: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getEditHistory, { allowUnknown: true });
+
+      const history = await getLocationEditHistory({
+        locationId: req.params.locationId,
+        limit: req.query.limit,
+        includeSegments: req.query.includeSegments,
+      });
+      res.send(history);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getEditTimeline: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getEditTimeline, { allowUnknown: true });
+
+      const timeline = await getLocationEditTimeline({
+        locationId: req.query.locationId,
+        limit: req.query.limit,
+        includeSegments: req.query.includeSegments,
+      });
+      res.send(timeline);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getCurrentUserEditHistory: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getCurrentUserEditHistory, { allowUnknown: true });
+
+      const history = await getCurrentUserEditHistory({
+        userName: req.userName || req.user,
+        limit: req.query.limit,
+      });
+      res.send(history);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   getInfo: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
@@ -448,6 +504,13 @@ export default {
         postal_code: address.postalCode,
         country: address.country,
       }, { metadata });
+      await recordLocationCreateHistory({
+        location: createdLocation,
+        input: req.body,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'location-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      });
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -519,12 +582,13 @@ export default {
       const { metadata } = req.body;
 
       const location = await models.Location.findByPk(locationId, {
-        include: models.PhysicalAddress,
+        include: [models.PhysicalAddress, models.EventRelatedInfo],
       });
 
       if (!location) {
         throw new NotFoundError('Location not found');
       }
+      const locationBefore = location.get({ plain: true });
 
       const updatePromises = [];
 
@@ -539,6 +603,13 @@ export default {
       updatePromises.push(updateLocation(location, req.body, metadata));
 
       await Promise.all(updatePromises);
+      await recordLocationUpdateHistory({
+        locationBefore,
+        input: req.body,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'location-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      });
 
       res.sendStatus(204);
     } catch (err) {
@@ -573,6 +644,14 @@ export default {
         language,
         description,
       }, { metadata });
+      await recordPhoneCreateHistory({
+        locationId,
+        phone: createdPhone,
+        input: req.body,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'phone-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      });
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -593,7 +672,15 @@ export default {
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
       const { metadata, ...updateParams } = req.body;
+      const phoneBefore = phone.get({ plain: true });
       await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
+      await recordPhoneUpdateHistory({
+        phoneBefore,
+        input: updateParams,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'phone-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      });
 
       res.sendStatus(204);
     } catch (err) {
@@ -612,7 +699,14 @@ export default {
         throw new NotFoundError('Phone not found');
       }
 
+      const phoneBefore = phone.get({ plain: true });
       await destroyInstance(req.user, phone);
+      await recordPhoneDeleteHistory({
+        phoneBefore,
+        userName: req.userName || req.user,
+        source: 'phone-api',
+        actionAt: new Date(),
+      });
       res.sendStatus(204);
     } catch (err) {
       next(err);

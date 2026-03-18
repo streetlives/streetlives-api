@@ -1,8 +1,19 @@
+/* eslint-disable no-console */
+
 import Joi from 'joi';
 import Sequelize from 'sequelize';
-import getCommentsHighlights from './openai';
 import models, { sequelize } from '../models';
 import commentSchemas from './validation/comments';
+
+let getCommentsHighlights = null;
+
+const loadCommentsHighlights = () => {
+  if (!getCommentsHighlights) {
+    // eslint-disable-next-line global-require
+    getCommentsHighlights = require('./openai').default;
+  }
+  return getCommentsHighlights;
+};
 
 async function doGenerateHighlights(results) {
   for (const location of results) {
@@ -18,7 +29,7 @@ async function doGenerateHighlights(results) {
       attributes: ['id', 'content'],
     });
 
-    const openAIOutput = await getCommentsHighlights(comments);
+    const openAIOutput = await loadCommentsHighlights()(comments);
 
     // get the latest comment for this location
     const [lastComment] = await sequelize.query(

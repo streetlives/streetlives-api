@@ -24,12 +24,15 @@ export default (app) => {
 
   app.get('/locations', locations.find);
   app.get('/locations/changes', locations.getChanges);
+  app.get('/locations/edit-history/user', getUser, locations.getCurrentUserEditHistory);
+  app.get('/locations/edit-history/timeline', getUser, locations.getEditTimeline);
 
   app.post('/locations/suggestions', locations.suggestNew);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
   app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
+  app.get('/locations/:locationId/edit-history', getUser, locations.getEditHistory);
   app.post('/locations', getUser, dataEntryAuth, locations.create);
   app.patch('/locations/:locationId', getUser, dataEntryAuth, locations.update);
 
@@ -64,7 +67,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);

@@ -9,7 +9,13 @@ export default function getUser(req, res, next) {
     req.apiGateway.event.requestContext.authorizer.claims;
 
   if (claims && claims.sub) {
-    req.user = claims.sub;
+    req.userSub = claims.sub;
+    req.userName = claims['cognito:username'] ||
+      claims.preferred_username ||
+      claims.username ||
+      claims.email ||
+      claims.sub;
+    req.user = req.userName;
 
     const organizationClaims = claims['custom:orgs'];
     if (organizationClaims && organizationClaims.length) {
@@ -27,6 +33,8 @@ export default function getUser(req, res, next) {
 
   if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     req.user = '<Anonymous>';
+    req.userName = req.user;
+    req.userSub = req.user;
     next();
   } else {
     next(new AuthError());

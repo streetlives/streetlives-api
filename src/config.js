@@ -1,5 +1,11 @@
 import { parseBoolean, parseNumber } from './utils/strings';
 
+const databaseHost = process.env.DATABASE_HOST || 'localhost';
+const databaseSsl = parseBoolean(
+  process.env.DATABASE_SSL,
+  databaseHost !== 'localhost' && process.env.NODE_ENV !== 'test',
+);
+
 export default {
   port: process.env.PORT || 3000,
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
@@ -14,7 +20,7 @@ export default {
     ),
     logLargeQueries: parseBoolean(process.env.DATABASE_LOG_LARGE_QUERIES, true),
     options: {
-      host: process.env.DATABASE_HOST || 'localhost',
+      host: databaseHost,
       port: parseNumber(process.env.DATABASE_PORT, 5432),
       logging: parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
@@ -30,10 +36,10 @@ export default {
       dialectOptions: {
         // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
         clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
-        ssl: {
+        ssl: databaseSsl ? {
           require: true,
           rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
-        },
+        } : false,
       },
     },
   },
