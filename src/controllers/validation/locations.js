@@ -81,7 +81,7 @@ export default {
   getEditTimeline: {
     query: Joi.object().keys({
       locationId: Joi.string().guid().required(),
-      scope: Joi.string().allow(''),
+      scope: Joi.string().valid('location', '').allow(''),
       limit: Joi.number().integer().positive().max(600),
       includeSegments: Joi.boolean(),
     }).required(),

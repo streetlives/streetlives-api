@@ -6,16 +6,14 @@ import bodyParser from 'body-parser';
 import { randomUUID } from 'crypto';
 import express from 'express';
 import request from 'supertest';
-import app from '../../src/app';
-import locations from '../../src/controllers/locations';
-import getUser from '../../src/middleware/get-user';
+import apiApp from '../../src/app';
 import models from '../../src/models';
 import { buildHistoryUserIdentity } from '../../src/services/edit-history';
 
 describe('edit history', () => {
   const timelineTestName =
     'returns extension-style timeline pages for service description and other info edits';
-  const buildAuthenticatedHistoryApp = (claims) => {
+  const buildAuthenticatedApp = (claims) => {
     const authenticatedApp = express();
     authenticatedApp.use(bodyParser.json());
     authenticatedApp.use((req, res, next) => {
@@ -28,18 +26,7 @@ describe('edit history', () => {
       };
       next();
     });
-    authenticatedApp.get(
-      '/locations/edit-history/user',
-      getUser,
-      locations.getCurrentUserEditHistory,
-    );
-    authenticatedApp.use((err, req, res, next) => {
-      if (res.headersSent) {
-        return next(err);
-      }
-
-      return res.status(500).send({ error: err.stack });
-    });
+    authenticatedApp.use(apiApp);
     return authenticatedApp;
   };
   const runAsProduction = async (callback) => {
@@ -118,12 +105,12 @@ describe('edit history', () => {
   it('records location and organization edits on the location history endpoint', async () => {
     const { organization, location } = await buildFixture();
 
-    await request(app)
+    await request(apiApp)
       .patch(`/organizations/${organization.id}`)
       .send({ description: 'Updated org description.' })
       .expect(204);
 
-    await request(app)
+    await request(apiApp)
       .patch(`/locations/${location.id}`)
       .send({
         name: 'Updated location name',
@@ -133,7 +120,7 @@ describe('edit history', () => {
       })
       .expect(204);
 
-    const response = await request(app)
+    const response = await request(apiApp)
       .get(`/locations/${location.id}/edit-history`)
       .expect(200);
 
@@ -159,7 +146,7 @@ describe('edit history', () => {
   it(timelineTestName, async () => {
     const { location, service } = await buildFixture();
 
-    await request(app)
+    await request(apiApp)
       .patch(`/services/${service.id}`)
       .send({
         description: 'Updated service description.',
@@ -170,7 +157,7 @@ describe('edit history', () => {
       })
       .expect(204);
 
-    const response = await request(app)
+    const response = await request(apiApp)
       .get('/locations/edit-history/timeline')
       .query({
         locationId: location.id,
@@ -185,6 +172,7 @@ describe('edit history', () => {
     const otherInfoKey = encodeURIComponent(otherInfoPath);
 
     expect(response.body.ok).toBe(true);
+    expect(response.body.scope).toBe('location');
     expect(response.body.pages[descriptionKey]).toBeDefined();
     expect(response.body.pages[otherInfoKey]).toBeDefined();
     expect(response.body.pages[descriptionKey].fieldKey).toBe('services.description');
@@ -200,17 +188,17 @@ describe('edit history', () => {
   it('groups the current user history by page path', async () => {
     const { location, service } = await buildFixture();
 
-    await request(app)
+    await request(apiApp)
       .patch(`/locations/${location.id}`)
       .send({ description: 'Refreshed location description.' })
       .expect(204);
 
-    await request(app)
+    await request(apiApp)
       .patch(`/services/${service.id}`)
       .send({ description: 'Refreshed service description.' })
       .expect(204);
 
-    const response = await request(app)
+    const response = await request(apiApp)
       .get('/locations/edit-history/user')
       .expect(200);
 
@@ -230,15 +218,27 @@ describe('edit history', () => {
     }));
   });
 
+  it('rejects unsupported timeline scopes', async () => {
+    const { location } = await buildFixture();
+
+    await request(apiApp)
+      .get('/locations/edit-history/timeline')
+      .query({
+        locationId: location.id,
+        scope: 'page',
+      })
+      .expect(400);
+  });
+
   it('rejects unauthenticated edit history endpoints outside test mode', async () => {
     const { location } = await buildFixture();
 
     await runAsProduction(async () => {
-      await request(app)
+      await request(apiApp)
         .get(`/locations/${location.id}/edit-history`)
         .expect(401);
 
-      await request(app)
+      await request(apiApp)
         .get('/locations/edit-history/timeline')
         .query({
           locationId: location.id,
@@ -246,9 +246,49 @@ describe('edit history', () => {
         })
         .expect(401);
 
-      await request(app)
+      await request(apiApp)
         .get('/locations/edit-history/user')
         .expect(401);
+    });
+  });
+
+  it('restricts location history reads to matching organizations outside test mode', async () => {
+    const { organization, location } = await buildFixture();
+    const authorizedClaims = {
+      sub: randomUUID(),
+      'cognito:username': 'authorized-editor',
+      'custom:orgs': organization.id,
+    };
+    const unauthorizedClaims = {
+      sub: randomUUID(),
+      'cognito:username': 'unauthorized-editor',
+      'custom:orgs': randomUUID(),
+    };
+
+    await runAsProduction(async () => {
+      await request(buildAuthenticatedApp(authorizedClaims))
+        .get(`/locations/${location.id}/edit-history`)
+        .expect(200);
+
+      await request(buildAuthenticatedApp(authorizedClaims))
+        .get('/locations/edit-history/timeline')
+        .query({
+          locationId: location.id,
+          scope: 'location',
+        })
+        .expect(200);
+
+      await request(buildAuthenticatedApp(unauthorizedClaims))
+        .get(`/locations/${location.id}/edit-history`)
+        .expect(403);
+
+      await request(buildAuthenticatedApp(unauthorizedClaims))
+        .get('/locations/edit-history/timeline')
+        .query({
+          locationId: location.id,
+          scope: 'location',
+        })
+        .expect(403);
     });
   });
 
@@ -309,7 +349,7 @@ describe('edit history', () => {
       },
     ]);
 
-    const response = await request(buildAuthenticatedHistoryApp(claims))
+    const response = await request(buildAuthenticatedApp(claims))
       .get('/locations/edit-history/user')
       .expect(200);
 
@@ -327,12 +367,92 @@ describe('edit history', () => {
       }));
   });
 
+  it('filters current user history to the caller organizations outside test mode', async () => {
+    const allowedFixture = await buildFixture();
+    const otherFixture = await buildFixture();
+    const claims = {
+      sub: randomUUID(),
+      'cognito:username': 'org-scoped-editor',
+      'custom:orgs': allowedFixture.organization.id,
+    };
+    const identity = buildHistoryUserIdentity({
+      userKey: claims.sub,
+      userName: claims['cognito:username'],
+    });
+
+    await models.EditHistory.bulkCreate([
+      {
+        location_id: allowedFixture.location.id,
+        page_path: `/team/location/${allowedFixture.location.id}`,
+        user_key: identity.key,
+        user_name: identity.displayName,
+        action: 'update',
+        field: 'description',
+        label: 'Description',
+        before_value: null,
+        after_value: null,
+        summary: 'Updated Description',
+        resource_table: 'locations',
+        resource_id: allowedFixture.location.id,
+        source: 'location-api',
+        action_at: new Date(),
+        copyedit: false,
+      },
+      {
+        location_id: otherFixture.location.id,
+        page_path: `/team/location/${otherFixture.location.id}`,
+        user_key: identity.key,
+        user_name: identity.displayName,
+        action: 'update',
+        field: 'description',
+        label: 'Description',
+        before_value: null,
+        after_value: null,
+        summary: 'Updated Description',
+        resource_table: 'locations',
+        resource_id: otherFixture.location.id,
+        source: 'location-api',
+        action_at: new Date(),
+        copyedit: false,
+      },
+    ]);
+
+    await runAsProduction(async () => {
+      const response = await request(buildAuthenticatedApp(claims))
+        .get('/locations/edit-history/user')
+        .expect(200);
+
+      expect(response.body.data[`/team/location/${allowedFixture.location.id}`]).toBeDefined();
+      expect(response.body.data[`/team/location/${otherFixture.location.id}`]).toBeUndefined();
+    });
+  });
+
+  it('redacts raw before and after values for non-playback edits', async () => {
+    const { location } = await buildFixture();
+
+    await request(apiApp)
+      .patch(`/locations/${location.id}`)
+      .send({ name: 'Redacted history name' })
+      .expect(204);
+
+    const response = await request(apiApp)
+      .get(`/locations/${location.id}/edit-history`)
+      .expect(200);
+
+    const nameEdit = response.body.edits.find(edit => edit.label === 'Name');
+    expect(nameEdit).toEqual(expect.objectContaining({
+      summary: 'Updated Name',
+    }));
+    expect(nameEdit.before).toBeUndefined();
+    expect(nameEdit.after).toBeUndefined();
+  });
+
   it('still updates a location when history recording fails', async () => {
     const { location } = await buildFixture();
     const bulkCreateSpy = jest.spyOn(models.EditHistory, 'bulkCreate')
       .mockRejectedValueOnce(new Error('history write failed'));
 
-    await request(app)
+    await request(apiApp)
       .patch(`/locations/${location.id}`)
       .send({ description: 'Location saved despite history failure.' })
       .expect(204);
@@ -352,7 +472,7 @@ describe('edit history', () => {
     const bulkCreateSpy = jest.spyOn(models.EditHistory, 'bulkCreate')
       .mockRejectedValueOnce(new Error('history write failed'));
 
-    const response = await request(app)
+    const response = await request(apiApp)
       .post('/locations')
       .send({
         name: 'Created despite history failure',

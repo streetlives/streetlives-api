@@ -10,6 +10,9 @@ const TIMELINE_PAGE_SUFFIXES = new Set(['description', 'other-info']);
 
 const UNKNOWN_HISTORY_USER = 'Unknown';
 const HISTORY_USER_DISPLAY_FALLBACK = 'User';
+const REDACTED_HISTORY_TEXT = '[redacted]';
+const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const PHONE_PATTERN = /(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}\b/g;
 
 const normalizeHistoryUserKey = (value, fallback = UNKNOWN_HISTORY_USER) => {
   const normalized = String(value || '').trim();
@@ -68,6 +71,9 @@ const normalizeLimit = (value) => {
 };
 
 const uniqueStrings = values => [...new Set(values.filter(Boolean).map(value => String(value)))];
+const pagePathSuffix = pagePath => String(pagePath || '').split('/').pop().toLowerCase();
+const supportsTimelineTextPlayback = pagePath =>
+  TIMELINE_PAGE_SUFFIXES.has(pagePathSuffix(pagePath));
 
 const locationPagePath = locationId => `/team/location/${locationId}`;
 
@@ -84,6 +90,30 @@ const stringifyValue = (value) => {
   } catch (err) {
     return String(value);
   }
+};
+
+const sanitizeHistoryText = (value) => {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(EMAIL_PATTERN, REDACTED_HISTORY_TEXT)
+    .replace(PHONE_PATTERN, REDACTED_HISTORY_TEXT);
+};
+
+const sanitizeStoredValue = ({ pagePath, value }) => {
+  if (value == null) return null;
+
+  if (typeof value === 'string') {
+    if (!supportsTimelineTextPlayback(pagePath)) {
+      return null;
+    }
+    return sanitizeHistoryText(value);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  return null;
 };
 
 const parseStoredValue = (value) => {
@@ -130,26 +160,6 @@ const humanizeField = (field) => {
     .replace(/\b\w/g, match => match.toUpperCase());
 };
 
-const previewValue = (value) => {
-  if (value == null) return '';
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    return value.map(item => previewValue(item)).filter(Boolean).join(', ');
-  }
-  if (typeof value === 'object') {
-    const nestedPreview = [
-      value.name,
-      value.label,
-      value.title,
-      value.number,
-      value.information,
-    ].find(Boolean);
-    return previewValue(nestedPreview || '');
-  }
-  return '';
-};
-
 const areEqual = (left, right) => {
   if (left === right) return true;
   if (left == null || right == null) return false;
@@ -167,23 +177,21 @@ const buildSummary = ({
   action, label, before, after,
 }) => {
   const title = label || 'Edit';
-  const afterPreview = previewValue(after);
-  const beforePreview = previewValue(before);
 
   if (action === ACTION_CREATE) {
-    return afterPreview ? `Created ${title}: ${afterPreview}` : `Created ${title}`;
+    return `Created ${title}`;
   }
 
   if (action === ACTION_DELETE) {
-    return beforePreview ? `Deleted ${title}: ${beforePreview}` : `Deleted ${title}`;
+    return `Deleted ${title}`;
   }
 
   if (before == null && after != null) {
-    return afterPreview ? `Added ${title}: ${afterPreview}` : `Added ${title}`;
+    return `Added ${title}`;
   }
 
   if (after == null && before != null) {
-    return beforePreview ? `Removed ${title}: ${beforePreview}` : `Removed ${title}`;
+    return `Removed ${title}`;
   }
 
   return `Updated ${title}`;
@@ -240,6 +248,11 @@ const createEntry = ({
   actionAt = new Date(),
 }) => {
   const identity = buildHistoryUserIdentity({ userKey, userName });
+  const sanitizedBefore = sanitizeStoredValue({ pagePath, value: before });
+  const sanitizedAfter = sanitizeStoredValue({ pagePath, value: after });
+  const sanitizedSummary = sanitizeHistoryText(summary || buildSummary({
+    action, label, before, after,
+  }));
 
   return {
     location_id: locationId,
@@ -252,11 +265,9 @@ const createEntry = ({
     action,
     field,
     label: label || humanizeField(field),
-    before_value: stringifyValue(before),
-    after_value: stringifyValue(after),
-    summary: summary || buildSummary({
-      action, label, before, after,
-    }),
+    before_value: stringifyValue(sanitizedBefore),
+    after_value: stringifyValue(sanitizedAfter),
+    summary: sanitizedSummary,
     resource_table: resourceTable,
     resource_id: String(resourceId),
     source,
@@ -962,8 +973,6 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
     action: entry.action,
     field: entry.field || '',
     label: entry.label || humanizeField(entry.field),
-    before,
-    after,
     summary: entry.summary,
     note: entry.summary,
     ts: timestamp.toISOString(),
@@ -980,6 +989,14 @@ const mapEntryToEvent = (entry, { includeSegments = false } = {}) => {
     source: entry.source || null,
     copyedit: Boolean(entry.copyedit),
   };
+
+  if (before != null) {
+    event.before = before;
+  }
+
+  if (after != null) {
+    event.after = after;
+  }
 
   if (entry.page_path && /\/description$/i.test(entry.page_path)) {
     event.fieldKey = 'services.description';
@@ -1020,13 +1037,18 @@ export const getLocationEditHistory = async ({ locationId, limit, includeSegment
   };
 };
 
-export const getLocationEditTimeline = async ({ locationId, limit, includeSegments = false }) => {
+export const getLocationEditTimeline = async ({
+  locationId,
+  limit,
+  includeSegments = false,
+  scope = 'location',
+}) => {
   const normalizedLimit = normalizeLimit(limit);
   const entries = await loadLocationEntries({ locationId, limit: normalizedLimit });
   const events = entries
     .map(entry => mapEntryToEvent(entry, { includeSegments }))
     .filter((event) => {
-      const suffix = String(event.pagePath || '').split('/').pop();
+      const suffix = pagePathSuffix(event.pagePath);
       return TIMELINE_PAGE_SUFFIXES.has(suffix);
     })
     .sort((a, b) => a.timestampMs - b.timestampMs);
@@ -1048,16 +1070,61 @@ export const getLocationEditTimeline = async ({ locationId, limit, includeSegmen
   return {
     ok: true,
     locationId,
+    scope,
     generatedAt: new Date().toISOString(),
     pages,
   };
 };
 
-export const getCurrentUserEditHistory = async ({ userKey, userName, limit }) => {
+const normalizeAllowedLocationIds = (allowedLocationIds) => {
+  if (allowedLocationIds == null) {
+    return null;
+  }
+
+  if (allowedLocationIds instanceof Set) {
+    return uniqueStrings([...allowedLocationIds]);
+  }
+
+  if (Array.isArray(allowedLocationIds)) {
+    return uniqueStrings(allowedLocationIds);
+  }
+
+  return uniqueStrings([allowedLocationIds]);
+};
+
+export const getCurrentUserEditHistory = async ({
+  userKey,
+  userName,
+  limit,
+  allowedLocationIds = null,
+}) => {
   const normalizedLimit = normalizeLimit(limit);
   const identity = buildHistoryUserIdentity({ userKey, userName });
+  const allowedLocationIdList = normalizeAllowedLocationIds(allowedLocationIds);
+
+  if (allowedLocationIdList && !allowedLocationIdList.length) {
+    return {
+      user: {
+        key: identity.displayName,
+        name: identity.displayName,
+        normalized: identity.displayName,
+      },
+      data: {},
+    };
+  }
+
+  const where = {
+    user_key: identity.key,
+  };
+
+  if (allowedLocationIdList) {
+    where.location_id = {
+      [models.Sequelize.Op.in]: allowedLocationIdList,
+    };
+  }
+
   const entries = await models.EditHistory.findAll({
-    where: { user_key: identity.key },
+    where,
     order: [['action_at', 'DESC'], ['createdAt', 'DESC'], ['id', 'DESC']],
     limit: normalizedLimit,
   });

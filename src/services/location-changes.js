@@ -19,6 +19,21 @@ const normalizeDate = (value) => {
 };
 
 const uniqueStrings = values => [...new Set(values.filter(Boolean).map(String))];
+const normalizeAllowedLocationIds = (allowedLocationIds) => {
+  if (allowedLocationIds == null) {
+    return null;
+  }
+
+  if (allowedLocationIds instanceof Set) {
+    return new Set(uniqueStrings([...allowedLocationIds]));
+  }
+
+  if (Array.isArray(allowedLocationIds)) {
+    return new Set(uniqueStrings(allowedLocationIds));
+  }
+
+  return new Set(uniqueStrings([allowedLocationIds]));
+};
 
 const readMetadataLocationFallback = (change) => {
   if (change.field_name === 'location_id') {
@@ -356,9 +371,25 @@ const fetchMetadataChanges = ({ createdAt, changeId, limit }) =>
     },
   );
 
-export const getLocationChanges = async ({ cursor, since, limit } = {}) => {
+export const getLocationChanges = async ({
+  cursor,
+  since,
+  limit,
+  allowedLocationIds = null,
+} = {}) => {
   const requestedCursor = resolveRequestedCursor({ cursor, since });
   const normalizedLimit = normalizeLimit(limit);
+  const allowedLocationIdSet = normalizeAllowedLocationIds(allowedLocationIds);
+  if (allowedLocationIdSet && !allowedLocationIdSet.size) {
+    return {
+      changes: [],
+      locationIds: [],
+      nextCursor: serializeLocationChangesCursor(requestedCursor),
+      hasMore: false,
+      serverTime: new Date().toISOString(),
+    };
+  }
+
   const rows = await fetchMetadataChanges({
     createdAt: requestedCursor.createdAt,
     changeId: requestedCursor.changeId,
@@ -371,7 +402,10 @@ export const getLocationChanges = async ({ cursor, since, limit } = {}) => {
 
   for (const row of trimmedRows) {
     const locationIds = await resolveLocationIdsForChange(row, context);
-    locationIds.forEach((locationId) => {
+    const visibleLocationIds = allowedLocationIdSet
+      ? locationIds.filter(locationId => allowedLocationIdSet.has(String(locationId)))
+      : locationIds;
+    visibleLocationIds.forEach((locationId) => {
       expandedChanges.push({
         cursor: serializeLocationChangesCursor({
           createdAt: row.created_at,

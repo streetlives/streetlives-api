@@ -23,13 +23,59 @@ import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
 const uniqueStrings = values => [...new Set(values.filter(Boolean).map(String))];
 const resolveHistoryActionAt = metadata =>
   (metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date());
+const canReadAllAuditData = req =>
+  req.userIsAdmin || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+const getUserOrganizationIds = req => uniqueStrings(req.userOrganizationIds || []);
+
+const loadAccessibleAuditLocationIds = async (req) => {
+  if (canReadAllAuditData(req)) {
+    return null;
+  }
+
+  const organizationIds = getUserOrganizationIds(req);
+  if (!organizationIds.length) {
+    return [];
+  }
+
+  const locations = await models.Location.findAll({
+    where: {
+      organization_id: {
+        [models.Sequelize.Op.in]: organizationIds,
+      },
+    },
+    attributes: ['id'],
+    raw: true,
+    hooks: false,
+  });
+
+  return uniqueStrings(locations.map(({ id }) => id));
+};
+
+const ensureLocationAuditAccess = async (req, locationId) => {
+  if (canReadAllAuditData(req)) {
+    return;
+  }
+
+  const location = await models.Location.findByPk(locationId, {
+    attributes: ['id', 'organization_id'],
+    raw: true,
+  });
+
+  if (!location) {
+    throw new NotFoundError('Location not found');
+  }
+
+  if (!getUserOrganizationIds(req).includes(location.organization_id)) {
+    throw new ForbiddenError('Not authorized to read edit history for this location');
+  }
+};
 
 const loadLocationIdsForOrganization = async (organizationId) => {
   if (!organizationId) return [];
@@ -355,7 +401,10 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getChanges, { allowUnknown: true });
 
-      const changes = await getLocationChanges(req.query);
+      const changes = await getLocationChanges({
+        ...req.query,
+        allowedLocationIds: await loadAccessibleAuditLocationIds(req),
+      });
       res.send(changes);
     } catch (err) {
       next(err);
@@ -365,6 +414,7 @@ export default {
   getEditHistory: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getEditHistory, { allowUnknown: true });
+      await ensureLocationAuditAccess(req, req.params.locationId);
 
       const history = await getLocationEditHistory({
         locationId: req.params.locationId,
@@ -380,9 +430,11 @@ export default {
   getEditTimeline: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getEditTimeline, { allowUnknown: true });
+      await ensureLocationAuditAccess(req, req.query.locationId);
 
       const timeline = await getLocationEditTimeline({
         locationId: req.query.locationId,
+        scope: req.query.scope || 'location',
         limit: req.query.limit,
         includeSegments: req.query.includeSegments,
       });
@@ -400,6 +452,7 @@ export default {
         userKey: req.userSub || req.user,
         userName: req.userName || req.user,
         limit: req.query.limit,
+        allowedLocationIds: await loadAccessibleAuditLocationIds(req),
       });
       res.send(history);
     } catch (err) {

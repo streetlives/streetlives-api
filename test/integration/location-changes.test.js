@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 
+import { randomUUID } from 'crypto';
 import request from 'supertest';
 import express from 'express';
 import locations from '../../src/controllers/locations';
@@ -10,6 +11,21 @@ import getUser from '../../src/middleware/get-user';
 
 describe('location changes feed', () => {
   const app = express();
+  const buildAuthenticatedChangesApp = (claims) => {
+    const authenticatedApp = express();
+    authenticatedApp.use((req, res, next) => {
+      req.apiGateway = {
+        event: {
+          requestContext: {
+            authorizer: { claims },
+          },
+        },
+      };
+      next();
+    });
+    authenticatedApp.use(app);
+    return authenticatedApp;
+  };
   const runAsProduction = async (callback) => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
@@ -182,6 +198,49 @@ describe('location changes feed', () => {
       await request(app)
         .get('/locations/changes')
         .expect(401);
+    });
+  });
+
+  it('filters the changes feed to the caller organizations outside test mode', async () => {
+    const metadataDate = new Date(Date.now() - (60 * 1000));
+    const claims = {
+      sub: randomUUID(),
+      'cognito:username': 'authorized-editor',
+      'custom:orgs': organization.id,
+    };
+    const otherClaims = {
+      sub: randomUUID(),
+      'cognito:username': 'other-editor',
+      'custom:orgs': randomUUID(),
+    };
+
+    await models.Metadata.create({
+      resource_table: 'organizations',
+      resource_id: organization.id,
+      last_action_date: metadataDate,
+      last_action_type: models.Metadata.actionTypes.update,
+      field_name: 'name',
+      replacement_value: 'Scoped Changes Test Org',
+      createdAt: new Date(metadataDate.getTime() + 1000),
+      updatedAt: new Date(metadataDate.getTime() + 1000),
+    });
+
+    await runAsProduction(async () => {
+      const authorizedResponse = await request(buildAuthenticatedChangesApp(claims))
+        .get('/locations/changes')
+        .query({ since: new Date(metadataDate.getTime() - 1000).toISOString() })
+        .expect(200);
+
+      expect(authorizedResponse.body.locationIds).toEqual(expect.arrayContaining([location.id]));
+      expect(authorizedResponse.body.changes.length).toBeGreaterThan(0);
+
+      const unauthorizedResponse = await request(buildAuthenticatedChangesApp(otherClaims))
+        .get('/locations/changes')
+        .query({ since: new Date(metadataDate.getTime() - 1000).toISOString() })
+        .expect(200);
+
+      expect(unauthorizedResponse.body.locationIds).toEqual([]);
+      expect(unauthorizedResponse.body.changes).toEqual([]);
     });
   });
 });
