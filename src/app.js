@@ -9,8 +9,12 @@ const app = express();
 
 app.use(morgan('dev'));
 
+function isInternalLocationCatalogPath(path) {
+  return path === '/locations/catalog' || path.startsWith('/locations/catalog/');
+}
+
 app.use((req, res, next) => {
-  if (req.path === '/locations/catalog') {
+  if (isInternalLocationCatalogPath(req.path)) {
     return internalLocationCatalogCors(req, res, next);
   }
   return publicApiCors(req, res, next);
