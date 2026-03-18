@@ -6,10 +6,18 @@ import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware';
 import setupRoutes from './routes';
 
 const app = express();
+const exposedHeaders = [
+  'Pagination-Count',
+  'Total-Count',
+  'Page-Number',
+  'Page-Size',
+  'Has-More',
+  'Next-Page',
+];
 
 app.use(morgan('dev'));
 
-app.use(cors());
+app.use(cors({ exposedHeaders }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 

@@ -1093,4 +1093,108 @@ describe('find locations', () => {
         .query(qs.stringify({ zipcodes: [] }))
         .then(res => expect(res.body.length).toBeGreaterThan(0)));
   });
+
+  describe('internal location catalog', () => {
+    it('should require a bearer token', () =>
+      request(app)
+        .get('/locations/catalog')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+        })
+        .expect(401));
+
+    it('should reject authenticated browser requests from disallowed origins', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer test-internal-token')
+        .set('Origin', 'https://example.com')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+        })
+        .expect(403));
+
+    it('should allow authenticated extension requests without enforcing the web host allowlist', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer test-internal-token')
+        .set('Origin', 'chrome-extension://abcdefghijklmnop')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.body).toHaveLength(1);
+        }));
+
+    it('should return a slim paginated catalog for authenticated internal users', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer test-internal-token')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 2,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.headers['pagination-count']).toBe('2');
+          expect(res.headers['page-number']).toBe('0');
+          expect(res.headers['page-size']).toBe('2');
+          expect(res.headers['has-more']).toBe('true');
+          expect(res.headers['next-page']).toBe('1');
+          expect(res.body).toHaveLength(2);
+          expect(res.body[0]).toEqual(expect.objectContaining({
+            id: primaryLocation.id,
+            name: primaryLocation.name,
+            org: organization.name,
+            Organization: expect.objectContaining({
+              id: organization.id,
+              name: organization.name,
+            }),
+          }));
+          expect(res.body[0]).not.toHaveProperty('Services');
+          expect(res.body[0]).not.toHaveProperty('EventRelatedInfos');
+          expect(res.body[0]).toHaveProperty('PhysicalAddresses');
+          expect(Array.isArray(res.body[0].PhysicalAddresses)).toBe(true);
+        }));
+
+    it('should return the final page without a next-page header', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer test-internal-token')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 1,
+          pageSize: 2,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.headers['pagination-count']).toBe('2');
+          expect(res.headers['page-number']).toBe('1');
+          expect(res.headers['page-size']).toBe('2');
+          expect(res.headers['has-more']).toBe('false');
+          expect(res.headers['next-page']).toBeUndefined();
+          expect(res.body).toHaveLength(1);
+          expect(res.body[0]).toEqual(expect.objectContaining({
+            id: farLocation.id,
+            name: farLocation.name,
+            org: organization.name,
+          }));
+        }));
+  });
 });

@@ -1,9 +1,58 @@
 import { parseBoolean, parseNumber } from './utils/strings';
 
+const DEFAULT_COGNITO_USER_POOL_ID = 'us-east-1_EvBbozIjd';
+const DEFAULT_INTERNAL_CATALOG_ALLOWED_HOSTS = ['sheets.doobneek.org'];
+const DEFAULT_INTERNAL_CATALOG_MAX_RADIUS_METERS = Math.round(20 * 1609.344);
+const DEFAULT_INTERNAL_CATALOG_DEFAULT_PAGE_SIZE = 500;
+const DEFAULT_INTERNAL_CATALOG_MAX_PAGE_SIZE = 1000;
+
+const parseCsv = (value, fallback = []) => {
+  if (typeof value !== 'string') return fallback;
+  const parsed = value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+  return parsed.length ? parsed : fallback;
+};
+
+const cognitoUserPoolId = process.env.COGNITO_USER_POOL_ID || DEFAULT_COGNITO_USER_POOL_ID;
+const cognitoUserPoolRegion = process.env.COGNITO_USER_POOL_REGION
+  || (cognitoUserPoolId.includes('_') ? cognitoUserPoolId.split('_')[0] : 'us-east-1');
+const cognitoUserPoolIssuer = cognitoUserPoolId
+  ? `https://cognito-idp.${cognitoUserPoolRegion}.amazonaws.com/${cognitoUserPoolId}`
+  : null;
+const internalCatalogMaxPageSize = parseNumber(
+  process.env.INTERNAL_LOCATION_CATALOG_MAX_PAGE_SIZE,
+  DEFAULT_INTERNAL_CATALOG_MAX_PAGE_SIZE,
+);
+
 export default {
   port: process.env.PORT || 3000,
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
   adminGroupName: process.env.ADMIN_GROUP_NAME || 'StreetlivesAdmins',
+  cognito: {
+    userPoolId: cognitoUserPoolId,
+    userPoolRegion: cognitoUserPoolRegion,
+    userPoolIssuer: cognitoUserPoolIssuer,
+  },
+  internalLocationCatalog: {
+    allowedOriginHosts: parseCsv(
+      process.env.INTERNAL_LOCATION_CATALOG_ALLOWED_HOSTS,
+      DEFAULT_INTERNAL_CATALOG_ALLOWED_HOSTS,
+    ),
+    maxRadiusMeters: parseNumber(
+      process.env.INTERNAL_LOCATION_CATALOG_MAX_RADIUS_METERS,
+      DEFAULT_INTERNAL_CATALOG_MAX_RADIUS_METERS,
+    ),
+    defaultPageSize: Math.min(
+      parseNumber(
+        process.env.INTERNAL_LOCATION_CATALOG_DEFAULT_PAGE_SIZE,
+        DEFAULT_INTERNAL_CATALOG_DEFAULT_PAGE_SIZE,
+      ),
+      internalCatalogMaxPageSize,
+    ),
+    maxPageSize: internalCatalogMaxPageSize,
+  },
   db: {
     database: process.env.DATABASE_NAME || 'streetlives',
     username: process.env.DATABASE_USER,
