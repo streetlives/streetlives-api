@@ -45,6 +45,25 @@ function normalizeHost(value) {
     .replace(/:\d+$/, '');
 }
 
+function normalizeValues(values) {
+  return values
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+}
+
+function getClaimValues(value) {
+  if (Array.isArray(value)) {
+    return normalizeValues(value);
+  }
+  if (value == null) {
+    return [];
+  }
+  if (typeof value === 'string' && value.includes(',')) {
+    return normalizeValues(value.split(','));
+  }
+  return normalizeValues([value]);
+}
+
 function extractRequestHost(value) {
   if (!value) return null;
   try {
@@ -83,6 +102,38 @@ function assertAllowedRequestHost(req) {
   if (!requestHosts.length) return;
   if (requestHosts.some(host => isAllowedHost(host, allowedHosts))) return;
   throw new ForbiddenError('Origin not allowed for internal location catalog');
+}
+
+function assertCatalogAuthorizationClaims(payload) {
+  const allowedClientIds = normalizeValues(
+    config.internalLocationCatalog.allowedClientIds || [],
+  );
+  const allowedGroupNames = normalizeValues(
+    config.internalLocationCatalog.allowedGroupNames || [],
+  );
+  if (!allowedClientIds.length && !allowedGroupNames.length) {
+    throw new ForbiddenError('Internal location catalog authorization is not configured');
+  }
+
+  if (allowedClientIds.length) {
+    const tokenClientIds = getClaimValues(payload.client_id)
+      .concat(getClaimValues(payload.aud))
+      .concat(getClaimValues(payload.azp));
+    const hasAllowedClientId = tokenClientIds.some(tokenClientId =>
+      allowedClientIds.includes(tokenClientId));
+    if (!hasAllowedClientId) {
+      throw new ForbiddenError('Bearer token client is not allowed for internal location catalog');
+    }
+  }
+
+  if (allowedGroupNames.length) {
+    const tokenGroups = getClaimValues(payload['cognito:groups']);
+    const hasAllowedGroup = tokenGroups.some(groupName =>
+      allowedGroupNames.includes(groupName));
+    if (!hasAllowedGroup) {
+      throw new ForbiddenError('Bearer token group is not allowed for internal location catalog');
+    }
+  }
 }
 
 async function fetchIssuerJwks(issuer) {
@@ -193,12 +244,15 @@ export default async function authorizeInternalLocationCatalogRequest(req) {
     throw new AuthError('Missing bearer token');
   }
   assertAllowedRequestHost(req);
-  if (process.env.NODE_ENV === 'test') {
+  if (process.env.NODE_ENV === 'test' && bearerToken === 'test-internal-token') {
     return {
       sub: 'test-user',
       token_use: 'test',
       iss: config.cognito.userPoolIssuer,
+      aud: (config.internalLocationCatalog.allowedClientIds || [])[0] || null,
     };
   }
-  return verifyCognitoJwt(bearerToken);
+  const payload = await verifyCognitoJwt(bearerToken);
+  assertCatalogAuthorizationClaims(payload);
+  return payload;
 }
