@@ -1117,7 +1117,18 @@ describe('find locations', () => {
         })
         .expect(403));
 
-    it('should allow authenticated extension requests without enforcing the web host allowlist', () =>
+    it('should reject authenticated requests with no origin context', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer test-internal-token')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+        })
+        .expect(403));
+
+    it('should allow authenticated extension requests from allowed extension origins', () =>
       request(app)
         .get('/locations/catalog')
         .set('Authorization', 'Bearer test-internal-token')
@@ -1139,6 +1150,7 @@ describe('find locations', () => {
       request(app)
         .get('/locations/catalog')
         .set('Authorization', 'Bearer test-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
         .query({
           latitude: originLatitude,
           longitude: originLongitude,
@@ -1174,6 +1186,7 @@ describe('find locations', () => {
       request(app)
         .get('/locations/catalog')
         .set('Authorization', 'Bearer test-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
         .query({
           latitude: originLatitude,
           longitude: originLongitude,

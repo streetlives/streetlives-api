@@ -16,6 +16,7 @@ const ORIGINAL_ENV = process.env;
 const loadAuthorizeWithMocks = ({
   allowedClientIds = 'allowed-client-id',
   allowedHosts = 'sheets.doobneek.org',
+  allowedOriginPatterns = 'chrome-extension://*',
   allowedGroups,
   verifyResult = true,
 } = {}) => {
@@ -23,8 +24,10 @@ const loadAuthorizeWithMocks = ({
   process.env = {
     ...ORIGINAL_ENV,
     NODE_ENV: 'test',
+    COGNITO_USER_POOL_ID: 'us-east-1_testPool',
     INTERNAL_LOCATION_CATALOG_ALLOWED_CLIENT_IDS: allowedClientIds,
     INTERNAL_LOCATION_CATALOG_ALLOWED_HOSTS: allowedHosts,
+    INTERNAL_LOCATION_CATALOG_ALLOWED_ORIGIN_PATTERNS: allowedOriginPatterns,
   };
 
   if (allowedGroups === undefined) {
@@ -67,7 +70,7 @@ describe('internal location catalog auth', () => {
     process.env = ORIGINAL_ENV;
   });
 
-  it('accepts a signed token from an allowed client without a browser origin', async () => {
+  it('accepts a signed token from an allowed web origin and client', async () => {
     const {
       authorizeInternalLocationCatalogRequest,
       config,
@@ -86,6 +89,7 @@ describe('internal location catalog auth', () => {
     await expect(authorizeInternalLocationCatalogRequest({
       headers: {
         authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
       },
     })).resolves.toEqual(expect.objectContaining({
       aud: 'allowed-client-id',
@@ -113,8 +117,30 @@ describe('internal location catalog auth', () => {
     await expect(authorizeInternalLocationCatalogRequest({
       headers: {
         authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
       },
     })).rejects.toThrow('Bearer token client is not allowed for internal location catalog');
+  });
+
+  it('rejects authenticated requests that do not provide any origin context', async () => {
+    const {
+      authorizeInternalLocationCatalogRequest,
+      config,
+    } = loadAuthorizeWithMocks();
+
+    const token = buildJwt({
+      iss: config.cognito.userPoolIssuer,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      token_use: 'id',
+      aud: 'allowed-client-id',
+      sub: 'user-123',
+    });
+
+    await expect(authorizeInternalLocationCatalogRequest({
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    })).rejects.toThrow('Origin not allowed for internal location catalog');
   });
 
   it('rejects a browser origin that is not on the allowlist', async () => {
@@ -156,6 +182,7 @@ describe('internal location catalog auth', () => {
     await expect(authorizeInternalLocationCatalogRequest({
       headers: {
         authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
       },
     })).rejects.toThrow('Unable to verify bearer token');
   });
@@ -177,8 +204,33 @@ describe('internal location catalog auth', () => {
     await expect(authorizeInternalLocationCatalogRequest({
       headers: {
         authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
       },
     })).rejects.toThrow('Unsupported Cognito token type');
+  });
+
+  it('accepts an allowed extension origin pattern', async () => {
+    const {
+      authorizeInternalLocationCatalogRequest,
+      config,
+    } = loadAuthorizeWithMocks();
+
+    const token = buildJwt({
+      iss: config.cognito.userPoolIssuer,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      token_use: 'access',
+      client_id: 'allowed-client-id',
+      sub: 'user-123',
+    });
+
+    await expect(authorizeInternalLocationCatalogRequest({
+      headers: {
+        authorization: `Bearer ${token}`,
+        origin: 'chrome-extension://abcdefghijklmnop',
+      },
+    })).resolves.toEqual(expect.objectContaining({
+      client_id: 'allowed-client-id',
+    }));
   });
 
   it('can require an allowed Cognito group in addition to the client id', async () => {
@@ -199,7 +251,52 @@ describe('internal location catalog auth', () => {
     await expect(authorizeInternalLocationCatalogRequest({
       headers: {
         authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
       },
     })).rejects.toThrow('Bearer token group is not allowed for internal location catalog');
+  });
+
+  it('fails closed when the Cognito issuer is not configured', async () => {
+    const {
+      authorizeInternalLocationCatalogRequest,
+    } = loadAuthorizeWithMocks();
+    process.env = {
+      ...process.env,
+    };
+    delete process.env.COGNITO_USER_POOL_ID;
+    delete process.env.COGNITO_USER_POOL_ISSUER;
+    jest.resetModules();
+
+    const axios = require('axios');
+    const crypto = require('crypto');
+    jest.spyOn(axios, 'get').mockResolvedValue({
+      data: { keys: [{ kid: 'kid-1', kty: 'RSA' }] },
+    });
+    jest.spyOn(crypto, 'createPublicKey').mockReturnValue('mock-public-key');
+    jest.spyOn(crypto, 'createVerify').mockReturnValue({
+      update: jest.fn(),
+      end: jest.fn(),
+      verify: jest.fn(() => true),
+    });
+
+    const reloadedAuthorize =
+      require('../../src/services/internal-location-catalog-auth').default;
+
+    const token = buildJwt({
+      iss: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_testPool',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      token_use: 'id',
+      aud: 'allowed-client-id',
+      sub: 'user-123',
+    });
+
+    await expect(reloadedAuthorize({
+      headers: {
+        authorization: `Bearer ${token}`,
+        origin: 'https://sheets.doobneek.org',
+      },
+    })).rejects.toThrow('Internal location catalog authorization is not configured');
+
+    expect(authorizeInternalLocationCatalogRequest).toBeDefined();
   });
 });

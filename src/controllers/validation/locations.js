@@ -77,10 +77,10 @@ export default {
         .integer()
         .positive()
         .max(config.internalLocationCatalog.maxPageSize),
-      sortBy: Joi.string().valid([
+      sortBy: Joi.string().valid(
         SORT_ORDER.NEARBY,
         SORT_ORDER.MOST_RECENTLY_VALIDATED,
-      ]),
+      ),
     }).required(),
   },
 

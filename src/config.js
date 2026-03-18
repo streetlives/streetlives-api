@@ -1,8 +1,7 @@
 import { parseBoolean, parseNumber } from './utils/strings';
 
-const DEFAULT_COGNITO_USER_POOL_ID = 'us-east-1_EvBbozIjd';
 const DEFAULT_INTERNAL_CATALOG_ALLOWED_HOSTS = ['sheets.doobneek.org'];
-const DEFAULT_INTERNAL_CATALOG_ALLOWED_CLIENT_IDS = ['kpd58387a2f9e4fe1d42sfd1q'];
+const DEFAULT_INTERNAL_CATALOG_ALLOWED_ORIGIN_PATTERNS = ['chrome-extension://*'];
 const DEFAULT_INTERNAL_CATALOG_ALLOWED_GROUPS = [];
 const DEFAULT_INTERNAL_CATALOG_MAX_RADIUS_METERS = Math.round(20 * 1609.344);
 const DEFAULT_INTERNAL_CATALOG_DEFAULT_PAGE_SIZE = 500;
@@ -17,12 +16,12 @@ const parseCsv = (value, fallback = []) => {
   return parsed.length ? parsed : fallback;
 };
 
-const cognitoUserPoolId = process.env.COGNITO_USER_POOL_ID || DEFAULT_COGNITO_USER_POOL_ID;
+const cognitoUserPoolId = process.env.COGNITO_USER_POOL_ID || null;
 const cognitoUserPoolRegion = process.env.COGNITO_USER_POOL_REGION
-  || (cognitoUserPoolId.includes('_') ? cognitoUserPoolId.split('_')[0] : 'us-east-1');
-const cognitoUserPoolIssuer = cognitoUserPoolId
+  || (cognitoUserPoolId && cognitoUserPoolId.includes('_') ? cognitoUserPoolId.split('_')[0] : null);
+const cognitoUserPoolIssuer = process.env.COGNITO_USER_POOL_ISSUER || (cognitoUserPoolId
   ? `https://cognito-idp.${cognitoUserPoolRegion}.amazonaws.com/${cognitoUserPoolId}`
-  : null;
+  : null);
 const internalCatalogMaxPageSize = parseNumber(
   process.env.INTERNAL_LOCATION_CATALOG_MAX_PAGE_SIZE,
   DEFAULT_INTERNAL_CATALOG_MAX_PAGE_SIZE,
@@ -42,9 +41,13 @@ export default {
       process.env.INTERNAL_LOCATION_CATALOG_ALLOWED_HOSTS,
       DEFAULT_INTERNAL_CATALOG_ALLOWED_HOSTS,
     ),
+    allowedOriginPatterns: parseCsv(
+      process.env.INTERNAL_LOCATION_CATALOG_ALLOWED_ORIGIN_PATTERNS,
+      DEFAULT_INTERNAL_CATALOG_ALLOWED_ORIGIN_PATTERNS,
+    ),
     allowedClientIds: parseCsv(
       process.env.INTERNAL_LOCATION_CATALOG_ALLOWED_CLIENT_IDS,
-      DEFAULT_INTERNAL_CATALOG_ALLOWED_CLIENT_IDS,
+      [],
     ),
     allowedGroupNames: parseCsv(
       process.env.INTERNAL_LOCATION_CATALOG_ALLOWED_GROUP_NAMES,

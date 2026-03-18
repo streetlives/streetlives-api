@@ -45,6 +45,13 @@ function normalizeHost(value) {
     .replace(/:\d+$/, '');
 }
 
+function normalizeOriginPattern(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\/$/, '');
+}
+
 function normalizeValues(values) {
   return values
     .map(value => String(value || '').trim())
@@ -64,19 +71,19 @@ function getClaimValues(value) {
   return normalizeValues([value]);
 }
 
-function extractRequestHost(value) {
+function extractRequestOrigin(value) {
   if (!value) return null;
+  const rawValue = String(value).trim();
+  if (!rawValue) return null;
+  if (rawValue.toLowerCase() === 'null') return 'null';
   try {
-    const parsedUrl = new URL(value);
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    const parsedUrl = new URL(rawValue);
+    if (!parsedUrl.protocol || !parsedUrl.host) {
       return null;
     }
-    return normalizeHost(parsedUrl.hostname);
+    return `${parsedUrl.protocol}//${parsedUrl.host}`.toLowerCase();
   } catch (error) {
-    if (String(value).includes('://')) {
-      return null;
-    }
-    return normalizeHost(value);
+    return normalizeOriginPattern(rawValue);
   }
 }
 
@@ -92,19 +99,56 @@ function isAllowedHost(host, allowedHosts) {
   });
 }
 
-function assertAllowedRequestHost(req) {
+function isAllowedOrigin(origin, allowedOriginPatterns) {
+  return allowedOriginPatterns.some((allowedOriginPattern) => {
+    const normalizedAllowedOriginPattern = normalizeOriginPattern(allowedOriginPattern);
+    if (!normalizedAllowedOriginPattern) return false;
+    if (normalizedAllowedOriginPattern.endsWith('*')) {
+      return origin.startsWith(normalizedAllowedOriginPattern.slice(0, -1));
+    }
+    return origin === normalizedAllowedOriginPattern;
+  });
+}
+
+function assertAllowedRequestOrigin(req) {
   const allowedHosts = config.internalLocationCatalog.allowedOriginHosts || [];
-  if (!allowedHosts.length) return;
-  const requestHosts = [
-    extractRequestHost(req.headers.origin),
-    extractRequestHost(req.headers.referer || req.headers.referrer),
-  ].filter(Boolean);
-  if (!requestHosts.length) return;
+  const allowedOriginPatterns = config.internalLocationCatalog.allowedOriginPatterns || [];
+  if (!allowedHosts.length && !allowedOriginPatterns.length) return;
+
+  const requestOrigin = extractRequestOrigin(req.headers.origin);
+  const requestRefererOrigin = extractRequestOrigin(req.headers.referer || req.headers.referrer);
+  const requestOrigins = [requestOrigin, requestRefererOrigin].filter(Boolean);
+  if (!requestOrigins.length) {
+    throw new ForbiddenError('Origin not allowed for internal location catalog');
+  }
+
+  const requestHosts = requestOrigins
+    .map((origin) => {
+      try {
+        const parsedOrigin = new URL(origin);
+        if (!['http:', 'https:'].includes(parsedOrigin.protocol)) {
+          return null;
+        }
+        return normalizeHost(parsedOrigin.hostname);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
   if (requestHosts.some(host => isAllowedHost(host, allowedHosts))) return;
+  if (requestOrigins.some(origin => isAllowedOrigin(origin, allowedOriginPatterns))) return;
   throw new ForbiddenError('Origin not allowed for internal location catalog');
 }
 
+function assertCatalogAuthorizationConfigured() {
+  if (!config.cognito.userPoolIssuer) {
+    throw new ForbiddenError('Internal location catalog authorization is not configured');
+  }
+}
+
 function assertCatalogAuthorizationClaims(payload) {
+  assertCatalogAuthorizationConfigured();
   const allowedClientIds = normalizeValues(
     config.internalLocationCatalog.allowedClientIds || [],
   );
@@ -243,7 +287,7 @@ export default async function authorizeInternalLocationCatalogRequest(req) {
   if (!bearerToken) {
     throw new AuthError('Missing bearer token');
   }
-  assertAllowedRequestHost(req);
+  assertAllowedRequestOrigin(req);
   if (process.env.NODE_ENV === 'test' && bearerToken === 'test-internal-token') {
     return {
       sub: 'test-user',
