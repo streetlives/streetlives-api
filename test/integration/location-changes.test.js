@@ -6,16 +6,27 @@ import request from 'supertest';
 import express from 'express';
 import locations from '../../src/controllers/locations';
 import models from '../../src/models';
+import getUser from '../../src/middleware/get-user';
 
 describe('location changes feed', () => {
   const app = express();
+  const runAsProduction = async (callback) => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      await callback();
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  };
   let organization;
   let location;
   let service;
   let phone;
 
   beforeAll(() => {
-    app.get('/locations/changes', locations.getChanges);
+    app.get('/locations/changes', getUser, locations.getChanges);
     app.delete('/phones/:phoneId', (req, res, next) => {
       req.user = '<Anonymous>';
       req.userName = '<Anonymous>';
@@ -164,5 +175,13 @@ describe('location changes feed', () => {
         actionType: 'delete',
       }),
     ]));
+  });
+
+  it('rejects unauthenticated access to the changes feed outside test mode', async () => {
+    await runAsProduction(async () => {
+      await request(app)
+        .get('/locations/changes')
+        .expect(401);
+    });
   });
 });

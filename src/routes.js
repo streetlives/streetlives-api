@@ -23,7 +23,7 @@ export default (app) => {
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
-  app.get('/locations/changes', locations.getChanges);
+  app.get('/locations/changes', getUser, locations.getChanges);
   app.get('/locations/edit-history/user', getUser, locations.getCurrentUserEditHistory);
   app.get('/locations/edit-history/timeline', getUser, locations.getEditTimeline);
 

@@ -9,6 +9,16 @@ import models from '../../src/models';
 describe('edit history', () => {
   const timelineTestName =
     'returns extension-style timeline pages for service description and other info edits';
+  const runAsProduction = async (callback) => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      await callback();
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  };
 
   const buildFixture = async () => {
     const organization = await models.Organization.create(
@@ -185,6 +195,28 @@ describe('edit history', () => {
       label: 'Description',
       pagePath: descriptionPath,
     }));
+  });
+
+  it('rejects unauthenticated edit history endpoints outside test mode', async () => {
+    const { location } = await buildFixture();
+
+    await runAsProduction(async () => {
+      await request(app)
+        .get(`/locations/${location.id}/edit-history`)
+        .expect(401);
+
+      await request(app)
+        .get('/locations/edit-history/timeline')
+        .query({
+          locationId: location.id,
+          scope: 'location',
+        })
+        .expect(401);
+
+      await request(app)
+        .get('/locations/edit-history/user')
+        .expect(401);
+    });
   });
 
   it('still updates a location when history recording fails', async () => {
