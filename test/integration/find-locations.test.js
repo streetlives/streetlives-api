@@ -321,6 +321,23 @@ describe('find locations', () => {
       makeRequestWithSearchString('center')
         .expect(200)
         .then(expectMatchNearbyLocations));
+
+    it(
+      'should paginate unique search results when a search match appears in multiple queries',
+      () => makeRequestWithSearchString('center')
+        .query({
+          pageNumber: 1,
+          pageSize: 1,
+        })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(1);
+          expect(res.headers['total-count']).toBe('2');
+          expect(res.headers['pagination-count']).toBe('2');
+          checkLastValidatedAt(returnedLocations);
+        }),
+    );
   });
 
   describe('when an organization name is specified', () => {
