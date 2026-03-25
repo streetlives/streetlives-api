@@ -21,9 +21,9 @@ export default {
   create: {
     body: Joi.object().keys({
       name: Joi.string().required(),
-      description: Joi.string(),
+      description: Joi.string().allow('', null),
       url: Joi.string(),
-      additionalInfo: Joi.string(),
+      additionalInfo: Joi.string().allow('', null),
       taxonomyId: Joi.string().guid().required(),
       locationId: Joi.string().guid().required(),
       metadata: updateMetadataSchema,
@@ -36,9 +36,9 @@ export default {
     }).required(),
     body: Joi.object().keys({
       name: Joi.string(),
-      description: Joi.string().allow(''),
+      description: Joi.string().allow('', null),
       url: Joi.string(),
-      additionalInfo: Joi.string().allow(''),
+      additionalInfo: Joi.string().allow('', null),
       taxonomyId: Joi.string().guid(),
       hours: Joi.array().items(Joi.object().keys({
         weekday: Joi.string().valid(weekdays).required(),
