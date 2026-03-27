@@ -18,7 +18,7 @@ jobs:
      postgres:
        image: postgis/postgis:16-3.4
        env:
-         POSTGRES_USER: streetlives
+         POSTGRES_USER: postgres
          POSTGRES_PASSWORD: password
          POSTGRES_DB: test
        ports:
@@ -49,10 +49,11 @@ jobs:
        env:
          NODE_ENV: test
          DATABASE_NAME: test
-         DATABASE_USER: streetlives
+         DATABASE_USER: postgres
          DATABASE_PASSWORD: password
          DATABASE_HOST: localhost
          DATABASE_PORT: 5432
+         OPENAI_API_KEY: dummy-key-for-tests
        run: npm test
 
 
