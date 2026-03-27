@@ -8,6 +8,8 @@ jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
+process.env.DATABASE_USER = process.env.DATABASE_USER || 'streetlives';
+process.env.DATABASE_PASSWORD = 'password';
 process.env.OPENAI_API_KEY = 'fake';
 
 const models = require('../src/models');
