@@ -14,10 +14,7 @@ const baseConfig = {
 
 module.exports = {
   development: baseConfig,
-  test: {
-    ...baseConfig,
-    searchPath: 'public,postgis',
-  },
+  test: baseConfig,
   production: baseConfig,
 };
 
