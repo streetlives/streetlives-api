@@ -1,5 +1,5 @@
 /* eslint-disable import/no-extraneous-dependencies */
-require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env.local',override: false });
 require('@babel/register');
 
 const baseConfig = {
