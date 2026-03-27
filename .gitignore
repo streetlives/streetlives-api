@@ -56,3 +56,5 @@ packaged-sam.yaml
 
 .idea
 *.sql
+.env.local
+.env.remote.dev 
