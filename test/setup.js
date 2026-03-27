@@ -43,7 +43,7 @@ beforeAll(async () => {
         where table_schema = 'public' and 
           table_type='BASE TABLE' and p.tableowner = 'streetlives'
       LOOP
-        EXECUTE format('drop table %I cascade',_table.table_name);
+        EXECUTE format('DROP TABLE IF EXISTS %I CASCADE',_table.table_name);
       END LOOP;
     END$$;
   `);
