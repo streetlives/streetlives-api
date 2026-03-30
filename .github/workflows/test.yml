@@ -56,6 +56,7 @@ jobs:
           DATABASE_HOST: localhost
           DATABASE_PORT: 5432
           TEST_DATABASE_NAME: test
+          PGPASSWORD: password
         run: node scripts/test-db.js
 
 
