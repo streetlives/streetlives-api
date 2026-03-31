@@ -1,6 +1,5 @@
 name: Run tests
 
-
 on:
   push:
     branches:
@@ -8,11 +7,20 @@ on:
       - fixTest
   pull_request:
 
-
 jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      NODE_ENV: test
+      DATABASE_NAME: test
+      DATABASE_USER: streetlives
+      DATABASE_PASSWORD: password
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      OPENAI_API_KEY: dummy-key-for-tests
+      PGUSER: streetlives
+      PGPASSWORD: password
 
     services:
       postgres:
@@ -29,10 +37,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-
     steps:
       - uses: actions/checkout@v4
-
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,34 +46,14 @@ jobs:
           node-version: '18'
           cache: npm
 
-
       - name: Install dependencies
         run: npm ci
-
 
       - name: Wait for DB
         run: sleep 5
 
-
       - name: Test DB connection
-        env:
-          DATABASE_USER: streetlives
-          DATABASE_PASSWORD: password
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_NAME: test
-          PGPASSWORD: password
         run: node scripts/test-db.js
 
-
       - name: Run tests
-        env:
-          NODE_ENV: test
-          DATABASE_NAME: test
-          DATABASE_USER: streetlives
-          DATABASE_PASSWORD: password
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          OPENAI_API_KEY: dummy-key-for-tests
-          PGUSER: streetlives
         run: npm test
