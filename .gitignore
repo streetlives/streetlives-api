@@ -58,3 +58,4 @@ packaged-sam.yaml
 *.sql
 .env.local
 .env.remote.dev 
+ql

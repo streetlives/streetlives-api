@@ -4,7 +4,7 @@ require('openai/shims/node');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
-jest.setTimeout(10000);
+jest.setTimeout(30000);
 
 process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
@@ -31,26 +31,13 @@ async function execScript(script) {
 }
 
 beforeAll(async () => {
-  // reset the database state
+  // reset the database state, including any leftover custom types or objects
   await models.sequelize.query(`
-    DO $$
-    DECLARE _table record;
-    BEGIN
-      FOR _table IN 
-        SELECT table_name FROM information_schema.tables t
-        inner join pg_catalog.pg_tables p on 
-        p.tablename = t.table_name and p.schemaname = t.table_schema
-        where table_schema = 'public' and 
-          table_type='BASE TABLE' and p.tableowner = 'streetlives'
-      LOOP
-        EXECUTE format('DROP TABLE IF EXISTS %I CASCADE',_table.table_name);
-      END LOOP;
-    END$$;
+    DROP SCHEMA public CASCADE;
+    CREATE SCHEMA public;
   `);
-  // for (let [table] of tables){
-  //  await models.sequelize.query(`drop table ${table} cascade`);
-  // }
 
+  await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS postgis;');
   await models.sequelize.sync({ force: true });
 
   // eslint-disable-next-line no-implied-eval
