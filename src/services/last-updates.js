@@ -165,7 +165,7 @@ export const getMetadataForService = async (service) => {
     }),
     models.Metadata.getLatestUpdateDateForResources(service.EventRelatedInfos.map(info => info.id)),
     models.Metadata
-      .getLastUpdateDatesForResourceFields(service
+      .getLatestUpdateDatePerResource(service
         .ServiceTaxonomySpecificAttributes.map(a => a.id)),
     models.Metadata.getLatestUpdateDateForQuery({
       resource_table: 'eligibility',
@@ -210,9 +210,13 @@ export const getMetadataForService = async (service) => {
 
   const documentsMetadata = await getMetadataForServiceDocuments(service);
 
+  const taxonomyAttrByResourceId = {};
+  service.ServiceTaxonomySpecificAttributes.forEach((a) => {
+    taxonomyAttrByResourceId[a.id] = a.attribute.name;
+  });
   taxonomySpecificAttributesUpdates.forEach((m) => {
     serviceWithAdditionalMetadata.push({
-      field_name: m.field_name,
+      field_name: taxonomyAttrByResourceId[m.resource_id],
       last_action_date: m.last_action_date,
     });
   });
