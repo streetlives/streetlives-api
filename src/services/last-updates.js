@@ -212,11 +212,15 @@ export const getMetadataForService = async (service) => {
 
   const taxonomyAttrByResourceId = {};
   service.ServiceTaxonomySpecificAttributes.forEach((a) => {
-    taxonomyAttrByResourceId[a.id] = a.attribute.name;
+    if (a.attribute && a.attribute.name) {
+      taxonomyAttrByResourceId[a.id] = a.attribute.name;
+    }
   });
   taxonomySpecificAttributesUpdates.forEach((m) => {
+    const fieldName = taxonomyAttrByResourceId[m.resource_id];
+    if (!fieldName) return;
     serviceWithAdditionalMetadata.push({
-      field_name: taxonomyAttrByResourceId[m.resource_id],
+      field_name: fieldName,
       last_action_date: m.last_action_date,
     });
   });
