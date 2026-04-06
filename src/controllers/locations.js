@@ -12,6 +12,7 @@ import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { parseNaturalLanguageQuery } from './openai';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
@@ -172,6 +173,7 @@ export default {
         pageNumber: _pageNumber,
         pageSize: _pageSize,
         sortBy,
+        naturalLanguageQuery,
       } = req.query;
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
@@ -183,6 +185,18 @@ export default {
       if (ageMin != null && ageMax != null && ageMin > ageMax) {
         throw new ValidationError('ageMin cannot be greater than ageMax');
       }
+
+      let nlParams = null;
+      if (naturalLanguageQuery) {
+        try {
+          nlParams = await parseNaturalLanguageQuery(naturalLanguageQuery, new Date().toISOString());
+        } catch (err) {
+          console.error('NL query parse failed, falling back to raw search:', err.message);
+        }
+      }
+
+      console.log('nlParams')
+      console.log(nlParams)
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -231,6 +245,40 @@ export default {
       }
       if (zipcodes && zipcodes.length) {
         filterParameters.zipcodes = zipcodes;
+      }
+
+      if (nlParams) {
+        if (!searchString && nlParams.searchString) {
+          filterParameters.searchString = nlParams.searchString;
+        }
+        if (!openAt && nlParams.openAt) {
+          filterParameters.openAt = new Date(nlParams.openAt);
+        }
+        if (!gender && nlParams.gender) {
+          filterParameters.eligibility[eligibilityParams.gender] = nlParams.gender;
+        }
+        if (membership == null && nlParams.membership != null) {
+          filterParameters.eligibility[eligibilityParams.membership] = nlParams.membership;
+        }
+        if (ageMin == null && ageMax == null && age == null) {
+          if (nlParams.ageMin != null || nlParams.ageMax != null) {
+            filterParameters.eligibility.ageRange = {
+              ageMin: nlParams.ageMin,
+              ageMax: nlParams.ageMax,
+            };
+          }
+        }
+        if (referralRequired == null && nlParams.referralRequired != null) {
+          filterParameters.documents[documentTypes.referralLetter] = nlParams.referralRequired;
+        }
+        if (photoIdRequired == null && nlParams.photoIdRequired != null) {
+          filterParameters.documents[documentTypes.photoId] = nlParams.photoIdRequired;
+        }
+        if (!servesZipcode && nlParams.servesZipcode) {
+          filterParameters.servesZipcode = nlParams.servesZipcode;
+        }
+      } else if (naturalLanguageQuery && !searchString) {
+        filterParameters.searchString = naturalLanguageQuery.trim();
       }
 
       if (taxonomyId) {

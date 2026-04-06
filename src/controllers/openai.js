@@ -1966,4 +1966,67 @@ const getCommentsHighlights = async (comments) => {
   }
 };
 
+const nlQuerySchema = {
+  type: 'json_schema',
+  json_schema: {
+    strict: true,
+    name: 'NaturalLanguageQueryParams',
+    schema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        searchString: { type: ['string', 'null'] },
+        openAt: { type: ['string', 'null'] },
+        gender: { type: ['string', 'null'] },
+        membership: { type: ['boolean', 'null'] },
+        ageMin: { type: ['integer', 'null'] },
+        ageMax: { type: ['integer', 'null'] },
+        referralRequired: { type: ['boolean', 'null'] },
+        photoIdRequired: { type: ['boolean', 'null'] },
+        servesZipcode: { type: ['string', 'null'] },
+      },
+      required: [
+        'searchString',
+        'openAt',
+        'gender',
+        'membership',
+        'ageMin',
+        'ageMax',
+        'referralRequired',
+        'photoIdRequired',
+        'servesZipcode',
+      ],
+      additionalProperties: false,
+    },
+  },
+};
+
+export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
+  const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
+
+The current datetime in America/New_York timezone is: ${currentDatetime}
+
+Extract the following fields if present in the query (return null for fields not mentioned):
+- searchString: general keyword(s) describing the type of service (e.g. "shelter", "food pantry")
+- openAt: an ISO 8601 datetime string resolved from relative time expressions ("tonight" = today at 8pm, "now" = current time, "tomorrow morning" = tomorrow at 9am), or null
+- gender: "male" or "female" if the query specifies gender, otherwise null
+- membership: true if membership is required/mentioned, false if explicitly not required, null if not mentioned
+- ageMin: minimum age as integer if mentioned, otherwise null
+- ageMax: maximum age as integer if mentioned, otherwise null
+- referralRequired: true/false/null based on whether a referral is mentioned
+- photoIdRequired: true/false/null based on whether photo ID is mentioned
+- servesZipcode: a 5-digit NYC zip code string if mentioned, otherwise null`;
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: query },
+    ],
+    response_format: nlQuerySchema,
+  });
+
+  return JSON.parse(completion.choices[0].message.content);
+};
+
 export default getCommentsHighlights;
