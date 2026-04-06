@@ -195,9 +195,6 @@ export default {
         }
       }
 
-      console.log('nlParams')
-      console.log(nlParams)
-
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
         try {
