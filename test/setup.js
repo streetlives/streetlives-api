@@ -38,6 +38,7 @@ beforeAll(async () => {
   `);
 
   await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS postgis;');
+  await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;');
   await models.sequelize.sync({ force: true });
 
   // eslint-disable-next-line no-implied-eval
