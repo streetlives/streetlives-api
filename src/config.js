@@ -27,14 +27,14 @@ export default {
         // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000),
         // let the RDS proxy handle timeout
       },
-      // dialectOptions: {
-      //   // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
-      //   clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
-      //   ssl: {
-      //     require: true,
-      //     rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
-      //   },
-      // },
+      dialectOptions: {
+        // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
+        clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
+        ssl: {
+          require: true,
+          rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
+        },
+      },
     },
   },
   appUrl: process.env.APP_URL || '',
