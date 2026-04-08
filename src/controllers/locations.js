@@ -274,6 +274,15 @@ export default {
         if (!servesZipcode && nlParams.servesZipcode) {
           filterParameters.servesZipcode = nlParams.servesZipcode;
         }
+        if (!taxonomyId && nlParams.taxonomyNames && nlParams.taxonomyNames.length > 0) {
+          const matchedTaxonomies = await models.Taxonomy.findAll({
+            where: { name: nlParams.taxonomyNames },
+          });
+          if (matchedTaxonomies.length > 0) {
+            const matchedIds = matchedTaxonomies.map(t => t.id);
+            filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(matchedIds);
+          }
+        }
       } else if (naturalLanguageQuery && !searchString) {
         filterParameters.searchString = naturalLanguageQuery.trim();
       }
