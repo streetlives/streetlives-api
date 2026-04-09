@@ -455,49 +455,58 @@ module.exports = (sequelize, DataTypes, Op) => {
 
       const zipCodeCondition = { [Op.in]: parseZipCodes(searchString) };
 
-      // TODO: optimize this by stepping through the conditions until we have enough results
-      const searchResults = [
-        await findWithCondition({ '$PhysicalAddresses.postal_code$': zipCodeCondition }),
-        await findWithCondition(getPhoneNumberCondition(searchString)),
+      const targetResultCount = Math.min(200, (offset || 0) + (limit || 200));
+      const searchConditions = [
+        { '$PhysicalAddresses.postal_code$': zipCodeCondition },
+        getPhoneNumberCondition(searchString),
 
-        await findWithCondition({ '$Organization.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Organization.name$': prefixCondition }),
-        await findWithCondition({ '$Organization.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition(getCombinedFuzzySearchCondition('Organization.name', searchString)),
-        await findWithCondition({ '$Location.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Location.name$': prefixCondition }),
-        await findWithCondition({ '$Location.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition(getCombinedFuzzySearchCondition('Location.name', searchString)),
+        { '$Organization.name$': exactExactMatchCondition },
+        { '$Organization.name$': prefixCondition },
+        { '$Organization.name_vector$': websearchToTsqueryCondition },
+        getCombinedFuzzySearchCondition('Organization.name', searchString),
+        { '$Location.name$': exactExactMatchCondition },
+        { '$Location.name$': prefixCondition },
+        { '$Location.name_vector$': websearchToTsqueryCondition },
+        getCombinedFuzzySearchCondition('Location.name', searchString),
 
-        await findWithCondition({ '$Services.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': exactExactMatchCondition }),
-        await findWithCondition({ '$Organization.name$': exactMatchCondition }),
-        await findWithCondition({ '$Location.name$': exactMatchCondition }),
-        await findWithCondition({ '$Services.name$': exactMatchCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': exactMatchCondition }),
+        { '$Services.name$': exactExactMatchCondition },
+        { '$Services.Taxonomies.name$': exactExactMatchCondition },
+        { '$Organization.name$': exactMatchCondition },
+        { '$Location.name$': exactMatchCondition },
+        { '$Services.name$': exactMatchCondition },
+        { '$Services.Taxonomies.name$': exactMatchCondition },
 
         // prefix match
-        await findWithCondition({ '$Services.name$': prefixCondition }),
-        await findWithCondition({ '$Services.Taxonomies.name$': prefixCondition }),
+        { '$Services.name$': prefixCondition },
+        { '$Services.Taxonomies.name$': prefixCondition },
 
         // full-text search
-        await findWithCondition({ '$Services.name_vector$': websearchToTsqueryCondition }),
-        await findWithCondition({
-          '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition,
-        }),
+        { '$Services.name_vector$': websearchToTsqueryCondition },
+        { '$Services.Taxonomies.name_vector$': websearchToTsqueryCondition },
 
-        await findWithCondition(getCombinedFuzzySearchCondition('Services.name', searchString)),
-        await findWithCondition(getCombinedFuzzySearchCondition(
-          'Services->Taxonomies.name',
-          searchString,
-        )),
+        getCombinedFuzzySearchCondition('Services.name', searchString),
+        getCombinedFuzzySearchCondition('Services->Taxonomies.name', searchString),
         // full text search on the description
-        await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
+        { '$Services.description_vector$': websearchToTsqueryCondition },
+      ];
 
-      ].reduce((a, b) => a.concat(b));
+      const seenLocationIds = new Set();
+      const orderedLocations = [];
+      for (const condition of searchConditions) {
+        const matches = await findWithCondition(condition);
+        for (const match of matches) {
+          if (!seenLocationIds.has(match.id)) {
+            seenLocationIds.add(match.id);
+            orderedLocations.push(match);
+          }
+        }
 
-      // Remove duplicates
-      locations = Array.from(new Map(searchResults.map(item => [item.id, item])).values());
+        if (orderedLocations.length >= targetResultCount) {
+          break;
+        }
+      }
+
+      locations = orderedLocations;
     } else {
       locations = await findAll(whereConditions);
     }
