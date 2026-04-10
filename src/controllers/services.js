@@ -1,7 +1,11 @@
 import Joi from 'joi';
 import serviceSchemas from './validation/services';
-import models, {sequelize} from '../models';
+import models, { sequelize } from '../models';
 import { createService, updateService, deleteService } from '../services/services';
+import {
+  upsertWebsiteDataForLocation,
+  upsertWebsiteDataForService,
+} from '../services/location-website-data';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -32,6 +36,7 @@ export default {
         req.user,
         metadata,
       );
+      await upsertWebsiteDataForLocation(locationId);
       res.status(201).send(createdService);
     } catch (err) {
       next(err);
@@ -64,6 +69,7 @@ export default {
       }
 
       await updateService(service, { ...otherProps, taxonomy }, req.user, metadata);
+      await upsertWebsiteDataForService(serviceId);
       res.sendStatus(204);
     } catch (err) {
       next(err);
@@ -74,8 +80,18 @@ export default {
     try {
       await Joi.validate(req, serviceSchemas.delete, { allowUnknown: true });
       const { serviceId } = req.params;
-
+      const service = await models.Service.findByPk(serviceId, {
+        include: [{
+          model: models.Location,
+          through: { attributes: [] },
+          attributes: ['id'],
+        }],
+      });
+      const relatedLocationIds = service ? service.Locations.map(location => location.id) : [];
       await deleteService(serviceId, req.user);
+      const websiteDataUpdates = relatedLocationIds
+        .map(locationId => upsertWebsiteDataForLocation(locationId));
+      await Promise.all(websiteDataUpdates);
 
       res.sendStatus(204);
     } catch (err) {
@@ -85,8 +101,7 @@ export default {
 
   getCount: async (req, res, next) => {
     try {
-      const [servicesCount] = await sequelize.query(
-        `
+      const serviceCountQuery = `
           select count(*)
           from locations
                  join organizations o on o.id = locations.organization_id
@@ -97,8 +112,8 @@ export default {
             from holiday_schedules as hs
                    join service_at_locations as sal on sal.service_id = hs.service_id
             where sal.location_id = locations.id
-          )    `,
-      );
+          )    `;
+      const [servicesCount] = await sequelize.query(serviceCountQuery);
       res.send(servicesCount[0]).status(200);
     } catch (err) {
       next(err);

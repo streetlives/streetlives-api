@@ -3,10 +3,10 @@ import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {
-  getMetadataForLocation,
-  getMetadataForService,
-  getLastValidatedDateForLocation,
-} from '../services/last-updates';
+  getWebsiteDataByLocationId,
+  getWebsiteDataBySlug,
+  upsertWebsiteDataForLocation,
+} from '../services/location-website-data';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
@@ -24,124 +24,6 @@ const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
   return hasCOVIDEventRelatedInfo;
 };
-
-// Get location and service associations separately to reduce SQL size
-// (avoids 16KB+ queries, which would result in session pinning)
-const locationAssociations = {
-  include: [
-    {
-      model: models.Organization,
-      include: [models.Phone],
-    },
-    models.Phone,
-    models.PhysicalAddress,
-    models.AccessibilityForDisabilities,
-    models.EventRelatedInfo,
-  ],
-};
-const serviceAssociations = {
-  include: [
-    {
-      model: models.Eligibility,
-      include: [models.EligibilityParameter],
-    },
-    {
-      model: models.ServiceTaxonomySpecificAttribute,
-      include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
-    },
-    {
-      model: models.Taxonomy,
-      through: { attributes: [] },
-    },
-    models.RegularSchedule,
-    models.HolidaySchedule,
-    {
-      model: models.Language,
-      through: { attributes: [] },
-    },
-    models.RequiredDocument,
-    models.DocumentsInfo,
-    models.Phone,
-    models.EventRelatedInfo,
-    models.ServiceArea,
-  ],
-};
-
-const getNeighborhoodAttributeSubquery = {
-  attributes: {
-    include: [
-      [
-        models.sequelize.literal(`(
-            SELECT neighborhood
-            FROM nyc_neighborhood_geometries
-            WHERE ST_Contains(
-              nyc_neighborhood_geometries.geometry,
-              ST_SetSRID(position,4326)
-            )
-        )`),
-        'neighborhood',
-      ],
-    ],
-  },
-};
-
-async function handleGetInfoResponse(location, locationWithServices, excludeMetadata) {
-  const {
-    PhysicalAddresses: addresses,
-    additional_info: additionalInfo,
-    ...unchangedProps
-  } = location.get({ plain: true });
-  const services = locationWithServices && locationWithServices.Services
-    ? locationWithServices.Services.map(s => s.get({ plain: true }))
-    : [];
-
-  if (!addresses || addresses.length !== 1) {
-    throw new Error('Location does not have a valid address');
-  }
-
-  const address = addresses[0];
-
-  const responseData = {
-    ...unchangedProps,
-    additionalInfo,
-    address: {
-      street: address.address_1,
-      city: address.city,
-      region: address.region,
-      state: address.state_province,
-      postalCode: address.postal_code,
-      country: address.country,
-      neighborhood: address.neighborhood,
-    },
-  };
-
-  const { EventRelatedInfos } = location;
-  // FIXME: we should not be hard-coding the COVID19 event here
-  // this is logic that needs ot be revisited in this codebase
-  const closed = isLocationClosed('COVID19', EventRelatedInfos, services);
-
-  if (excludeMetadata) {
-    const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
-    return {
-      ...responseData,
-      Services: services,
-      lastValidatedDateForLocation,
-      closed,
-    };
-  }
-  const locationMetadata = await getMetadataForLocation(location, address);
-  const servicesWithMetadata = await Promise.all(services.map(async service => ({
-    ...service,
-    metadata: await getMetadataForService(service),
-  })));
-
-  return {
-    ...responseData,
-    Services: servicesWithMetadata,
-    metadata: locationMetadata,
-    closed,
-  };
-}
 
 export default {
   find: async (req, res, next) => {
@@ -297,33 +179,7 @@ export default {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
 
       const { locationId } = req.params;
-
-      const [location, locationWithServices] = await Promise.all([
-        models.Location.findByPk(
-          locationId,
-          {
-            include: locationAssociations.include,
-            attributes: getNeighborhoodAttributeSubquery.attributes,
-          },
-        ),
-        models.Location.findByPk(
-          locationId,
-          {
-            include: [{
-              model: models.Service,
-              through: { attributes: [] },
-              include: serviceAssociations.include,
-            }],
-            attributes: ['id'],
-          },
-        ),
-      ]);
-
-      if (!location) {
-        throw new NotFoundError('Location not found');
-      }
-
-      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, false);
+      const getInfoResponse = await getWebsiteDataByLocationId(locationId);
       res.send(getInfoResponse);
     } catch (err) {
       next(err);
@@ -333,35 +189,11 @@ export default {
   getInfoBySlug: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
-
-      const locations = await models.Location.findAll({
-        where: {
-          slug: req.params.slug,
-        },
-        include: locationAssociations.include,
-        attributes: getNeighborhoodAttributeSubquery.attributes,
-      });
-
-      if (!locations.length) {
+      const getInfoResponse = await getWebsiteDataBySlug(req.params.slug);
+      if (!getInfoResponse) {
         res.status(404).send({ status: 404 });
         return;
       }
-
-      const location = locations[0];
-
-      const locationWithServices = await models.Location.findByPk(
-        location.id,
-        {
-          include: [{
-            model: models.Service,
-            through: { attributes: [] },
-            include: serviceAssociations.include,
-          }],
-          attributes: ['id'],
-        },
-      );
-
-      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, true);
       res.send(getInfoResponse);
     } catch (err) {
       next(err);
@@ -436,6 +268,8 @@ export default {
         postal_code: address.postalCode,
         country: address.country,
       }, { metadata });
+
+      await upsertWebsiteDataForLocation(createdLocation.id);
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -527,6 +361,7 @@ export default {
       updatePromises.push(updateLocation(location, req.body, metadata));
 
       await Promise.all(updatePromises);
+      await upsertWebsiteDataForLocation(locationId);
 
       res.sendStatus(204);
     } catch (err) {
@@ -561,6 +396,7 @@ export default {
         language,
         description,
       }, { metadata });
+      await upsertWebsiteDataForLocation(locationId);
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -582,6 +418,9 @@ export default {
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
       const { metadata, ...updateParams } = req.body;
       await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
+      if (phone.location_id) {
+        await upsertWebsiteDataForLocation(phone.location_id);
+      }
 
       res.sendStatus(204);
     } catch (err) {
@@ -600,7 +439,11 @@ export default {
         throw new NotFoundError('Phone not found');
       }
 
+      const { location_id: locationId } = phone;
       await destroyInstance(req.user, phone);
+      if (locationId) {
+        await upsertWebsiteDataForLocation(locationId);
+      }
       res.sendStatus(204);
     } catch (err) {
       next(err);
