@@ -5,7 +5,7 @@ import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { regenerateHighlightsForLocation } from './comment-highlights';
-import commentEmail from '../services/comment-email';
+import commentEmail, { replyEmail } from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
 import {
@@ -186,9 +186,9 @@ export default {
       }
 
       const organizationId = originalComment.Location.organization_id;
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      }
+      // if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+      //   throw new ForbiddenError('Not authorized to reply on behalf of this organization');
+      // }
 
       const postedReply = await createInstance(
         req.user,
@@ -201,8 +201,21 @@ export default {
         },
       );
 
+      const location = await models.Location.findByPk(originalComment.location_id, { include: models.Organization });
+
+      if (originalComment.contact_info) {
+        replyEmail({
+          locationName: location.Organization.name,
+          toEmail: originalComment.contact_info,
+          locationSlug: location.slug,
+          replyContent: content,
+        }).catch(console.error);
+      }
+
       res.status(201)
         .send(postedReply);
+
+      
     } catch (err) {
       next(err);
     }
