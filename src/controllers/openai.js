@@ -1983,7 +1983,10 @@ const nlQuerySchema = {
         ageMax: { type: ['integer', 'null'] },
         referralRequired: { type: ['boolean', 'null'] },
         photoIdRequired: { type: ['boolean', 'null'] },
-        servesZipcode: { type: ['string', 'null'] },
+        zipcodes: {
+          type: ['array', 'null'],
+          items: { type: 'string' },
+        },
         taxonomyNames: {
           type: ['array', 'null'],
           items: { type: 'string' },
@@ -1998,7 +2001,7 @@ const nlQuerySchema = {
         'ageMax',
         'referralRequired',
         'photoIdRequired',
-        'servesZipcode',
+        'zipcodes',
         'taxonomyNames',
       ],
       additionalProperties: false,
@@ -2012,7 +2015,7 @@ export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
 The current datetime in America/New_York timezone is: ${currentDatetime}
 
 Extract the following fields if present in the query (return null for fields not mentioned):
-- searchString: additional keyword(s) NOT already captured by any other field (taxonomyNames, openAt, gender, membership, age, referralRequired, photoIdRequired, servesZipcode). If the entire query is covered by other fields, set searchString to null. Only include words that add meaning beyond what other fields capture (e.g. "free clothes near me" -> taxonomyNames: ["Clothing"], searchString: null; "halal food pantry" -> taxonomyNames: ["Food"], searchString: "halal"; "shelter open tonight for women" -> taxonomyNames: ["Shelter"], openAt: ..., gender: "female", searchString: null)
+- searchString: additional keyword(s) NOT already captured by any other field (taxonomyNames, openAt, gender, membership, age, referralRequired, photoIdRequired, zipcodes). If the entire query is covered by other fields, set searchString to null. Only include words that add meaning beyond what other fields capture (e.g. "free clothes near me" -> taxonomyNames: ["Clothing"], searchString: null; "halal food pantry" -> taxonomyNames: ["Food"], searchString: "halal"; "shelter open tonight for women" -> taxonomyNames: ["Shelter"], openAt: ..., gender: "female", searchString: null)
 - openAt: an ISO 8601 datetime string resolved from relative time expressions ("tonight" = today at 8pm, "now" = current time, "tomorrow morning" = tomorrow at 9am), or null
 - gender: "male" or "female" if the query specifies gender, otherwise null
 - membership: true if membership is required/mentioned, false if explicitly not required, null if not mentioned
@@ -2020,7 +2023,7 @@ Extract the following fields if present in the query (return null for fields not
 - ageMax: maximum age as integer if mentioned, otherwise null
 - referralRequired: true/false/null based on whether a referral is mentioned
 - photoIdRequired: true/false/null based on whether photo ID is mentioned
-- servesZipcode: a 5-digit NYC zip code string if mentioned, otherwise null
+- zipcodes: a 5-digit NYC zip code string if mentioned, otherwise null
 - taxonomyNames: an array of taxonomy names that match the user's query, or null if not applicable. Available top-level taxonomies: Food, Clothing, Personal Care, Shelter, Health, Other service. Available sub-taxonomies: Mental Health, Substance Use Treatment, General Health, Support Groups (under Health); Pets, Education, Employment, Legal Services, Immigration Services, Internship (under Other service); Interview-Ready Clothing, Baby Supplies, Thrift Shop, Coat Drive, Professional Clothing (under Clothing); Food Benefits, Food Delivery / Meals on Wheels, Appliances (under Food); Gym, Baby, Hygiene, Community Services, Activities (under Personal Care); Drop-in Center, Intake, Senior, Transitional Independent Living (TIL), Housing Lottery, Supportive Housing, Residential Recovery, Cooling Center, Referral, Youth, Warming Center, Veterans (under Shelter). Use the most specific matching taxonomy. For example "food" -> ["Food"], "men's shelter" -> ["Shelter"], "mental health support" -> ["Mental Health", "Support Groups"], "drug rehab" -> ["Substance Use Treatment"]`;
 
   const completion = await openai.chat.completions.create({

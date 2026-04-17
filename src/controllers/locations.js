@@ -194,6 +194,7 @@ export default {
           console.error('NL query parse failed, falling back to raw search:', err.message);
         }
       }
+      console.log('NL query params:', nlParams);
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -271,8 +272,8 @@ export default {
         if (photoIdRequired == null && nlParams.photoIdRequired != null) {
           filterParameters.documents[documentTypes.photoId] = nlParams.photoIdRequired;
         }
-        if (!servesZipcode && nlParams.servesZipcode) {
-          filterParameters.servesZipcode = nlParams.servesZipcode;
+        if (!zipcodes && nlParams.zipcodes) {
+          filterParameters.zipcodes = nlParams.zipcodes;
         }
         if (!taxonomyId && nlParams.taxonomyNames && nlParams.taxonomyNames.length > 0) {
           const matchedTaxonomies = await models.Taxonomy.findAll({
