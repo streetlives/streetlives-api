@@ -205,7 +205,7 @@ export default {
 
       if (originalComment.contact_info) {
         replyEmail({
-          locationName: location.Organization.name,
+          locationName: location.Organization ? location.Organization.name : '',
           toEmail: originalComment.contact_info,
           locationSlug: location.slug,
           replyContent: content,
