@@ -2,6 +2,15 @@ import config from '../config';
 
 const nodemailer = require('nodemailer');
 
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Looking to send emails in production? Check out our Email API/SMTP product!
 const transport = nodemailer.createTransport({
   host: config.mail.host,
@@ -106,6 +115,7 @@ ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}�
 async function replyEmail({
   locationName, toEmail, locationSlug, replyContent
 }) {
+  const safeReplyContent = escapeHtml(replyContent);
   console.log('sending mail...');
   // send mail with defined transport object
   const info = await transport.sendMail({
@@ -171,7 +181,7 @@ async function replyEmail({
     <p>Hi,</p>
     <p>A provider has replied to your comment on YourPeer. Here’s what they shared:</p>
 
-    <div class="comment-box">“${replyContent}”</div>
+    <div class="comment-box">“${safeReplyContent}”</div>
 
     <p>Click <a href="https://staging.yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see Your comment.</p>
 
