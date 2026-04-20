@@ -186,9 +186,9 @@ export default {
       }
 
       const organizationId = originalComment.Location.organization_id;
-      // if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-      //   throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      // }
+      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
+      }
 
       const postedReply = await createInstance(
         req.user,
