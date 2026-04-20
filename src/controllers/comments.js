@@ -203,7 +203,7 @@ export default {
 
       const location = await models.Location.findByPk(originalComment.location_id, { include: models.Organization });
 
-      if (originalComment.contact_info) {
+      if (originalComment.contact_info && location) {
         replyEmail({
           locationName: location.Organization ? location.Organization.name : '',
           toEmail: originalComment.contact_info,
