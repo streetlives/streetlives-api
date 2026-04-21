@@ -1,18 +1,20 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`get location info should get all relevant fields for a given location 1`] = `
-Object {
-  "AccessibilityForDisabilities": Object {},
-  "EventRelatedInfos": Object {},
-  "Organization": Object {
-    "Phones": Object {},
+{
+  "AccessibilityForDisabilities": {},
+  "EventRelatedInfos": {},
+  "Organization": {
+    "Phones": {},
     "description": "An organization meant for testing purposes.",
     "email": null,
     "name": "The Test Org",
+    "name_vector": null,
+    "partners": null,
     "url": "www.streetlives.com",
   },
-  "Phones": Object {
-    "0": Object {
+  "Phones": {
+    "0": {
       "description": null,
       "extension": null,
       "language": null,
@@ -20,44 +22,47 @@ Object {
       "type": null,
     },
   },
-  "Services": Object {
-    "0": Object {
+  "Services": {
+    "0": {
       "DocumentsInfo": null,
-      "Eligibilities": Object {},
-      "EventRelatedInfos": Object {},
-      "HolidaySchedules": Object {},
-      "Languages": Object {},
-      "Phones": Object {},
-      "RegularSchedules": Object {},
-      "RequiredDocuments": Object {},
-      "ServiceAreas": Object {},
-      "ServiceAtLocation": Object {
+      "Eligibilities": {},
+      "EventRelatedInfos": {},
+      "HolidaySchedules": {},
+      "Languages": {},
+      "Phones": {},
+      "RegularSchedules": {},
+      "RequiredDocuments": {},
+      "ServiceAreas": {},
+      "ServiceAtLocation": {
         "description": null,
       },
-      "ServiceTaxonomySpecificAttributes": Object {},
-      "Taxonomies": Object {
-        "0": Object {
-          "ServiceTaxonomy": Object {},
+      "ServiceTaxonomySpecificAttributes": {},
+      "Taxonomies": {
+        "0": {
+          "ServiceTaxonomy": {},
           "name": "Shelter",
+          "name_vector": null,
           "parent_name": null,
         },
       },
       "additional_info": "A service might have some other info as well.",
       "description": null,
+      "description_vector": null,
       "email": null,
       "fees": null,
       "interpretation_services": null,
-      "metadata": Object {
+      "metadata": {
         "documents": null,
-        "service": Object {},
-        "sources": Object {},
+        "service": {},
+        "sources": {},
       },
       "name": "A specific offering",
+      "name_vector": null,
       "url": null,
     },
   },
   "additionalInfo": "And some other, perhaps less standardized, information.",
-  "address": Object {
+  "address": {
     "city": "New York",
     "country": "United States",
     "neighborhood": "Chelsea",
@@ -68,15 +73,18 @@ Object {
   },
   "closed": false,
   "description": "This is how one would describe this shelter.",
-  "metadata": Object {
-    "address": Object {},
-    "location": Object {},
-    "organization": Object {},
-    "sources": Object {},
+  "metadata": {
+    "address": {},
+    "location": {},
+    "organization": {},
+    "sources": {},
   },
   "name": "Some kind of center",
+  "name_vector": null,
+  "neighborhood": null,
   "position": null,
   "slug": "the-test-org-chelsea",
+  "streetview_url": null,
   "transportation": null,
 }
 `;
