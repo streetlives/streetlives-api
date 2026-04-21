@@ -1,16 +1,20 @@
 /* eslint-disable import/no-extraneous-dependencies */
+require('dotenv').config({ path: '.env.local' });
 require('@babel/register');
 
-const env = process.env.NODE_ENV || 'development';
+const baseConfig = {
+  username: process.env.DATABASE_USER,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  host: process.env.DATABASE_HOST || 'localhost',
+  port: process.env.DATABASE_PORT || 5432,
+  dialect: 'postgres',
+  operatorsAliases: false,
+};
 
 module.exports = {
-  [env]: {
-    database: process.env.DATABASE_NAME || 'streetlives',
-    username: process.env.DATABASE_USER,
-    password: process.env.DATABASE_PASSWORD,
-    host: process.env.DATABASE_HOST || 'localhost',
-    port: process.env.DATABASE_PORT || 5432,
-    dialect: 'postgres',
-    operatorsAliases: false,
-  },
+  development: baseConfig,
+  test: baseConfig,
+  production: baseConfig,
 };
+

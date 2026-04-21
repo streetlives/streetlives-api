@@ -491,6 +491,8 @@ module.exports = (sequelize, DataTypes, Op) => {
           'Services->Taxonomies.name',
           searchString,
         )),
+        // plain-text search on the description
+        await findWithCondition({ '$Services.description$': { [Op.iLike]: `%${searchString}%` } }),
         // full text search on the description
         await findWithCondition({ '$Services.description_vector$': websearchToTsqueryCondition }),
 

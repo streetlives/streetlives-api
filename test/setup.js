@@ -1,3 +1,6 @@
+require('dotenv').config({ path: '.env.local' });
+require('openai/shims/node');
+
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
@@ -5,6 +8,7 @@ jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
+process.env.OPENAI_API_KEY = 'fake';
 
 const models = require('../src/models');
 

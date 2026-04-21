@@ -16,7 +16,7 @@ export default {
     options: {
       host: process.env.DATABASE_HOST || 'localhost',
       port: parseNumber(process.env.DATABASE_PORT, 5432),
-      logging: parseBoolean(process.env.DATABASE_LOGGING, true),
+      logging: process.env.NODE_ENV === 'test' ? console.error : parseBoolean(process.env.DATABASE_LOGGING, true),
       dialect: 'postgres',
       // Avoid sequelize connection-level SET commands that trigger RDS Proxy session pinning.
       keepDefaultTimezone: parseBoolean(process.env.DATABASE_KEEP_DEFAULT_TIMEZONE, true),
@@ -27,10 +27,10 @@ export default {
         // idle: parseNumber(process.env.DATABASE_POOL_IDLE_TIME, 10000),
         // let the RDS proxy handle timeout
       },
-      dialectOptions: {
-        // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
-        clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
+      dialectOptions: process.env.NODE_ENV === 'test' ? {} : {
         ssl: {
+          // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
+          clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
           require: true,
           rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
         },
