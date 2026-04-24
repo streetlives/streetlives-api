@@ -39,6 +39,10 @@ export default {
       taxonomySpecificAttributes: Joi.array().max(200).items(Joi.string()),
       pageNumber: Joi.number(),
       pageSize: Joi.number(),
+      credentialed: Joi.alternatives().try(
+        Joi.boolean(),
+        Joi.string().valid('1', '0'),
+      ),
       age: Joi.number(),
       ageMin: Joi.number(),
       ageMax: Joi.number(),

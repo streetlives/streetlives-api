@@ -8,6 +8,7 @@ import comments from './controllers/comments';
 import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
+import getUserIfPresent from './middleware/get-user-if-present';
 import dataEntryAuth from './middleware/data-entry-auth';
 import {
   NotFoundError,
@@ -22,7 +23,7 @@ export default (app) => {
   app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
-  app.get('/locations', locations.find);
+  app.get('/locations', getUserIfPresent, locations.find);
 
   app.post('/locations/suggestions', locations.suggestNew);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
@@ -63,7 +64,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);

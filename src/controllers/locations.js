@@ -15,6 +15,55 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+// Keep a buffer under Lambda's 6 MB synchronous payload cap for headers and envelope overhead.
+const AUTHENTICATED_COLLECTION_RESPONSE_BYTE_LIMIT = 5 * 1024 * 1024;
+
+const estimateJsonBytes = value => Buffer.byteLength(JSON.stringify(value));
+
+const trimResponseToByteLimit = (locations, maxBytes) => {
+  let totalBytes = 2;
+  const limitedLocations = [];
+
+  for (const location of locations) {
+    const locationBytes = estimateJsonBytes(location);
+    const nextTotalBytes = totalBytes + locationBytes + (limitedLocations.length ? 1 : 0);
+    if (nextTotalBytes > maxBytes) {
+      return {
+        limitedLocations,
+        responseBytes: totalBytes,
+        truncated: true,
+      };
+    }
+    limitedLocations.push(location);
+    totalBytes = nextTotalBytes;
+  }
+
+  return {
+    limitedLocations,
+    responseBytes: totalBytes,
+    truncated: false,
+  };
+};
+
+const parseCredentialedQueryValue = (value) => {
+  if (value == null) {
+    return false;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const normalizedValue = value.toString().toLowerCase();
+  if (normalizedValue === '1') {
+    return true;
+  }
+  if (normalizedValue === '0') {
+    return false;
+  }
+
+  return parseBoolean(normalizedValue);
+};
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -154,7 +203,7 @@ export default {
         noServices,
         radius,
         minResults,
-        maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
+        maxResults: _maxResults,
         searchString,
         organizationName,
         zipcodes,
@@ -176,11 +225,18 @@ export default {
         sortBy,
       } = req.query;
 
-      const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
-      const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const pageNumber = _pageNumber != null ? parseInt(_pageNumber, 10) : undefined;
+      const pageSize = _pageNumber != null && _pageSize != null
+        ? parseInt(_pageSize, 10)
+        : undefined;
+      const maxResults = _maxResults != null
+        ? parseInt(_maxResults, 10)
+        : DEFAULT_MAX_LOCATIONS_RETURNED;
       const age = _age ? parseInt(_age, 10) : undefined;
       const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
       const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
+      const isCredentialedCollectionRead =
+        parseCredentialedQueryValue(req.query.credentialed) && !!req.user && !radius;
 
       if (ageMin != null && ageMax != null && ageMin > ageMax) {
         throw new ValidationError('ageMin cannot be greater than ageMax');
@@ -243,7 +299,11 @@ export default {
         }
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-      const limit = pageSize || maxResults;
+      const limit = pageSize || (
+        isCredentialedCollectionRead && _maxResults == null
+          ? undefined
+          : maxResults
+      );
 
       const offset = pageNumber !== undefined && pageSize !== undefined ?
         pageNumber * pageSize : undefined;
@@ -282,11 +342,34 @@ export default {
           closed,
         };
       });
+      const {
+        limitedLocations,
+        responseBytes,
+        truncated,
+      } = isCredentialedCollectionRead
+        ? trimResponseToByteLimit(
+          formattedLocations,
+          AUTHENTICATED_COLLECTION_RESPONSE_BYTE_LIMIT,
+        )
+        : {
+          limitedLocations: formattedLocations,
+          responseBytes: estimateJsonBytes(formattedLocations),
+          truncated: false,
+        };
+
       if (pageNumber !== undefined && pageSize !== undefined) {
         res.setHeader('Pagination-Count', paginationCount);
         res.setHeader('Total-Count', totalNumLocations);
       }
-      res.send(formattedLocations);
+      if (isCredentialedCollectionRead) {
+        res.setHeader('Returned-Count', limitedLocations.length);
+        res.setHeader('Response-Bytes', responseBytes);
+        res.setHeader('Results-Truncated', truncated);
+        if (pageNumber === undefined || pageSize === undefined) {
+          res.setHeader('Total-Count', totalNumLocations);
+        }
+      }
+      res.send(limitedLocations);
     } catch (err) {
       next(err);
     }
