@@ -4,7 +4,11 @@
 
 import request from 'supertest';
 import qs from 'qs';
+import express from 'express';
+import bodyParser from 'body-parser';
+import cors from 'cors';
 import app from '../../src/app';
+import setupRoutes from '../../src/routes';
 import models from '../../src/models';
 import geometry from '../../src/utils/geometry';
 import { documentTypes, eligibilityParams } from '../../src/services/services';
@@ -27,6 +31,7 @@ describe('find locations', () => {
   let aSpecificOffering2;
   let aDifferentKindOfService;
   let aSpecificOffering3;
+  let authenticatedApp;
 
   let lastValidatedAtStartTime;
   let lastValidatedAtEndTime;
@@ -160,6 +165,27 @@ describe('find locations', () => {
         },
       })
     )));
+
+    authenticatedApp = express();
+    authenticatedApp.use(cors());
+    authenticatedApp.use(bodyParser.json());
+    authenticatedApp.use(bodyParser.urlencoded({ extended: true }));
+    authenticatedApp.use((req, res, next) => {
+      const rawClaims = req.get('x-test-apigateway-claims');
+      if (rawClaims) {
+        req.apiGateway = {
+          event: {
+            requestContext: {
+              authorizer: {
+                claims: JSON.parse(rawClaims),
+              },
+            },
+          },
+        };
+      }
+      next();
+    });
+    setupRoutes(authenticatedApp);
   };
 
   const checkLastValidatedAt = (returnedLocations) => {
@@ -194,6 +220,12 @@ describe('find locations', () => {
     const returnedLocations = res.body;
     expect(returnedLocations).toEqual([]);
   };
+
+  const credentialedClaims = () => ({
+    sub: 'streetli-user-1',
+    'custom:orgs': organization.id,
+    'cognito:groups': '',
+  });
 
   beforeEach(setupData);
   afterAll(clearData);
@@ -349,6 +381,45 @@ describe('find locations', () => {
           const returnedLocations = res.body;
           expect(returnedLocations).toHaveLength(1);
         }));
+
+    it(
+      'should keep public reads capped and provide an unbounded authenticated endpoint',
+      async () => {
+        const overflowLocations = await organization.createLocations(Array.from(
+          { length: 1002 },
+          (_, index) => ({
+            name: `Extra center ${index}`,
+            position: pointNearOrigin,
+          }),
+        ));
+        await models.ServiceAtLocation.bulkCreate(overflowLocations.map(location => ({
+          service_id: aSpecificOffering1.id,
+          location_id: location.id,
+        })));
+
+        const publicRes = await request(authenticatedApp)
+          .get('/locations')
+          .set('x-test-apigateway-claims', JSON.stringify(credentialedClaims()))
+          .query({
+            organizationName: 'test org',
+            credentialed: 1,
+          })
+          .expect(200);
+
+        expect(publicRes.body).toHaveLength(1000);
+
+        const authenticatedRes = await request(authenticatedApp)
+          .get('/locations/authenticated')
+          .set('x-test-apigateway-claims', JSON.stringify(credentialedClaims()))
+          .query({ organizationName: 'test org' })
+          .expect(200);
+
+        expect(authenticatedRes.headers['results-truncated']).toBeUndefined();
+        expect(authenticatedRes.headers['returned-count']).toBe('1005');
+        expect(authenticatedRes.headers['total-count']).toBe('1005');
+        expect(authenticatedRes.body).toHaveLength(1005);
+      },
+    );
   });
 
   describe('when a minimum number of results is requested', () => {

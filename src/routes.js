@@ -23,6 +23,7 @@ export default (app) => {
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
+  app.get('/locations/authenticated', getUser, locations.findAuthenticated);
 
   app.post('/locations/suggestions', locations.suggestNew);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
@@ -63,7 +64,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);

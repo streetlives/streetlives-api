@@ -6,46 +6,58 @@ const updateMetadataSchema = Joi.object().keys({
   lastUpdated: Joi.date().iso(),
 });
 
+const findQuerySchema = maxResultsSchema => Joi.object().keys({
+  latitude: Joi.number().when('sortBy', {
+    is: SORT_ORDER.NEARBY,
+    then: Joi.required(),
+  }),
+  longitude: Joi.number().when('sortBy', {
+    is: SORT_ORDER.NEARBY,
+    then: Joi.required(),
+  }),
+  radius: Joi.number()
+    .integer().positive().max(50000),
+  minResults: Joi.number()
+    .integer().positive().max(500),
+  maxResults: maxResultsSchema,
+  searchString: Joi.string().allow(''),
+  organizationName: Joi.string().min(3),
+  zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
+  taxonomyId: Joi.string(),
+  openAt: Joi.date().iso(),
+  occasion: Joi.string(),
+  referralRequired: Joi.boolean(),
+  photoIdRequired: Joi.boolean(),
+  membership: Joi.boolean(),
+  gender: Joi.string(),
+  servesZipcode: Joi.string().length(5).regex(/\d+/),
+  taxonomySpecificAttributes: Joi.array().max(200).items(Joi.string()),
+  pageNumber: Joi.number(),
+  pageSize: Joi.number(),
+  age: Joi.number(),
+  ageMin: Joi.number(),
+  ageMax: Joi.number(),
+  sortBy: Joi.string().valid(SORT_OPTIONS),
+})
+  .with('radius', ['latitude', 'longitude'])
+  .required();
+
+const publicMaxResultsSchema = Joi.number()
+  .integer().positive()
+  .min(Joi.ref('minResults', { default: 0 }))
+  .max(1000);
+
+const authenticatedMaxResultsSchema = Joi.number()
+  .integer().positive()
+  .min(Joi.ref('minResults', { default: 0 }));
+
 export default {
   find: {
-    query: Joi.object().keys({
-      latitude: Joi.number().when('sortBy', {
-        is: SORT_ORDER.NEARBY,
-        then: Joi.required(),
-      }),
-      longitude: Joi.number().when('sortBy', {
-        is: SORT_ORDER.NEARBY,
-        then: Joi.required(),
-      }),
-      radius: Joi.number()
-        .integer().positive().max(50000),
-      minResults: Joi.number()
-        .integer().positive().max(500),
-      maxResults: Joi.number()
-        .integer().positive()
-        .min(Joi.ref('minResults', { default: 0 }))
-        .max(1000),
-      searchString: Joi.string().allow(''),
-      organizationName: Joi.string().min(3),
-      zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
-      taxonomyId: Joi.string(),
-      openAt: Joi.date().iso(),
-      occasion: Joi.string(),
-      referralRequired: Joi.boolean(),
-      photoIdRequired: Joi.boolean(),
-      membership: Joi.boolean(),
-      gender: Joi.string(),
-      servesZipcode: Joi.string().length(5).regex(/\d+/),
-      taxonomySpecificAttributes: Joi.array().max(200).items(Joi.string()),
-      pageNumber: Joi.number(),
-      pageSize: Joi.number(),
-      age: Joi.number(),
-      ageMin: Joi.number(),
-      ageMax: Joi.number(),
-      sortBy: Joi.string().valid(SORT_OPTIONS),
-    })
-      .with('radius', ['latitude', 'longitude'])
-      .required(),
+    query: findQuerySchema(publicMaxResultsSchema),
+  },
+
+  findAuthenticated: {
+    query: findQuerySchema(authenticatedMaxResultsSchema),
   },
 
   getInfo: {
