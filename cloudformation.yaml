@@ -72,6 +72,12 @@ Resources:
             RestApiId: !Ref ApiGatewayApi
             Path: /{proxy+}
             Method: ANY
+        ScheduledActionsRunner:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+            Description: Runs due scheduled Streetlives API actions.
+            Enabled: true
 
 Outputs:
   LambdaFunctionConsoleUrl:

@@ -1,5 +1,6 @@
 import awsServerlessExpress from 'aws-serverless-express';
 import app from './app';
+import { runDueScheduledActions } from './services/scheduled-actions';
 
 const binaryMimeTypes = [
   'application/javascript',
@@ -22,4 +23,22 @@ const binaryMimeTypes = [
 ];
 const server = awsServerlessExpress.createServer(app, null, binaryMimeTypes);
 
-exports.handler = (event, context) => awsServerlessExpress.proxy(server, event, context);
+const isScheduledActionsEvent = event => (
+  event && (
+    event.source === 'aws.events' ||
+    event.source === 'streetlives-api.scheduled-actions' ||
+    event['detail-type'] === 'Scheduled Event'
+  )
+);
+
+exports.handler = async (event, context) => {
+  if (isScheduledActionsEvent(event)) {
+    const result = await runDueScheduledActions({ triggeredBy: 'aws.events' });
+    return {
+      statusCode: 200,
+      body: JSON.stringify(result),
+    };
+  }
+
+  return awsServerlessExpress.proxy(server, event, context);
+};

@@ -8,18 +8,30 @@ import { regenerateHighlightsForLocation } from './comment-highlights';
 import commentEmail from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
-import {
-  CognitoIdentityProviderClient,
-  ListUsersCommand,
-} from '@aws-sdk/client-cognito-identity-provider';
+let cognitoClient;
+let listUsersCommand;
 
-const client = new CognitoIdentityProviderClient({
-  region: 'us-east-1',
-});
+const getCognitoClient = () => {
+  if (!cognitoClient || !listUsersCommand) {
+    // eslint-disable-next-line global-require
+    const awsSdk = require('@aws-sdk/client-cognito-identity-provider');
+    const { CognitoIdentityProviderClient, ListUsersCommand } = awsSdk;
+    cognitoClient = new CognitoIdentityProviderClient({
+      region: 'us-east-1',
+    });
+    listUsersCommand = ListUsersCommand;
+  }
+
+  return {
+    client: cognitoClient,
+    ListUsersCommand: listUsersCommand,
+  };
+};
 
 const getAllUsers = async (userPoolId) => {
   let users = [];
   let paginationToken;
+  const { client, ListUsersCommand } = getCognitoClient();
 
   do {
     const command = new ListUsersCommand({
