@@ -15,55 +15,6 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
-// Keep a buffer under Lambda's 6 MB synchronous payload cap for headers and envelope overhead.
-const AUTHENTICATED_COLLECTION_RESPONSE_BYTE_LIMIT = 5 * 1024 * 1024;
-
-const estimateJsonBytes = value => Buffer.byteLength(JSON.stringify(value));
-
-const trimResponseToByteLimit = (locations, maxBytes) => {
-  let totalBytes = 2;
-  const limitedLocations = [];
-
-  for (const location of locations) {
-    const locationBytes = estimateJsonBytes(location);
-    const nextTotalBytes = totalBytes + locationBytes + (limitedLocations.length ? 1 : 0);
-    if (nextTotalBytes > maxBytes) {
-      return {
-        limitedLocations,
-        responseBytes: totalBytes,
-        truncated: true,
-      };
-    }
-    limitedLocations.push(location);
-    totalBytes = nextTotalBytes;
-  }
-
-  return {
-    limitedLocations,
-    responseBytes: totalBytes,
-    truncated: false,
-  };
-};
-
-const parseCredentialedQueryValue = (value) => {
-  if (value == null) {
-    return false;
-  }
-
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  const normalizedValue = value.toString().toLowerCase();
-  if (normalizedValue === '1') {
-    return true;
-  }
-  if (normalizedValue === '0') {
-    return false;
-  }
-
-  return parseBoolean(normalizedValue);
-};
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -192,184 +143,190 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
   };
 }
 
+async function getLocationSearchResponse(query, defaultMaxResults) {
+  const {
+    latitude,
+    longitude,
+    noServices,
+    radius,
+    minResults,
+    maxResults: _maxResults,
+    searchString,
+    organizationName,
+    zipcodes,
+    taxonomyId,
+    openAt,
+    occasion,
+    referralRequired,
+    photoIdRequired,
+    membership,
+    gender,
+    servesZipcode,
+    age: _age,
+    ageMin: _ageMin,
+    ageMax: _ageMax,
+    taxonomySpecificAttributes,
+    locationFieldsOnly,
+    pageNumber: _pageNumber,
+    pageSize: _pageSize,
+    sortBy,
+  } = query;
+
+  const pageNumber = _pageNumber != null ? parseInt(_pageNumber, 10) : undefined;
+  const pageSize = _pageNumber != null && _pageSize != null
+    ? parseInt(_pageSize, 10)
+    : undefined;
+  const maxResults = _maxResults != null
+    ? parseInt(_maxResults, 10)
+    : defaultMaxResults;
+  const age = _age ? parseInt(_age, 10) : undefined;
+  const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
+  const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
+
+  if (ageMin != null && ageMax != null && ageMin > ageMax) {
+    throw new ValidationError('ageMin cannot be greater than ageMax');
+  }
+
+  let attributesObject;
+  if (taxonomySpecificAttributes != null) {
+    try {
+      attributesObject = convertKeyValueArrayToObject(taxonomySpecificAttributes);
+    } catch (err) {
+      throw new ValidationError(`Invalid "taxonomySpecificAttributes" param: ${err.message}`);
+    }
+  }
+
+  const eligibility = {};
+  if (membership != null) {
+    eligibility[eligibilityParams.membership] = membership;
+  }
+  if (gender != null) {
+    eligibility[eligibilityParams.gender] = gender;
+  }
+  if (age != null) {
+    eligibility.age = age;
+  } else if (ageMin != null || ageMax != null) {
+    eligibility.ageRange = { ageMin, ageMax };
+  }
+
+  const documents = {};
+  if (referralRequired != null) {
+    documents[documentTypes.referralLetter] = parseBoolean(referralRequired);
+  }
+  if (photoIdRequired != null) {
+    documents[documentTypes.photoId] = parseBoolean(photoIdRequired);
+  }
+
+  const filterParameters = {
+    documents,
+    eligibility,
+    occasion,
+    servesZipcode,
+    openAt: openAt && new Date(openAt),
+    taxonomySpecificAttributes: attributesObject,
+  };
+
+  if (searchString) {
+    filterParameters.searchString = searchString.trim();
+  }
+  if (organizationName) {
+    filterParameters.organizationName = organizationName.trim();
+  }
+  if (zipcodes && zipcodes.length) {
+    filterParameters.zipcodes = zipcodes;
+  }
+
+  if (taxonomyId) {
+    const taxonomyIds = taxonomyId.split(',').filter(Boolean);
+    if (taxonomyIds.length > MAX_TAXONOMY_IDS) {
+      const message = `taxonomyId query param may include at most ${MAX_TAXONOMY_IDS} IDs`;
+      throw new ValidationError(message);
+    }
+    filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
+  }
+  const limit = pageSize || maxResults;
+
+  const offset = pageNumber !== undefined && pageSize !== undefined ?
+    pageNumber * pageSize : undefined;
+
+  const {
+    locations,
+    totalNumLocations,
+  } = await models.Location.search({
+    position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
+    radius,
+    minResults,
+    filterParameters,
+    locationFieldsOnly,
+    noServices: parseBoolean(noServices),
+    limit,
+    offset,
+    sortBy,
+  });
+  const plainLocations = await locations
+    .map(location => location.get({ plain: true }));
+
+  const formattedLocations = plainLocations.map((location) => {
+    const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
+    const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+
+    if (locationFieldsOnly) {
+      return {
+        ...simplifiedLocation,
+        closed,
+      };
+    }
+
+    return {
+      ...location,
+      closed,
+    };
+  });
+
+  return {
+    formattedLocations,
+    pageNumber,
+    pageSize,
+    totalNumLocations,
+  };
+}
+
+const sendLocationSearchResponse = (res, {
+  formattedLocations,
+  pageNumber,
+  pageSize,
+  totalNumLocations,
+}, includeCollectionHeaders = false) => {
+  if (pageNumber !== undefined && pageSize !== undefined) {
+    res.setHeader('Pagination-Count', Math.ceil(totalNumLocations / pageSize));
+    res.setHeader('Total-Count', totalNumLocations);
+  }
+  if (includeCollectionHeaders) {
+    res.setHeader('Returned-Count', formattedLocations.length);
+    res.setHeader('Total-Count', totalNumLocations);
+  }
+  res.send(formattedLocations);
+};
+
 export default {
   find: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.find, { allowUnknown: true });
 
-      const {
-        latitude,
-        longitude,
-        noServices,
-        radius,
-        minResults,
-        maxResults: _maxResults,
-        searchString,
-        organizationName,
-        zipcodes,
-        taxonomyId,
-        openAt,
-        occasion,
-        referralRequired,
-        photoIdRequired,
-        membership,
-        gender,
-        servesZipcode,
-        age: _age,
-        ageMin: _ageMin,
-        ageMax: _ageMax,
-        taxonomySpecificAttributes,
-        locationFieldsOnly,
-        pageNumber: _pageNumber,
-        pageSize: _pageSize,
-        sortBy,
-      } = req.query;
-
-      const pageNumber = _pageNumber != null ? parseInt(_pageNumber, 10) : undefined;
-      const pageSize = _pageNumber != null && _pageSize != null
-        ? parseInt(_pageSize, 10)
-        : undefined;
-      const maxResults = _maxResults != null
-        ? parseInt(_maxResults, 10)
-        : DEFAULT_MAX_LOCATIONS_RETURNED;
-      const age = _age ? parseInt(_age, 10) : undefined;
-      const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
-      const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
-      const isCredentialedCollectionRead =
-        parseCredentialedQueryValue(req.query.credentialed) && !!req.user && !radius;
-
-      if (ageMin != null && ageMax != null && ageMin > ageMax) {
-        throw new ValidationError('ageMin cannot be greater than ageMax');
-      }
-
-      let attributesObject;
-      if (taxonomySpecificAttributes != null) {
-        try {
-          attributesObject = convertKeyValueArrayToObject(taxonomySpecificAttributes);
-        } catch (err) {
-          throw new ValidationError(`Invalid "taxonomySpecificAttributes" param: ${err.message}`);
-        }
-      }
-
-      const eligibility = {};
-      if (membership != null) {
-        eligibility[eligibilityParams.membership] = membership;
-      }
-      if (gender != null) {
-        eligibility[eligibilityParams.gender] = gender;
-      }
-      if (age != null) {
-        eligibility.age = age;
-      } else if (ageMin != null || ageMax != null) {
-        eligibility.ageRange = { ageMin, ageMax };
-      }
-
-      const documents = {};
-      if (referralRequired != null) {
-        documents[documentTypes.referralLetter] = parseBoolean(referralRequired);
-      }
-      if (photoIdRequired != null) {
-        documents[documentTypes.photoId] = parseBoolean(photoIdRequired);
-      }
-
-      const filterParameters = {
-        documents,
-        eligibility,
-        occasion,
-        servesZipcode,
-        openAt: openAt && new Date(openAt),
-        taxonomySpecificAttributes: attributesObject,
-      };
-
-      if (searchString) {
-        filterParameters.searchString = searchString.trim();
-      }
-      if (organizationName) {
-        filterParameters.organizationName = organizationName.trim();
-      }
-      if (zipcodes && zipcodes.length) {
-        filterParameters.zipcodes = zipcodes;
-      }
-
-      if (taxonomyId) {
-        const taxonomyIds = taxonomyId.split(',').filter(Boolean);
-        if (taxonomyIds.length > MAX_TAXONOMY_IDS) {
-          const message = `taxonomyId query param may include at most ${MAX_TAXONOMY_IDS} IDs`;
-          throw new ValidationError(message);
-        }
-        filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
-      }
-      const limit = pageSize || (
-        isCredentialedCollectionRead && _maxResults == null
-          ? undefined
-          : maxResults
+      sendLocationSearchResponse(
+        res,
+        await getLocationSearchResponse(req.query, DEFAULT_MAX_LOCATIONS_RETURNED),
       );
+    } catch (err) {
+      next(err);
+    }
+  },
 
-      const offset = pageNumber !== undefined && pageSize !== undefined ?
-        pageNumber * pageSize : undefined;
+  findAuthenticated: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.findAuthenticated, { allowUnknown: true });
 
-      const {
-        locations,
-        totalNumLocations,
-      } = await models.Location.search({
-        position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
-        radius,
-        minResults,
-        filterParameters,
-        locationFieldsOnly,
-        noServices: parseBoolean(noServices),
-        limit,
-        offset,
-        sortBy,
-      });
-      const plainLocations = await locations
-        .map(location => location.get({ plain: true }));
-      const paginationCount = Math.ceil(totalNumLocations / pageSize);
-
-      const formattedLocations = plainLocations.map((location) => {
-        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
-
-        if (locationFieldsOnly) {
-          return {
-            ...simplifiedLocation,
-            closed,
-          };
-        }
-
-        return {
-          ...location,
-          closed,
-        };
-      });
-      const {
-        limitedLocations,
-        responseBytes,
-        truncated,
-      } = isCredentialedCollectionRead
-        ? trimResponseToByteLimit(
-          formattedLocations,
-          AUTHENTICATED_COLLECTION_RESPONSE_BYTE_LIMIT,
-        )
-        : {
-          limitedLocations: formattedLocations,
-          responseBytes: estimateJsonBytes(formattedLocations),
-          truncated: false,
-        };
-
-      if (pageNumber !== undefined && pageSize !== undefined) {
-        res.setHeader('Pagination-Count', paginationCount);
-        res.setHeader('Total-Count', totalNumLocations);
-      }
-      if (isCredentialedCollectionRead) {
-        res.setHeader('Returned-Count', limitedLocations.length);
-        res.setHeader('Response-Bytes', responseBytes);
-        res.setHeader('Results-Truncated', truncated);
-        if (pageNumber === undefined || pageSize === undefined) {
-          res.setHeader('Total-Count', totalNumLocations);
-        }
-      }
-      res.send(limitedLocations);
+      sendLocationSearchResponse(res, await getLocationSearchResponse(req.query), true);
     } catch (err) {
       next(err);
     }
