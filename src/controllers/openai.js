@@ -1,8 +1,17 @@
 /* eslint-disable max-len, no-console */
 
-import OpenAI from 'openai';
+let openai;
 
-const openai = new OpenAI();
+const getOpenAI = () => {
+  if (!openai) {
+    // eslint-disable-next-line global-require
+    const OpenAI = require('openai');
+    const OpenAIClient = OpenAI.default || OpenAI;
+    openai = new OpenAIClient();
+  }
+
+  return openai;
+};
 
 const commentsSchema = {
   type: 'array',
@@ -1934,7 +1943,7 @@ const getCommentsHighlights = async (comments) => {
   const commentLookupMap = Object.fromEntries(commentContents.map(({ id, comment }) => [id, comment]));
   try {
     const tic = new Date();
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-5',
       messages: [
         { role: "system", content: defaultPrompt },

@@ -1,6 +1,7 @@
 import locations from './controllers/locations';
 import services from './controllers/services';
 import organizations from './controllers/organizations';
+import scheduledActions from './controllers/scheduled-actions';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
 import geocode from './controllers/geocode';
@@ -17,6 +18,12 @@ import {
 } from './utils/errors';
 
 export default (app) => {
+  app.get('/scheduled-actions', getUser, scheduledActions.list);
+  app.delete('/scheduled-actions/:scheduledActionId', getUser, scheduledActions.cancel);
+  app.post('/scheduled-actions/run-due', getUser, scheduledActions.runDue);
+  app.post('/scheduled-patches', getUser, dataEntryAuth, scheduledActions.createPatch);
+  app.post('/scheduled-deletions', getUser, dataEntryAuth, scheduledActions.createDeletion);
+
   app.get('/organizations', organizations.find);
   app.post('/organizations', getUser, dataEntryAuth, organizations.create);
   app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
@@ -63,7 +70,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);

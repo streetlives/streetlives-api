@@ -5,6 +5,7 @@ jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
+process.env.DATABASE_SSL = 'false';
 
 const models = require('../src/models');
 
