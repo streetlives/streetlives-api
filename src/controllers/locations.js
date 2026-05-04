@@ -12,9 +12,13 @@ import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { normalizePhoneParams, validatePhoneForUse } from '../utils/phones';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+const PHONE_VALIDATION_FIELDS = ['number', 'type', 'extension'];
+
+const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -553,14 +557,21 @@ export default {
         description,
         metadata,
       } = req.body;
-
-      const createdPhone = await createInstance(req.user, location.createPhone.bind(location), {
+      const rawPhoneParams = {
         number,
         extension,
         type,
         language,
         description,
-      }, { metadata });
+      };
+      validatePhoneForUse(rawPhoneParams);
+
+      const createdPhone = await createInstance(
+        req.user,
+        location.createPhone.bind(location),
+        normalizePhoneParams(rawPhoneParams, type),
+        { metadata },
+      );
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -581,7 +592,24 @@ export default {
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
       const { metadata, ...updateParams } = req.body;
-      await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
+      const shouldValidatePhone = PHONE_VALIDATION_FIELDS
+        .some(field => hasOwn(updateParams, field));
+
+      if (shouldValidatePhone) {
+        const existingPhone = phone.get({ plain: true });
+        const candidatePhone = {
+          ...existingPhone,
+          ...updateParams,
+        };
+        validatePhoneForUse(candidatePhone);
+      }
+
+      await updateInstance(
+        req.user,
+        phone,
+        normalizePhoneParams(updateParams, phone.type),
+        { fields: editableFields, metadata },
+      );
 
       res.sendStatus(204);
     } catch (err) {
