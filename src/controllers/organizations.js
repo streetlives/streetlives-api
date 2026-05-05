@@ -2,6 +2,10 @@ import Joi from 'joi';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
+import {
+  recordHistorySafely,
+  recordOrganizationUpdateHistory,
+} from '../services/edit-history';
 import { NotFoundError } from '../utils/errors';
 
 export default {
@@ -56,11 +60,23 @@ export default {
 
       const editableFields = ['name', 'description', 'url'];
       const { metadata, ...updateParams } = req.body;
+      const organizationBefore = organization.get({ plain: true });
       await updateInstance(
         req.user,
         organization,
         updateParams,
         { fields: editableFields, metadata },
+      );
+      await recordHistorySafely(
+        'recordOrganizationUpdateHistory',
+        () => recordOrganizationUpdateHistory({
+          organization: organizationBefore,
+          input: updateParams,
+          userKey: req.userSub || req.user,
+          userName: req.userName || req.user,
+          source: metadata && metadata.source ? metadata.source : 'organization-api',
+          actionAt: metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date(),
+        }),
       );
 
       res.sendStatus(204);

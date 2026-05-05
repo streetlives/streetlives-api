@@ -5,6 +5,7 @@ jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
+process.env.DATABASE_SSL = 'false';
 
 const models = require('../src/models');
 
@@ -25,6 +26,8 @@ async function execScript(script) {
 }
 
 beforeAll(async () => {
+  await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS postgis;');
+
   // reset the database state
   await models.sequelize.query(`
     DO $$

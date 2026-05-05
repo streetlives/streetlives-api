@@ -1,3 +1,5 @@
+/* eslint-disable no-console, global-require */
+
 import Joi from 'joi';
 import { col, fn, cast, literal } from 'sequelize';
 import commentSchemas from './validation/comments';
@@ -8,21 +10,35 @@ import { regenerateHighlightsForLocation } from './comment-highlights';
 import commentEmail from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
-import {
-  CognitoIdentityProviderClient,
-  ListUsersCommand,
-} from '@aws-sdk/client-cognito-identity-provider';
+let cognitoClient = null;
+let ListUsersCommand = null;
 
-const client = new CognitoIdentityProviderClient({
-  region: 'us-east-1',
-});
+const loadCognitoClient = () => {
+  if (!cognitoClient || !ListUsersCommand) {
+    const {
+      CognitoIdentityProviderClient,
+      ListUsersCommand: LoadedListUsersCommand,
+    } = require('@aws-sdk/client-cognito-identity-provider');
+
+    ListUsersCommand = LoadedListUsersCommand;
+    cognitoClient = new CognitoIdentityProviderClient({
+      region: 'us-east-1',
+    });
+  }
+
+  return {
+    client: cognitoClient,
+    ListUsersCommand,
+  };
+};
 
 const getAllUsers = async (userPoolId) => {
+  const { client, ListUsersCommand: ListUsersCommandType } = loadCognitoClient();
   let users = [];
   let paginationToken;
 
   do {
-    const command = new ListUsersCommand({
+    const command = new ListUsersCommandType({
       UserPoolId: userPoolId,
       PaginationToken: paginationToken,
       Limit: 60, // Maximum allowed per request
@@ -299,7 +315,10 @@ export default {
         throw new NotFoundError('Comment not found');
       }
       //
-      if (!(process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && !req.userIsAdmin) {
+      if (
+        !(process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+        && !req.userIsAdmin
+      ) {
         throw new ForbiddenError('Not authorized to hide comments');
       }
 
@@ -316,7 +335,6 @@ export default {
           console.log(error);
         }
       });
-
     } catch (err) {
       next(err);
     }
@@ -413,4 +431,3 @@ export default {
     }
   },
 };
-

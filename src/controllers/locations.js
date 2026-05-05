@@ -7,14 +7,119 @@ import {
   getMetadataForService,
   getLastValidatedDateForLocation,
 } from '../services/last-updates';
+import {
+  getCurrentUserEditHistory,
+  getLocationEditHistory,
+  getLocationEditTimeline,
+  recordHistorySafely,
+  recordLocationCreateHistory,
+  recordLocationUpdateHistory,
+  recordPhoneCreateHistory,
+  recordPhoneDeleteHistory,
+  recordPhoneUpdateHistory,
+} from '../services/edit-history';
+import { getLocationChanges } from '../services/location-changes';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+const uniqueStrings = values => [...new Set(values.filter(Boolean).map(String))];
+const resolveHistoryActionAt = metadata =>
+  (metadata && metadata.lastUpdated ? new Date(metadata.lastUpdated) : new Date());
+const canReadAllAuditData = req =>
+  req.userIsAdmin || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+const getUserOrganizationIds = req => uniqueStrings(req.userOrganizationIds || []);
+
+const loadAccessibleAuditLocationIds = async (req) => {
+  if (canReadAllAuditData(req)) {
+    return null;
+  }
+
+  const organizationIds = getUserOrganizationIds(req);
+  if (!organizationIds.length) {
+    return [];
+  }
+
+  const locations = await models.Location.findAll({
+    where: {
+      organization_id: {
+        [models.Sequelize.Op.in]: organizationIds,
+      },
+    },
+    attributes: ['id'],
+    raw: true,
+    hooks: false,
+  });
+
+  return uniqueStrings(locations.map(({ id }) => id));
+};
+
+const ensureLocationAuditAccess = async (req, locationId) => {
+  if (canReadAllAuditData(req)) {
+    return;
+  }
+
+  const location = await models.Location.findByPk(locationId, {
+    attributes: ['id', 'organization_id'],
+    raw: true,
+  });
+
+  if (!location) {
+    throw new NotFoundError('Location not found');
+  }
+
+  if (!getUserOrganizationIds(req).includes(location.organization_id)) {
+    throw new ForbiddenError('Not authorized to read edit history for this location');
+  }
+};
+
+const loadLocationIdsForOrganization = async (organizationId) => {
+  if (!organizationId) return [];
+
+  const locations = await models.Location.findAll({
+    where: { organization_id: organizationId },
+    attributes: ['id'],
+    raw: true,
+    hooks: false,
+  });
+
+  return uniqueStrings(locations.map(({ id }) => id));
+};
+
+const loadLocationIdsForService = async (serviceId) => {
+  if (!serviceId) return [];
+
+  const serviceAtLocations = await models.ServiceAtLocation.findAll({
+    where: { service_id: serviceId },
+    attributes: ['location_id'],
+    raw: true,
+  });
+
+  return uniqueStrings(serviceAtLocations.map(({ location_id: locationId }) => locationId));
+};
+
+const loadLocationIdsForServiceAtLocation = async (serviceAtLocationId) => {
+  if (!serviceAtLocationId) return [];
+
+  const serviceAtLocation = await models.ServiceAtLocation.findByPk(serviceAtLocationId, {
+    attributes: ['location_id'],
+    raw: true,
+  });
+
+  return uniqueStrings([serviceAtLocation && serviceAtLocation.location_id]);
+};
+
+const resolvePhoneLocationIdsForDeletion = async phone =>
+  uniqueStrings([
+    phone.location_id,
+    ...(await loadLocationIdsForServiceAtLocation(phone.service_at_location_id)),
+    ...(await loadLocationIdsForService(phone.service_id)),
+    ...(await loadLocationIdsForOrganization(phone.organization_id)),
+  ]);
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -292,6 +397,69 @@ export default {
     }
   },
 
+  getChanges: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getChanges, { allowUnknown: true });
+
+      const changes = await getLocationChanges({
+        ...req.query,
+        allowedLocationIds: await loadAccessibleAuditLocationIds(req),
+      });
+      res.send(changes);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getEditHistory: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getEditHistory, { allowUnknown: true });
+      await ensureLocationAuditAccess(req, req.params.locationId);
+
+      const history = await getLocationEditHistory({
+        locationId: req.params.locationId,
+        limit: req.query.limit,
+        includeSegments: req.query.includeSegments,
+      });
+      res.send(history);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getEditTimeline: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getEditTimeline, { allowUnknown: true });
+      await ensureLocationAuditAccess(req, req.query.locationId);
+
+      const timeline = await getLocationEditTimeline({
+        locationId: req.query.locationId,
+        scope: req.query.scope || 'location',
+        limit: req.query.limit,
+        includeSegments: req.query.includeSegments,
+      });
+      res.send(timeline);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getCurrentUserEditHistory: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getCurrentUserEditHistory, { allowUnknown: true });
+
+      const history = await getCurrentUserEditHistory({
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        limit: req.query.limit,
+        allowedLocationIds: await loadAccessibleAuditLocationIds(req),
+      });
+      res.send(history);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   getInfo: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
@@ -436,6 +604,14 @@ export default {
         postal_code: address.postalCode,
         country: address.country,
       }, { metadata });
+      await recordHistorySafely('recordLocationCreateHistory', () => recordLocationCreateHistory({
+        location: createdLocation,
+        input: req.body,
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'location-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      }));
 
       res.status(201).send(createdLocation);
     } catch (err) {
@@ -507,12 +683,13 @@ export default {
       const { metadata } = req.body;
 
       const location = await models.Location.findByPk(locationId, {
-        include: models.PhysicalAddress,
+        include: [models.PhysicalAddress, models.EventRelatedInfo],
       });
 
       if (!location) {
         throw new NotFoundError('Location not found');
       }
+      const locationBefore = location.get({ plain: true });
 
       const updatePromises = [];
 
@@ -527,6 +704,14 @@ export default {
       updatePromises.push(updateLocation(location, req.body, metadata));
 
       await Promise.all(updatePromises);
+      await recordHistorySafely('recordLocationUpdateHistory', () => recordLocationUpdateHistory({
+        locationBefore,
+        input: req.body,
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'location-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      }));
 
       res.sendStatus(204);
     } catch (err) {
@@ -561,6 +746,15 @@ export default {
         language,
         description,
       }, { metadata });
+      await recordHistorySafely('recordPhoneCreateHistory', () => recordPhoneCreateHistory({
+        locationId,
+        phone: createdPhone,
+        input: req.body,
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'phone-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      }));
 
       res.status(201).send(createdPhone);
     } catch (err) {
@@ -581,7 +775,16 @@ export default {
 
       const editableFields = ['number', 'extension', 'type', 'language', 'description'];
       const { metadata, ...updateParams } = req.body;
+      const phoneBefore = phone.get({ plain: true });
       await updateInstance(req.user, phone, updateParams, { fields: editableFields, metadata });
+      await recordHistorySafely('recordPhoneUpdateHistory', () => recordPhoneUpdateHistory({
+        phoneBefore,
+        input: updateParams,
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        source: metadata && metadata.source ? metadata.source : 'phone-api',
+        actionAt: resolveHistoryActionAt(metadata),
+      }));
 
       res.sendStatus(204);
     } catch (err) {
@@ -600,7 +803,34 @@ export default {
         throw new NotFoundError('Phone not found');
       }
 
-      await destroyInstance(req.user, phone);
+      const phoneBefore = phone.get({ plain: true });
+      const phoneLocationIds = await resolvePhoneLocationIdsForDeletion(phoneBefore);
+      const actionAt = new Date();
+
+      await models.sequelize.transaction(async (transaction) => {
+        await destroyInstance(req.user, phone, { transaction });
+
+        if (phoneLocationIds.length) {
+          await models.Metadata.bulkCreate(phoneLocationIds.map(locationId => ({
+            resource_table: models.Phone.tableName,
+            resource_id: phoneBefore.id,
+            last_action_date: actionAt,
+            last_action_type: models.Metadata.actionTypes.delete,
+            field_name: 'location_id',
+            previous_value: locationId,
+            updated_by: req.user,
+            source: 'phone-api',
+          })), { transaction });
+        }
+      });
+
+      await recordHistorySafely('recordPhoneDeleteHistory', () => recordPhoneDeleteHistory({
+        phoneBefore,
+        userKey: req.userSub || req.user,
+        userName: req.userName || req.user,
+        source: 'phone-api',
+        actionAt,
+      }));
       res.sendStatus(204);
     } catch (err) {
       next(err);
