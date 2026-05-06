@@ -677,5 +677,105 @@ module.exports = (sequelize, DataTypes, Op) => {
     };
   };
 
+  Location.findCatalog = async ({
+    position,
+    radius,
+    limit,
+    offset,
+    sortBy,
+  }) => {
+    let distance;
+    const whereConditions = [{
+      hidden_from_search: { [Op.or]: [false, null] },
+    }];
+
+    if (position) {
+      distance = sequelize.fn(
+        'ST_DistanceSphere',
+        sequelize.col('position'),
+        sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
+      );
+    }
+
+    if (position && radius) {
+      whereConditions.push(sequelize.where(distance, { [Op.lte]: radius }));
+    }
+
+    let order;
+    if (position && (!sortBy || sortBy === SORT_ORDER.NEARBY)) {
+      order = [[distance, 'ASC'], ['id', 'ASC']];
+    } else {
+      order = [['last_validated_at', 'DESC'], ['id', 'ASC']];
+    }
+
+    const where = sequelize.and(...whereConditions);
+    const include = [
+      {
+        model: sequelize.models.Organization,
+        attributes: ['id', 'name'],
+      },
+      {
+        model: sequelize.models.PhysicalAddress,
+        attributes: [
+          'id',
+          'address_1',
+          'city',
+          'region',
+          'state_province',
+          'postal_code',
+          'country',
+        ],
+      },
+    ];
+
+    const totalNumLocations = await Location.count({
+      where,
+      distinct: true,
+      col: 'Location.id',
+    });
+
+    const pageRows = await Location.findAll({
+      attributes: ['id'],
+      where,
+      order,
+      limit,
+      offset,
+      raw: true,
+    });
+
+    const locationIds = pageRows.map(location => location.id);
+    if (!locationIds.length) {
+      return {
+        locations: [],
+        totalNumLocations,
+      };
+    }
+
+    const locations = await Location.findAll({
+      attributes: [
+        'id',
+        'name',
+        'slug',
+        'description',
+        'additional_info',
+        'last_validated_at',
+        'position',
+      ],
+      where: {
+        id: { [Op.in]: locationIds },
+      },
+      include,
+    });
+
+    const locationPositionById = new Map(locationIds.map((id, index) => [id, index]));
+    locations.sort((left, right) =>
+      locationPositionById.get(left.id) - locationPositionById.get(right.id));
+
+    return {
+      locations,
+      totalNumLocations,
+    };
+  };
+
   return Location;
 };

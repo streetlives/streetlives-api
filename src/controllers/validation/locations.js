@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { SORT_OPTIONS, SORT_ORDER } from '../sort-by';
+import config from '../../config';
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -57,6 +58,29 @@ export default {
   getInfoBySlug: {
     params: Joi.object().keys({
       slug: Joi.string().required(),
+    }).required(),
+  },
+
+  findCatalog: {
+    query: Joi.object().keys({
+      latitude: Joi.number().required(),
+      longitude: Joi.number().required(),
+      radius: Joi.number()
+        .integer()
+        .positive()
+        .max(config.internalLocationCatalog.maxRadiusMeters)
+        .required(),
+      pageNumber: Joi.number()
+        .integer()
+        .min(0),
+      pageSize: Joi.number()
+        .integer()
+        .positive()
+        .max(config.internalLocationCatalog.maxPageSize),
+      sortBy: Joi.string().valid(
+        SORT_ORDER.NEARBY,
+        SORT_ORDER.MOST_RECENTLY_VALIDATED,
+      ),
     }).required(),
   },
 

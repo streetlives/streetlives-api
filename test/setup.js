@@ -1,6 +1,14 @@
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
+if (!global.TextEncoder) {
+  global.TextEncoder = util.TextEncoder;
+}
+
+if (!global.TextDecoder) {
+  global.TextDecoder = util.TextDecoder;
+}
+
 jest.setTimeout(10000);
 
 process.env.DATABASE_NAME = 'test';

@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import locationSchemas from './validation/locations';
 import models from '../models';
+import config from '../config';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {
   getMetadataForLocation,
@@ -12,9 +13,67 @@ import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import authorizeInternalLocationCatalogRequest from '../services/internal-location-catalog-auth';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+
+const setPaginationHeaders = (res, {
+  totalNumLocations,
+  pageNumber,
+  pageSize,
+}) => {
+  const paginationCount = pageSize > 0
+    ? Math.ceil(totalNumLocations / pageSize)
+    : 1;
+  const hasMore = pageNumber + 1 < paginationCount;
+  res.setHeader('Pagination-Count', paginationCount);
+  res.setHeader('Total-Count', totalNumLocations);
+  res.setHeader('Page-Number', pageNumber);
+  res.setHeader('Page-Size', pageSize);
+  res.setHeader('Has-More', hasMore ? 'true' : 'false');
+  if (hasMore) {
+    res.setHeader('Next-Page', pageNumber + 1);
+  } else {
+    res.removeHeader('Next-Page');
+  }
+};
+
+const getCoordinatesFromPosition = (position) => {
+  const coordinates = position && position.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return {
+      latitude: null,
+      longitude: null,
+    };
+  }
+  return {
+    latitude: Number(coordinates[1]),
+    longitude: Number(coordinates[0]),
+  };
+};
+
+const formatCatalogLocation = (location) => {
+  const plainLocation = location.get({ plain: true });
+  const {
+    latitude,
+    longitude,
+  } = getCoordinatesFromPosition(plainLocation.position);
+  return {
+    id: plainLocation.id,
+    name: plainLocation.name,
+    slug: plainLocation.slug,
+    description: plainLocation.description,
+    additional_info: plainLocation.additional_info,
+    last_validated_at: plainLocation.last_validated_at,
+    position: plainLocation.position,
+    latitude,
+    longitude,
+    org: plainLocation.Organization ? plainLocation.Organization.name : null,
+    Organization: plainLocation.Organization || null,
+    PhysicalAddresses: plainLocation.PhysicalAddresses || [],
+  };
+};
 
 const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   if (!occasion) {
@@ -292,6 +351,45 @@ export default {
     }
   },
 
+  findCatalog: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.findCatalog, { allowUnknown: true });
+      await authorizeInternalLocationCatalogRequest(req);
+
+      const {
+        latitude,
+        longitude,
+        radius,
+        pageNumber: rawPageNumber,
+        pageSize: rawPageSize,
+        sortBy,
+      } = req.query;
+
+      const pageSize = rawPageSize != null
+        ? parseInt(rawPageSize, 10)
+        : config.internalLocationCatalog.defaultPageSize;
+      const pageNumber = rawPageNumber != null ? parseInt(rawPageNumber, 10) : 0;
+      const {
+        locations,
+        totalNumLocations,
+      } = await models.Location.findCatalog({
+        position: geometry.createPoint(Number(longitude), Number(latitude)),
+        radius: Number(radius),
+        limit: pageSize,
+        offset: pageNumber * pageSize,
+        sortBy,
+      });
+
+      setPaginationHeaders(res, {
+        totalNumLocations,
+        pageNumber,
+        pageSize,
+      });
+      res.send(locations.map(formatCatalogLocation));
+    } catch (err) {
+      next(err);
+    }
+  },
   getInfo: async (req, res, next) => {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });

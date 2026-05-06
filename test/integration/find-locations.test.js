@@ -2,6 +2,15 @@
  * @jest-environment node
  */
 
+import { AuthError } from '../../src/utils/errors';
+
+const mockAuthorizeInternalLocationCatalogRequest = jest.fn();
+
+jest.mock('../../src/services/internal-location-catalog-auth', () => ({
+  __esModule: true,
+  default: (...args) => mockAuthorizeInternalLocationCatalogRequest(...args),
+}));
+
 import request from 'supertest';
 import qs from 'qs';
 import app from '../../src/app';
@@ -195,7 +204,18 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual([]);
   };
 
-  beforeEach(setupData);
+  beforeEach(async () => {
+    mockAuthorizeInternalLocationCatalogRequest.mockReset();
+    mockAuthorizeInternalLocationCatalogRequest.mockImplementation(async (req) => {
+      const authorization = req.headers.authorization || req.headers.Authorization;
+      if (typeof authorization !== 'string' || !authorization.match(/^Bearer\s+.+$/i)) {
+        throw new AuthError('Missing bearer token');
+      }
+      return { sub: 'test-user', aud: 'allowed-client-id', 'cognito:groups': ['InternalCatalogUsers'] };
+    });
+
+    await setupData();
+  });
   afterAll(clearData);
 
   it('should return locations within a given radius of a given position', () =>
@@ -1092,5 +1112,161 @@ describe('find locations', () => {
         .get('/locations')
         .query(qs.stringify({ zipcodes: [] }))
         .then(res => expect(res.body.length).toBeGreaterThan(0)));
+  });
+
+  describe('internal location catalog', () => {
+    it('should require a bearer token', () =>
+      request(app)
+        .get('/locations/catalog')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+        })
+        .expect(401));
+
+    it('should allow authenticated requests with no browser origin context', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.body).toHaveLength(1);
+        }));
+
+    it('should allow authenticated extension requests from allowed extension origins', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'chrome-extension://abcdefghijklmnop')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.body).toHaveLength(1);
+        }));
+
+    it('should return a slim paginated catalog for authenticated internal users', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 2,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.headers['pagination-count']).toBe('2');
+          expect(res.headers['page-number']).toBe('0');
+          expect(res.headers['page-size']).toBe('2');
+          expect(res.headers['has-more']).toBe('true');
+          expect(res.headers['next-page']).toBe('1');
+          expect(res.body).toHaveLength(2);
+          expect(res.body[0]).toEqual(expect.objectContaining({
+            id: primaryLocation.id,
+            name: primaryLocation.name,
+            org: organization.name,
+            Organization: expect.objectContaining({
+              id: organization.id,
+              name: organization.name,
+            }),
+          }));
+          expect(res.body[0]).not.toHaveProperty('Services');
+          expect(res.body[0]).not.toHaveProperty('EventRelatedInfos');
+          expect(res.body[0]).toHaveProperty('PhysicalAddresses');
+          expect(Array.isArray(res.body[0].PhysicalAddresses)).toBe(true);
+        }));
+
+    it('should paginate distinct locations when a location has multiple physical addresses', async () => {
+      await primaryLocation.createPhysicalAddress({
+        address_1: '124 W 50th St.',
+        city: 'New York',
+        state_province: 'NY',
+        postal_code: '10001',
+        country: 'US',
+      });
+
+      const firstPage = await request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 0,
+          pageSize: 1,
+        })
+        .expect(200);
+
+      const secondPage = await request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 1,
+          pageSize: 1,
+        })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(secondPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(1);
+      expect(secondPage.body).toHaveLength(1);
+      expect(firstPage.body[0].id).toBe(primaryLocation.id);
+      expect(firstPage.body[0].PhysicalAddresses).toHaveLength(2);
+      expect(secondPage.body[0].id).toBe(otherServiceLocation.id);
+      expect(secondPage.body[0].id).not.toBe(firstPage.body[0].id);
+    });
+
+    it('should return the final page without a next-page header', () =>
+      request(app)
+        .get('/locations/catalog')
+        .set('Authorization', 'Bearer mocked-internal-token')
+        .set('Origin', 'https://sheets.doobneek.org')
+        .query({
+          latitude: originLatitude,
+          longitude: originLongitude,
+          radius: 20000,
+          pageNumber: 1,
+          pageSize: 2,
+        })
+        .expect(200)
+        .then((res) => {
+          expect(res.headers['total-count']).toBe('3');
+          expect(res.headers['pagination-count']).toBe('2');
+          expect(res.headers['page-number']).toBe('1');
+          expect(res.headers['page-size']).toBe('2');
+          expect(res.headers['has-more']).toBe('false');
+          expect(res.headers['next-page']).toBeUndefined();
+          expect(res.body).toHaveLength(1);
+          expect(res.body[0]).toEqual(expect.objectContaining({
+            id: farLocation.id,
+            name: farLocation.name,
+            org: organization.name,
+          }));
+        }));
   });
 });
