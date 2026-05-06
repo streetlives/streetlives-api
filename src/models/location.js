@@ -123,9 +123,31 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$PhysicalAddresses.postal_code$': { [Op.in]: zipcodes },
   });
 
-  const getTaxonomyCondition = taxonomyIds => ({
-    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
+  const getStreetAddressCondition = address => ({
+    '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${address}%` },
   });
+
+  const getNeighborhoodCondition = neighborhood => sequelize.where(
+    sequelize.literal(`(
+      SELECT COUNT(*) FROM nyc_neighborhood_geometries
+      WHERE (
+        nyc_neighborhood_geometries.neighborhood ILIKE ${sequelize.escape(`%${neighborhood}%`)}
+        OR nyc_neighborhood_geometries.borough ILIKE ${sequelize.escape(`%${neighborhood}%`)}
+      )
+      AND ST_Contains(
+        nyc_neighborhood_geometries.geometry,
+        ST_SetSRID("Location".position, 4326)
+      )
+    )`),
+    { [Op.gt]: 0 },
+  );
+
+  const getTaxonomyCondition = (taxonomyIds) => {
+    console.log('taxonomyIds', taxonomyIds);
+    return {
+    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
+  }
+};
 
   const getOpeningHoursCondition = (openAt, occasion) => {
     // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
@@ -310,6 +332,8 @@ module.exports = (sequelize, DataTypes, Op) => {
       searchString,
       organizationName,
       zipcodes,
+      streetAddress,
+      neighborhood,
       taxonomyIds,
       openAt,
       occasion,
@@ -330,6 +354,12 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
     if (zipcodes) {
       whereConditions.push(getZipcodesCondition(zipcodes));
+    }
+    if (streetAddress) {
+      whereConditions.push(getStreetAddressCondition(streetAddress));
+    }
+    if (neighborhood) {
+      whereConditions.push(getNeighborhoodCondition(neighborhood));
     }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
@@ -458,6 +488,8 @@ module.exports = (sequelize, DataTypes, Op) => {
       const targetResultCount = Math.min(200, (offset || 0) + (limit || 200));
       const searchConditions = [
         { '$PhysicalAddresses.postal_code$': zipCodeCondition },
+        getStreetAddressCondition(searchString),
+        getNeighborhoodCondition(searchString),
         getPhoneNumberCondition(searchString),
 
         { '$Organization.name$': exactExactMatchCondition },

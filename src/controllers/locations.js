@@ -275,6 +275,12 @@ export default {
         if (!zipcodes && nlParams.zipcodes) {
           filterParameters.zipcodes = nlParams.zipcodes;
         }
+        if (nlParams.streetAddress) {
+          filterParameters.streetAddress = nlParams.streetAddress;
+        }
+        if (nlParams.neighborhood) {
+          filterParameters.neighborhood = nlParams.neighborhood;
+        }
         if (!taxonomyId && nlParams.taxonomyNames && nlParams.taxonomyNames.length > 0) {
           const matchedTaxonomies = await models.Taxonomy.findAll({
             where: { name: nlParams.taxonomyNames },
