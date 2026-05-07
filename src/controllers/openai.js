@@ -2013,7 +2013,16 @@ const nlQuerySchema = {
   },
 };
 
+const nlQueryCache = new Map();
+const NL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
+  const cacheKey = query.toLowerCase().trim();
+  const cached = nlQueryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < NL_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
   const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
 
 The current datetime in America/New_York timezone is: ${currentDatetime}
@@ -2041,7 +2050,9 @@ Extract the following fields if present in the query (return null for fields not
     response_format: nlQuerySchema,
   });
 
-  return JSON.parse(completion.choices[0].message.content);
+  const result = JSON.parse(completion.choices[0].message.content);
+  nlQueryCache.set(cacheKey, { result, timestamp: Date.now() });
+  return result;
 };
 
 export default getCommentsHighlights;
