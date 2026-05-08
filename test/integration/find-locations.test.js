@@ -337,6 +337,29 @@ describe('find locations', () => {
           ]));
         }));
 
+    it('should include locations without linked services when requested', async () => {
+      const noServiceLocation = await organization.createLocation({
+        name: 'Service-less center',
+        position: pointNearOrigin,
+      });
+
+      return request(app).get('/locations').query({
+        organizationName: 'test org',
+        noServices: true,
+      })
+        .expect(200)
+        .then((res) => {
+          const returnedLocations = res.body;
+          expect(returnedLocations).toHaveLength(4);
+          expect(returnedLocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: primaryLocation.name }),
+            expect.objectContaining({ name: otherServiceLocation.name }),
+            expect.objectContaining({ name: farLocation.name }),
+            expect.objectContaining({ name: noServiceLocation.name }),
+          ]));
+        });
+    });
+
     it('should not match locations whose organization doesn\'t have the string in its name', () =>
       request(app).get('/locations').query({ organizationName: 'center' })
         .expect(200)
