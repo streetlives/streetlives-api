@@ -349,6 +349,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
 
     const whereConditions = [];
+    if (searchString) {
+      whereConditions.push(sequelize.where(
+        // eslint-disable-next-line max-len
+        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\')'),
+        true,
+      ));
+    }
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
