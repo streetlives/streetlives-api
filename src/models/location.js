@@ -477,6 +477,10 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
+      // Normalize acronyms: convert "S.H.O.W." → "SHOW" to support dot-separated acronym queries
+      const normalizeAcronyms = str => str.replace(/\b[A-Za-z](?:\.[A-Za-z])+\.?/g, m => m.replace(/\./g, ''));
+      const normalizedSearchString = normalizeAcronyms(searchString);
+
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
@@ -484,6 +488,29 @@ module.exports = (sequelize, DataTypes, Op) => {
       const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
       const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
       const exactExactMatchCondition = { [Op.iLike]: searchString };
+
+      // Conditions using normalized search string (for when user types "S.H.O.W." → match "SHOW")
+      const normalizedPrefixCondition = normalizedSearchString !== searchString
+        ? { [Op.iRegexp]: `(^|\\b)${normalizedSearchString}.*$` }
+        : null;
+      const normalizedExactMatchCondition = normalizedSearchString !== searchString
+        ? { [Op.iRegexp]: `(^|\\b)${normalizedSearchString}(\\b|$)` }
+        : null;
+      const normalizedExactExactMatchCondition = normalizedSearchString !== searchString
+        ? { [Op.iLike]: normalizedSearchString }
+        : null;
+
+      // DB-side acronym normalization: strip dots from column values to match "S.H.O.W." → "SHOW"
+      // Used when searching "SHOW" against names stored as "S.H.O.W."
+      const stripDotsFromCol = col => sequelize.fn('regexp_replace', sequelize.col(col), '\\.', '', 'g');
+      const dbNormalizedOrgNameCondition = sequelize.where(
+        sequelize.fn('lower', stripDotsFromCol('Organization.name')),
+        { [Op.iLike]: `%${normalizedSearchString}%` },
+      );
+      const dbNormalizedLocationNameCondition = sequelize.where(
+        sequelize.fn('lower', stripDotsFromCol('Location.name')),
+        { [Op.iLike]: `%${normalizedSearchString}%` },
+      );
 
       // eslint-disable-next-line no-inner-declarations, no-shadow
       function parseZipCodes(searchString) {
@@ -503,20 +530,32 @@ module.exports = (sequelize, DataTypes, Op) => {
         getPhoneNumberCondition(searchString),
 
         { '$Organization.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Organization.name$': normalizedExactExactMatchCondition }] : []),
         { '$Organization.name$': prefixCondition },
+        ...(normalizedPrefixCondition ? [{ '$Organization.name$': normalizedPrefixCondition }] : []),
+        dbNormalizedOrgNameCondition,
         { '$Organization.name_vector$': websearchToTsqueryCondition },
         getCombinedFuzzySearchCondition('Organization.name', searchString),
         { '$Location.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Location.name$': normalizedExactExactMatchCondition }] : []),
         { '$Location.name$': prefixCondition },
+        ...(normalizedPrefixCondition ? [{ '$Location.name$': normalizedPrefixCondition }] : []),
+        dbNormalizedLocationNameCondition,
         { '$Location.name_vector$': websearchToTsqueryCondition },
         getCombinedFuzzySearchCondition('Location.name', searchString),
 
         { '$Services.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Services.name$': normalizedExactExactMatchCondition }] : []),
         { '$Services.Taxonomies.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Services.Taxonomies.name$': normalizedExactExactMatchCondition }] : []),
         { '$Organization.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Organization.name$': normalizedExactMatchCondition }] : []),
         { '$Location.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Location.name$': normalizedExactMatchCondition }] : []),
         { '$Services.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Services.name$': normalizedExactMatchCondition }] : []),
         { '$Services.Taxonomies.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Services.Taxonomies.name$': normalizedExactMatchCondition }] : []),
 
         // prefix match
         { '$Services.name$': prefixCondition },
