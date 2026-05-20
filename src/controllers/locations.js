@@ -198,7 +198,6 @@ export default {
           console.error('NL query parse failed, falling back to raw search:', err.message);
         }
       }
-      console.log('NL query params:', nlParams);
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
