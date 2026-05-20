@@ -189,7 +189,11 @@ export default {
       let nlParams = null;
       if (naturalLanguageQuery) {
         try {
-          nlParams = await parseNaturalLanguageQuery(naturalLanguageQuery, new Date().toISOString());
+          const sanitizedQuery = naturalLanguageQuery
+            .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE]')
+            .replace(/\S+@\S+\.\S+/g, '[EMAIL]')
+            .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]');
+          nlParams = await parseNaturalLanguageQuery(sanitizedQuery, new Date().toISOString());
         } catch (err) {
           console.error('NL query parse failed, falling back to raw search:', err.message);
         }
@@ -250,7 +254,10 @@ export default {
           filterParameters.searchString = nlParams.searchString;
         }
         if (!openAt && nlParams.openAt) {
-          filterParameters.openAt = new Date(nlParams.openAt);
+          const parsedOpenAt = new Date(nlParams.openAt);
+          if (!isNaN(parsedOpenAt.getTime())) {
+            filterParameters.openAt = parsedOpenAt;
+          }
         }
         if (!gender && nlParams.gender) {
           filterParameters.eligibility[eligibilityParams.gender] = nlParams.gender;
