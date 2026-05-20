@@ -2013,6 +2013,69 @@ const nlQuerySchema = {
   },
 };
 
+const VALID_NL_GENDERS = new Set(['male', 'female']);
+const ZIPCODE_RE = /^\d{5}$/;
+const NL_MAX_AGE = 120;
+const NL_MAX_ZIPCODES = 20;
+const NL_MAX_TAXONOMY_NAMES = 10;
+const NL_MAX_STRING_LEN = 200;
+
+function sanitizeNlParams(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const str = (v) => (typeof v === 'string' ? v.slice(0, NL_MAX_STRING_LEN).trim() || null : null);
+  const bool = (v) => (typeof v === 'boolean' ? v : null);
+
+  const ageMin = (Number.isInteger(raw.ageMin) && raw.ageMin >= 0 && raw.ageMin <= NL_MAX_AGE)
+    ? raw.ageMin : null;
+  const ageMax = (Number.isInteger(raw.ageMax) && raw.ageMax >= 0 && raw.ageMax <= NL_MAX_AGE)
+    ? raw.ageMax : null;
+
+  let openAt = null;
+  if (typeof raw.openAt === 'string') {
+    const d = new Date(raw.openAt);
+    if (!isNaN(d.getTime())) openAt = raw.openAt;
+  }
+
+  let gender = null;
+  if (typeof raw.gender === 'string') {
+    const g = raw.gender.toLowerCase();
+    if (VALID_NL_GENDERS.has(g)) gender = g;
+  }
+
+  let zipcodes = null;
+  if (Array.isArray(raw.zipcodes)) {
+    const valid = raw.zipcodes
+      .filter(z => typeof z === 'string' && ZIPCODE_RE.test(z))
+      .slice(0, NL_MAX_ZIPCODES);
+    if (valid.length > 0) zipcodes = valid;
+  }
+
+  let taxonomyNames = null;
+  if (Array.isArray(raw.taxonomyNames)) {
+    const valid = raw.taxonomyNames
+      .filter(n => typeof n === 'string' && n.trim().length > 0)
+      .map(n => n.trim().slice(0, 100))
+      .slice(0, NL_MAX_TAXONOMY_NAMES);
+    if (valid.length > 0) taxonomyNames = valid;
+  }
+
+  return {
+    searchString: str(raw.searchString),
+    streetAddress: str(raw.streetAddress),
+    neighborhood: str(raw.neighborhood),
+    openAt,
+    gender,
+    membership: bool(raw.membership),
+    ageMin: (ageMin != null && ageMax != null && ageMin > ageMax) ? null : ageMin,
+    ageMax: (ageMin != null && ageMax != null && ageMin > ageMax) ? null : ageMax,
+    referralRequired: bool(raw.referralRequired),
+    photoIdRequired: bool(raw.photoIdRequired),
+    zipcodes,
+    taxonomyNames,
+  };
+}
+
 const nlQueryCache = new Map();
 const NL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -2050,7 +2113,8 @@ Extract the following fields if present in the query (return null for fields not
     response_format: nlQuerySchema,
   });
 
-  const result = JSON.parse(completion.choices[0].message.content);
+  const rawResult = JSON.parse(completion.choices[0].message.content);
+  const result = sanitizeNlParams(rawResult);
   nlQueryCache.set(cacheKey, { result, timestamp: Date.now() });
   return result;
 };
