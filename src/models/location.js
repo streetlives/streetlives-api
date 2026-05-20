@@ -349,13 +349,16 @@ module.exports = (sequelize, DataTypes, Op) => {
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
 
     const whereConditions = [];
+
+    // exclude closed locations if search string is specified
     if (searchString) {
       whereConditions.push(sequelize.where(
         // eslint-disable-next-line max-len
-        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\')'),
+        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\' AND eri.created_at <= NOW() - INTERVAL \'14 days\')'),
         true,
       ));
     }
+
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
@@ -708,6 +711,15 @@ module.exports = (sequelize, DataTypes, Op) => {
     } else {
       // Sort by locationIds order
       sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
+    }
+
+    if (filterParameters.searchString) {
+      const isClosedLocation = loc =>
+        loc.EventRelatedInfos && loc.EventRelatedInfos.some(e => e.event === 'COVID19');
+      sortedLocationsWithAssociations = [
+        ...sortedLocationsWithAssociations.filter(loc => !isClosedLocation(loc)),
+        ...sortedLocationsWithAssociations.filter(loc => isClosedLocation(loc)),
+      ];
     }
 
     return {
