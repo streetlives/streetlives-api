@@ -354,7 +354,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     if (searchString) {
       whereConditions.push(sequelize.where(
         // eslint-disable-next-line max-len
-        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\' AND eri.created_at <= NOW() - INTERVAL \'14 days\')'),
+        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\' AND eri.created_at <= NOW() - INTERVAL \'3 months\')'),
         true,
       ));
     }
