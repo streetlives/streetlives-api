@@ -103,6 +103,15 @@ export default {
         event: Joi.string().required(),
         information: Joi.string().required().allow(null),
       }),
+      streetview: Joi.object().keys({
+        pano_id: Joi.string().max(128).allow(null),
+        lat: Joi.number().min(-90).max(90).allow(null),
+        lng: Joi.number().min(-180).max(180).allow(null),
+        heading: Joi.number().min(0).max(360).allow(null),
+        pitch: Joi.number().min(-90).max(90).allow(null),
+        fov: Joi.number().integer().min(10).max(120)
+          .allow(null),
+      }).allow(null),
       metadata: updateMetadataSchema,
     }).required(),
   },
