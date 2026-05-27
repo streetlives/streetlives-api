@@ -2,6 +2,8 @@ import config from '../config';
 
 const nodemailer = require('nodemailer');
 
+const appUrl = config.appUrl || 'https://staging.yourpeer.nyc';
+
 function escapeHtml(input) {
   return String(input || '')
     .replace(/&/g, '&amp;')
@@ -94,8 +96,8 @@ ${whatWentWell ? `What went well: ${whatWentWell}` : ''}
 ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}”</div>
 
     <p>Want to keep the conversation going?</p>
-    <p>Click <a href="https://staging.yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
-    <p>(If you’re not logged in, click <a href="https://staging.yourpeer.nyc/login">here</a> to log in)</p>
+    <p>Click <a href="${appUrl}/locations/${locationSlug}#reviews">here</a> and "View All" to see your location’s reviews.</p>
+    <p>(If you’re not logged in, click <a href="${appUrl}/login">here</a> to log in)</p>
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>
@@ -183,7 +185,7 @@ async function replyEmail({
 
     <div class="comment-box">“${safeReplyContent}”</div>
 
-    <p>Click <a href="https://staging.yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see Your comment.</p>
+    <p>Click <a href="${appUrl}/locations/${locationSlug}#reviews">here</a> and "View All" to see your comment.</p>
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>

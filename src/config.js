@@ -37,6 +37,7 @@ export default {
       },
     },
   },
+  appUrl: process.env.APP_URL || '',
   mail: {
     host: process.env.MAIL_HOST,
     port: parseNumber(process.env.MAIL_PORT, 587),

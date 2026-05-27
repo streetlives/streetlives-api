@@ -123,7 +123,7 @@ export default {
               whatWentWell: extractedContent.whatWentWell,
               providersEmail: emails.join(','),
               locationSlug: location.slug,
-            }).catch(console.error);
+            }).catch(err => console.error('Error sending comment email:', err.message));
           }
         })
         .catch((err) => {
@@ -209,12 +209,11 @@ export default {
           toEmail: originalComment.contact_info,
           locationSlug: location.slug,
           replyContent: content,
-        }).catch(console.error);
+        }).catch(err => console.error('Error sending reply email:', err.message));
       }
 
       res.status(201)
         .send(postedReply);
-
       
     } catch (err) {
       next(err);
