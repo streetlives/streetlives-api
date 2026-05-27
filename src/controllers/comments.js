@@ -201,7 +201,7 @@ export default {
         },
       );
 
-      const location = await models.Location.findByPk(originalComment.location_id, { include: models.Organization });
+      const location = originalComment.Location;
 
       const contactEmail = originalComment.contact_info && originalComment.contact_info.trim();
       const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
