@@ -89,7 +89,6 @@ export default {
         locationId,
         content,
         postedBy,
-        contactInfo,
       } = req.body;
 
       const location = await models.Location.findByPk(locationId, { include: models.Organization });
@@ -100,7 +99,6 @@ export default {
       const postedComment = await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
-        contact_info: contactInfo,
       });
       const extractedContent = extractCommentContent(postedComment.content);
 

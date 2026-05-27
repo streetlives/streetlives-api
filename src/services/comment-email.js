@@ -67,14 +67,17 @@ const sharedCss = `
     }
 `;
 
-function buildEmailHtml({ title, header, bodyHtml, footerMessage }) {
+function buildEmailHtml({
+  title, header, bodyHtml, footerMessage,
+}) {
   return `
       <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>${title}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
   <style>
 ${sharedCss}
   </style>
@@ -97,31 +100,35 @@ ${sharedCss}
 }
 
 async function sendEmail({ to, subject, html }) {
-  console.log('sending mail...');
-  const info = await transport.sendMail({
+  await transport.sendMail({
     from: `"YourPeer Feedback" <${config.mail.from}>`,
     to,
     subject,
     html,
   });
-  console.log('Message sent: %s', info.messageId);
 }
 
 async function commentEmail({
   whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail, locationSlug,
 }) {
   const subject = '📝 You’ve Got a New Comment on YourPeer!';
+  const escapedName = escapeHtml(locationName);
+  const commentLines = [
+    servicesUsed ? `Services used: ${servicesUsed.map(escapeHtml).join(', ')}` : '',
+    whatWentWell ? `What went well: ${escapeHtml(whatWentWell)}` : '',
+    whatCouldBeImproved ? `What could be improved: ${escapeHtml(whatCouldBeImproved)}` : '',
+  ].filter(Boolean).join('\n');
+  const safeSlug = encodeURIComponent(locationSlug);
   const bodyHtml = `
-    <p>Hi <strong>${locationName}</strong>,</p>
-    <p>Someone just left you a new comment on YourPeer. Here's what they shared:</p>
+    <p>Hi <strong>${escapedName}</strong>,</p>
+    <p>Someone just left you a new comment on YourPeer. Here’s what they shared:</p>
 
-    <div class="comment-box">"${servicesUsed ? `Services used: ${servicesUsed.join(', ')}` : ''}
-${whatWentWell ? `What went well: ${whatWentWell}` : ''}
-${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}"</div>
+    <div class="comment-box">"${commentLines}"</div>
 
     <p>Want to keep the conversation going?</p>
-    <p>Click <a href="${appUrl}/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
-    <p>(If you're not logged in, click <a href="${appUrl}/login">here</a> to log in)</p>
+    <p>Click <a href="${appUrl}/locations/${safeSlug}#reviews">here</a>
+    and "View All" to see your location’s reviews.</p>
+    <p>(If you’re not logged in, click <a href="${appUrl}/login">here</a> to log in)</p>
   `;
 
   await sendEmail({
@@ -136,19 +143,23 @@ ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}"<
   });
 }
 
-async function replyEmail({ locationName, toEmail, locationSlug, replyContent }) {
+async function replyEmail({
+  locationName, toEmail, locationSlug, replyContent,
+}) {
   if (!toEmail || !/^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(toEmail)) {
     throw new Error('Invalid recipient email address');
   }
 
   const subject = '📝 A provider replied to your comment on YourPeer!';
+  const safeSlug = encodeURIComponent(locationSlug);
   const bodyHtml = `
     <p>Hi,</p>
     <p>A provider has replied to your comment on YourPeer. Here's what they shared:</p>
 
     <div class="comment-box">"${escapeHtml(replyContent)}"</div>
 
-    <p>Click <a href="${appUrl}/locations/${locationSlug}#reviews">here</a> and "View All" to see your comment.</p>
+    <p>Click <a href="${appUrl}/locations/${safeSlug}#reviews">here</a>
+    and "View All" to see your comment.</p>
   `;
 
   await sendEmail({

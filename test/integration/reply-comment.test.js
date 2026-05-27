@@ -28,7 +28,7 @@ jest.mock('../../src/models', () => ({
   __esModule: true,
   default: {
     Comment: { findByPk: jest.fn() },
-    Location: {},
+    Location: { findByPk: jest.fn() },
     Organization: {},
   },
 }));
@@ -77,6 +77,41 @@ function makeRes() {
   res.send = jest.fn().mockReturnValue(res);
   return res;
 }
+
+describe('comments.create — consent: contact_info must not be persisted', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const mockLocation = {
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      slug: LOCATION_SLUG,
+      organization_id: ORG_ID,
+      Organization: { id: ORG_ID, name: 'Test Shelter' },
+      createComment: jest.fn().mockResolvedValue({}),
+    };
+    models.Location.findByPk.mockResolvedValue(mockLocation);
+    createInstance.mockResolvedValue({ id: 'comment-1', content: '{}' });
+  });
+
+  it('does not persist contact_info when creating a comment', async () => {
+    const req = {
+      body: {
+        locationId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        content: '{}',
+        postedBy: 'Anonymous',
+        contactInfo: 'should-be-ignored@example.com',
+      },
+      user: 'test-user',
+    };
+    const res = makeRes();
+    await commentsController.create(req, res, jest.fn());
+
+    expect(createInstance).toHaveBeenCalledWith(
+      'test-user',
+      expect.any(Function),
+      expect.not.objectContaining({ contact_info: expect.anything() }),
+    );
+  });
+});
 
 describe('comments.reply — email side-effects', () => {
   beforeEach(() => {
