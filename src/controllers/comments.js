@@ -203,10 +203,12 @@ export default {
 
       const location = await models.Location.findByPk(originalComment.location_id, { include: models.Organization });
 
-      if (originalComment.contact_info && location) {
+      const contactEmail = originalComment.contact_info && originalComment.contact_info.trim();
+      const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
+      if (isValidEmail && location) {
         replyEmail({
           locationName: location.Organization ? location.Organization.name : '',
-          toEmail: originalComment.contact_info,
+          toEmail: contactEmail,
           locationSlug: location.slug,
           replyContent: content,
         }).catch(err => console.error('Error sending reply email:', err.message));

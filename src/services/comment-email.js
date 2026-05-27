@@ -117,6 +117,9 @@ ${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}â€
 async function replyEmail({
   locationName, toEmail, locationSlug, replyContent
 }) {
+  if (!toEmail || !/^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(toEmail)) {
+    throw new Error('Invalid recipient email address');
+  }
   const safeReplyContent = escapeHtml(replyContent);
   console.log('sending mail...');
   // send mail with defined transport object
