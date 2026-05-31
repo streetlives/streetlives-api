@@ -268,7 +268,8 @@ export default {
 
       const formattedLocations = plainLocations.map((location) => {
         const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+        // NOTE: to determine if a location is closed, we are only checking for COVID19-related EventRelatedInfos, but this logic may need to be expanded in the future to check for other types of EventRelatedInfos or Service-related information
+        const closed = isLocationClosed('COVID19', EventRelatedInfos, Services);
 
         if (locationFieldsOnly) {
           return {
@@ -282,6 +283,7 @@ export default {
           closed,
         };
       });
+      
       if (pageNumber !== undefined && pageSize !== undefined) {
         res.setHeader('Pagination-Count', paginationCount);
         res.setHeader('Total-Count', totalNumLocations);
