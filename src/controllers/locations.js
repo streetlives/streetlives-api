@@ -16,13 +16,13 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
 
-const isLocationClosed = (occasion, eventRelatedInfos, services) => {
-  if (!occasion) {
+const CLOSURE_EVENT_TYPE = 'CLOSURE';
+
+const isLocationClosed = (eventRelatedInfos) => {
+  if (!eventRelatedInfos) {
     return false;
   }
-  const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
-  eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
-  return hasCOVIDEventRelatedInfo;
+  return eventRelatedInfos.some(info => info.event === CLOSURE_EVENT_TYPE);
 };
 
 // Get location and service associations separately to reduce SQL size
@@ -116,9 +116,7 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
   };
 
   const { EventRelatedInfos } = location;
-  // FIXME: we should not be hard-coding the COVID19 event here
-  // this is logic that needs ot be revisited in this codebase
-  const closed = isLocationClosed('COVID19', EventRelatedInfos, services);
+  const closed = isLocationClosed(EventRelatedInfos);
 
   if (excludeMetadata) {
     const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
@@ -267,9 +265,9 @@ export default {
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
       const formattedLocations = plainLocations.map((location) => {
-        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        // NOTE: to determine if a location is closed, we are only checking for COVID19-related EventRelatedInfos, but this logic may need to be expanded in the future to check for other types of EventRelatedInfos or Service-related information
-        const closed = isLocationClosed('COVID19', EventRelatedInfos, Services);
+        // eslint-disable-next-line no-unused-vars
+        const { EventRelatedInfos, Services: _Services, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(EventRelatedInfos);
 
         if (locationFieldsOnly) {
           return {
@@ -283,7 +281,7 @@ export default {
           closed,
         };
       });
-      
+
       if (pageNumber !== undefined && pageSize !== undefined) {
         res.setHeader('Pagination-Count', paginationCount);
         res.setHeader('Total-Count', totalNumLocations);
