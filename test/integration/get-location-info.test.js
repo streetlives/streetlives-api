@@ -97,4 +97,42 @@ describe('get location info', () => {
       .get(`/locations/${nonExistentLocationId}`)
       .expect(404);
   });
+
+  describe('closed flag', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: { location_id: location.id } }));
+
+    it('should return closed: false when location has no events', () =>
+      request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200)
+        .then(res => expect(res.body.closed).toBe(false)));
+
+    it('should return closed: true when location has a CLOSURE event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: location.id,
+      });
+
+      const res = await request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200);
+
+      expect(res.body.closed).toBe(true);
+    });
+
+    it('should return closed: false when location only has a COVID19 event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'COVID19',
+        information: 'COVID-19 related information',
+        location_id: location.id,
+      });
+
+      const res = await request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200);
+
+      expect(res.body.closed).toBe(false);
+    });
+  });
 });
