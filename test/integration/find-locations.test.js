@@ -1093,4 +1093,74 @@ describe('find locations', () => {
         .query(qs.stringify({ zipcodes: [] }))
         .then(res => expect(res.body.length).toBeGreaterThan(0)));
   });
+
+  describe('closed flag in list response', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    it('should return closed: false for locations without a CLOSURE event', () =>
+      request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200)
+        .then((res) => {
+          const primary = res.body.find(l => l.name === primaryLocation.name);
+          expect(primary).toBeDefined();
+          expect(primary.closed).toBe(false);
+        }));
+
+    it('should return closed: true for a location with a CLOSURE event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+
+      const other = res.body.find(l => l.name === otherServiceLocation.name);
+      expect(other).toBeDefined();
+      expect(other.closed).toBe(false);
+    });
+
+    it('should return closed: false when location only has a COVID19 event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'COVID19',
+        information: 'COVID-19 related information',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(false);
+    });
+
+    it('should include closed flag in paginated responses', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
+  });
 });
