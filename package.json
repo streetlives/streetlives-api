@@ -93,7 +93,7 @@
         "testMatch": ["<rootDir>/test/integration/**/*.test.js"],
         "setupFilesAfterEnv": ["<rootDir>/test/setup.js"]
       }
-    ]
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/test/setup.js"
     ],
