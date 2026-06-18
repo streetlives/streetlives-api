@@ -494,10 +494,13 @@ export default {
     };
 
     const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata, transaction) => {
-      await models.EventRelatedInfo.destroy({
+      const existing = await models.EventRelatedInfo.findOne({
         where: { location_id: location.id, event: eventRelatedInfo.event },
         transaction,
       });
+      if (existing) {
+        await destroyInstance(req.user, existing, { metadata, transaction });
+      }
 
       if (eventRelatedInfo.information) {
         const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
@@ -584,11 +587,7 @@ export default {
         await Promise.all(updatePromises);
       });
 
-      const updatedLocation = await models.Location.findByPk(locationId, {
-        include: [models.Streetview],
-      });
-
-      res.send(updatedLocation);
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
