@@ -494,13 +494,11 @@ export default {
     };
 
     const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata, transaction) => {
-      const existing = await models.EventRelatedInfo.findOne({
+      const existing = await models.EventRelatedInfo.findAll({
         where: { location_id: location.id, event: eventRelatedInfo.event },
         transaction,
       });
-      if (existing) {
-        await destroyInstance(req.user, existing, { metadata, transaction });
-      }
+      await Promise.all(existing.map(row => destroyInstance(req.user, row, { metadata, transaction })));
 
       if (eventRelatedInfo.information) {
         const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
