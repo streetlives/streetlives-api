@@ -520,7 +520,7 @@ export default {
 
       if (streetviewData === null) {
         if (existing) {
-          await destroyInstance(req.user, existing, { transaction });
+          await destroyInstance(req.user, existing, { metadata, transaction });
         }
         return;
       }

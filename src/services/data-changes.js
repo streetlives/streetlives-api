@@ -90,12 +90,15 @@ export const updateInstance = async (user, instance, values, options = {}) =>
 
 export const destroyInstance = (user, instance, options = {}) =>
   startTransactionOrUseExisting(async (t) => {
+    const { metadata = {} } = options;
+
     await instance.destroy({ transaction: t });
 
     await instance.createMetadatum({
       resource_id: instance.id,
-      last_action_date: new Date(),
+      last_action_date: metadata.lastUpdated || new Date(),
       last_action_type: actionTypes.delete,
       updated_by: user,
+      source: metadata.source,
     }, { transaction: t });
   }, options);
