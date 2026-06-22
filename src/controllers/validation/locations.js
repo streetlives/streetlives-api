@@ -27,6 +27,7 @@ export default {
         .max(1000),
       searchString: Joi.string().allow(''),
       organizationName: Joi.string().min(3),
+      noServices: Joi.boolean(),
       zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),

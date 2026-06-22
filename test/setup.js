@@ -7,7 +7,25 @@ process.env.DATABASE_NAME = 'test';
 process.env.DATABASE_LOGGING = 'false';
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-key-placeholder';
 
-const models = require('../src/models');
+jest.mock('openai', () => function OpenAI() {
+  return {
+    chat: {
+      completions: {
+        create: jest.fn(),
+      },
+    },
+  };
+});
+
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+  CognitoIdentityProviderClient: jest.fn(() => ({
+    send: jest.fn(),
+  })),
+  ListUsersCommand: jest.fn(),
+}));
+
+const unitTestRun = process.argv.some(arg => arg.includes('test/unit'));
+const models = unitTestRun ? null : require('../src/models');
 
 async function execScript(script) {
   // run the migrations
@@ -26,6 +44,10 @@ async function execScript(script) {
 }
 
 beforeAll(async () => {
+  if (unitTestRun) {
+    return;
+  }
+
   // reset the database state
   await models.sequelize.query(`
     DO $$
@@ -54,6 +76,10 @@ beforeAll(async () => {
   await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
 });
 afterAll(async () => {
+  if (unitTestRun) {
+    return;
+  }
+
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate:undo --name 20240607172205-age-filter');
   await models.sequelize.close();

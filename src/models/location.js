@@ -565,6 +565,9 @@ module.exports = (sequelize, DataTypes, Op) => {
       totalNumLocations = (await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition],
+        {},
+        null,
+        noServices,
       )).length;
 
       locationIds = await Location.findUniqueLocationIds(
@@ -585,7 +588,13 @@ module.exports = (sequelize, DataTypes, Op) => {
       // aren't natively supported by sequelize and would require a raw query.
       // For now, the simplicity and security of sequelize seems worth the slight performance hit.
       if (minResults && locationIds.length < minResults) {
-        totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
+        totalNumLocations = (await Location.findUniqueLocationIds(
+          filterParameters,
+          [],
+          {},
+          null,
+          noServices,
+        )).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
           order,
           limit: minResults,
@@ -593,12 +602,18 @@ module.exports = (sequelize, DataTypes, Op) => {
         }, selectedAttributeForOrderBy, noServices);
       }
     } else {
-      totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
+      totalNumLocations = (await Location.findUniqueLocationIds(
+        filterParameters,
+        [],
+        {},
+        null,
+        noServices,
+      )).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         limit,
         offset,
         order,
-      }, selectedAttributeForOrderBy);
+      }, selectedAttributeForOrderBy, noServices);
     }
 
     const additionalLocationData = locationFieldsOnly ? [
