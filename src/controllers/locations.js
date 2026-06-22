@@ -78,6 +78,7 @@ const getNeighborhoodAttributeSubquery = {
               nyc_neighborhood_geometries.geometry,
               ST_SetSRID(position,4326)
             )
+            LIMIT 1
         )`),
         'neighborhood',
       ],
