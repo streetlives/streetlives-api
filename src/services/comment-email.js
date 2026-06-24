@@ -2,7 +2,17 @@ import config from '../config';
 
 const nodemailer = require('nodemailer');
 
-// Looking to send emails in production? Check out our Email API/SMTP product!
+const appUrl = config.appUrl || 'https://staging.yourpeer.nyc';
+
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const transport = nodemailer.createTransport({
   host: config.mail.host,
   port: config.mail.port,
@@ -12,23 +22,7 @@ const transport = nodemailer.createTransport({
   },
 });
 
-async function commentEmail({
-  whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail, locationSlug,
-}) {
-  console.log('sending mail...');
-  // send mail with defined transport object
-  const info = await transport.sendMail({
-    from: `"YourPeer Feedback" <${config.mail.from}>`, // sender address
-    to: providersEmail, // list of receivers
-    subject: '📝 You’ve Got a New Comment on YourPeer!', // Subject line
-    html: `
-      <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>You’ve Got a New Comment on YourPeer!</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <style>
+const sharedCss = `
     body {
       margin: 0;
       padding: 0;
@@ -71,38 +65,115 @@ async function commentEmail({
       color: #6b7280;
       line-height: 1.6;
     }
+`;
+
+function buildEmailHtml({
+  title, header, bodyHtml, footerMessage,
+}) {
+  return `
+      <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
+  <style>
+${sharedCss}
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">📝 You’ve Got a New Comment on YourPeer!</div>
+    <div class="header">${header}</div>
 
-    <p>Hi <strong>${locationName}</strong>,</p>
-    <p>Someone just left you a new comment on YourPeer. Here’s what they shared:</p>
-
-    <div class="comment-box">“${servicesUsed ? `Services used: ${servicesUsed.join(', ')}` : ''}
-${whatWentWell ? `What went well: ${whatWentWell}` : ''}
-${whatCouldBeImproved ? `What could be improved: ${whatCouldBeImproved}` : ''}”</div>
-
-    <p>Want to keep the conversation going?</p>
-    <p>Click <a href="https://staging.yourpeer.nyc/locations/${locationSlug}#reviews">here</a> and "View All" to see your location's reviews.</p>
-    <p>(If you’re not logged in, click <a href="https://staging.yourpeer.nyc/login">here</a> to log in)</p>
+    ${bodyHtml}
 
     <div class="footer">
       <p>If you have any questions or need support, feel free to reach out to us at <a href="mailto:team@streetlives.nyc">team@streetlives.nyc</a>.</p>
-      <p>Thanks for being part of the YourPeer community!</p>
+      <p>${footerMessage}</p>
       <p>—<br>The YourPeer Team<br>Powered by Streetlives</p>
     </div>
   </div>
 </body>
 </html>
-    `,
-  });
-
-  console.log('Message sent: %s', info.messageId);
-  // Message sent: <d786aa62-4e0a-070a-47ed-0b0666549519@ethereal.email>
+    `;
 }
 
-export default commentEmail;
+async function sendEmail({ to, subject, html }) {
+  await transport.sendMail({
+    from: `"YourPeer Feedback" <${config.mail.from}>`,
+    to,
+    subject,
+    html,
+  });
+}
 
-// main().catch(console.error);
+async function commentEmail({
+  whatCouldBeImproved, whatWentWell, servicesUsed, locationName, providersEmail, locationSlug,
+}) {
+  const subject = '📝 You’ve Got a New Comment on YourPeer!';
+  const escapedName = escapeHtml(locationName);
+  const commentLines = [
+    servicesUsed ? `Services used: ${servicesUsed.map(escapeHtml).join(', ')}` : '',
+    whatWentWell ? `What went well: ${escapeHtml(whatWentWell)}` : '',
+    whatCouldBeImproved ? `What could be improved: ${escapeHtml(whatCouldBeImproved)}` : '',
+  ].filter(Boolean).join('\n');
+  const safeSlug = encodeURIComponent(locationSlug);
+  const bodyHtml = `
+    <p>Hi <strong>${escapedName}</strong>,</p>
+    <p>Someone just left you a new comment on YourPeer. Here’s what they shared:</p>
+
+    <div class="comment-box">"${commentLines}"</div>
+
+    <p>Want to keep the conversation going?</p>
+    <p>Click <a href="${appUrl}/locations/${safeSlug}#reviews">here</a>
+    and "View All" to see your location’s reviews.</p>
+    <p>(If you’re not logged in, click <a href="${appUrl}/login">here</a> to log in)</p>
+  `;
+
+  await sendEmail({
+    to: providersEmail,
+    subject,
+    html: buildEmailHtml({
+      title: 'You’ve Got a New Comment on YourPeer!',
+      header: `📝 ${subject}`,
+      bodyHtml,
+      footerMessage: 'Thanks for being part of the YourPeer community!',
+    }),
+  });
+}
+
+async function replyEmail({
+  locationName, toEmail, locationSlug, replyContent,
+}) {
+  if (!toEmail || !/^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(toEmail)) {
+    throw new Error('Invalid recipient email address');
+  }
+
+  const subject = '📝 A provider replied to your comment on YourPeer!';
+  const safeSlug = encodeURIComponent(locationSlug);
+  const bodyHtml = `
+    <p>Hi,</p>
+    <p>A provider has replied to your comment on YourPeer. Here's what they shared:</p>
+
+    <div class="comment-box">"${escapeHtml(replyContent)}"</div>
+
+    <p>Click <a href="${appUrl}/locations/${safeSlug}#reviews">here</a>
+    and "View All" to see your comment.</p>
+  `;
+
+  await sendEmail({
+    to: toEmail,
+    subject,
+    html: buildEmailHtml({
+      title: 'A provider replied to your comment on YourPeer!',
+      header: subject,
+      bodyHtml,
+      footerMessage: 'Thanks for using YourPeer!',
+    }),
+  });
+}
+
+export { replyEmail };
+
+export default commentEmail;

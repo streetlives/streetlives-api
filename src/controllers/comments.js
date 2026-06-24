@@ -5,7 +5,7 @@ import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { regenerateHighlightsForLocation } from './comment-highlights';
-import commentEmail from '../services/comment-email';
+import commentEmail, { replyEmail } from '../services/comment-email';
 import { extractCommentContent } from '../utils/helpers';
 
 import {
@@ -89,7 +89,6 @@ export default {
         locationId,
         content,
         postedBy,
-        contactInfo,
       } = req.body;
 
       const location = await models.Location.findByPk(locationId, { include: models.Organization });
@@ -100,7 +99,6 @@ export default {
       const postedComment = await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
-        contact_info: contactInfo,
       });
       const extractedContent = extractCommentContent(postedComment.content);
 
@@ -123,7 +121,7 @@ export default {
               whatWentWell: extractedContent.whatWentWell,
               providersEmail: emails.join(','),
               locationSlug: location.slug,
-            }).catch(console.error);
+            }).catch(err => console.error('Error sending comment email:', err.message));
           }
         })
         .catch((err) => {
@@ -201,8 +199,22 @@ export default {
         },
       );
 
+      const location = originalComment.Location;
+
+      const contactEmail = originalComment.contact_info && originalComment.contact_info.trim();
+      const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
+      if (isValidEmail && location) {
+        replyEmail({
+          locationName: location.Organization ? location.Organization.name : '',
+          toEmail: contactEmail,
+          locationSlug: location.slug,
+          replyContent: content,
+        }).catch(err => console.error('Error sending reply email:', err.message));
+      }
+
       res.status(201)
         .send(postedReply);
+      
     } catch (err) {
       next(err);
     }

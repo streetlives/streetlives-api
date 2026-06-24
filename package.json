@@ -83,6 +83,17 @@
     "test"
   ],
   "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "testMatch": ["<rootDir>/test/unit/**/*.test.js"]
+      },
+      {
+        "displayName": "integration",
+        "testMatch": ["<rootDir>/test/integration/**/*.test.js"],
+        "setupFilesAfterEnv": ["<rootDir>/test/setup.js"]
+      }
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/test/setup.js"
     ],
