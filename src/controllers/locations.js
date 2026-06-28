@@ -249,7 +249,7 @@ export default {
       }
 
       if (nlParams) {
-        if (!searchString && nlParams.searchString) {
+        if (!filterParameters.searchString && nlParams.searchString) {
           filterParameters.searchString = nlParams.searchString;
         }
         if (!openAt && nlParams.openAt) {
@@ -296,7 +296,7 @@ export default {
             filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(matchedIds);
           }
         }
-      } else if (naturalLanguageQuery && !searchString) {
+      } else if (naturalLanguageQuery && !filterParameters.searchString) {
         filterParameters.searchString = naturalLanguageQuery.trim();
       }
 
