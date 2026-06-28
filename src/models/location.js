@@ -143,7 +143,6 @@ module.exports = (sequelize, DataTypes, Op) => {
   );
 
   const getTaxonomyCondition = (taxonomyIds) => {
-    console.log('taxonomyIds', taxonomyIds);
     return {
     '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
   }
@@ -350,11 +349,11 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     const whereConditions = [];
 
-    // exclude closed locations if search string is specified
+    // exclude locations that closed for more than 3 months if search string is specified
     if (searchString) {
       whereConditions.push(sequelize.where(
         // eslint-disable-next-line max-len
-        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'COVID19\' AND eri.created_at <= NOW() - INTERVAL \'3 months\')'),
+        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'CLOSURE\' AND eri.created_at <= NOW() - INTERVAL \'3 months\')'),
         true,
       ));
     }
