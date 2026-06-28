@@ -753,8 +753,7 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     if (filterParameters.searchString) {
       const isClosedLocation = loc =>
-        loc.EventRelatedInfos && loc.EventRelatedInfos.some(e => e.event === 'COVID19');
-      sortedLocationsWithAssociations = [
+        loc.EventRelatedInfos && loc.EventRelatedInfos.some(e => e.event === 'CLOSURE'); sortedLocationsWithAssociations = [
         ...sortedLocationsWithAssociations.filter(loc => !isClosedLocation(loc)),
         ...sortedLocationsWithAssociations.filter(loc => isClosedLocation(loc)),
       ];
