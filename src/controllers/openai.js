@@ -2078,12 +2078,89 @@ function sanitizeNlParams(raw) {
 
 const nlQueryCache = new Map();
 const NL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const NL_CACHE_MAX_ENTRIES = 1000; // bound memory: this endpoint is public
+
+// Insert into the (insertion-ordered) cache, evicting the oldest entries once
+// the cap is reached so a flood of unique queries can't grow the map unbounded.
+function nlCacheSet(key, value) {
+  nlQueryCache.delete(key);
+  nlQueryCache.set(key, value);
+  while (nlQueryCache.size > NL_CACHE_MAX_ENTRIES) {
+    const oldestKey = nlQueryCache.keys().next().value;
+    nlQueryCache.delete(oldestKey);
+  }
+}
+
+// ---- Abuse / availability controls around the (paid) OpenAI call ----
+// This endpoint is public and each uncached query costs money + latency, so we
+// guard the upstream call with a timeout, a global rate cap, a concurrency cap
+// and a circuit breaker. When any guard trips we return null, which the caller
+// treats as "no structured params" and falls back to a plain keyword search.
+
+const NL_REQUEST_TIMEOUT_MS = 8000; // hard per-call timeout (overrides SDK default)
+const NL_MAX_RETRIES = 1; // bound retry amplification of the upstream cost
+
+// Fixed-window global rate limit (cost control across all callers).
+const NL_RATE_WINDOW_MS = 60 * 1000;
+const NL_RATE_MAX_REQUESTS = 60; // max uncached OpenAI calls per window
+let nlWindowStart = Date.now();
+let nlWindowCount = 0;
+
+// Concurrency cap: prevents a burst from piling up in-flight upstream requests.
+const NL_MAX_CONCURRENT = 10;
+let nlInFlight = 0;
+
+// Circuit breaker: stop hammering OpenAI while it is failing.
+const NL_CB_FAILURE_THRESHOLD = 5;
+const NL_CB_OPEN_MS = 60 * 1000;
+let nlCbFailures = 0;
+let nlCbOpenedAt = 0;
+
+const nlCircuitOpen = () => nlCbOpenedAt > 0 && (Date.now() - nlCbOpenedAt) < NL_CB_OPEN_MS;
+
+const nlRecordSuccess = () => {
+  nlCbFailures = 0;
+  nlCbOpenedAt = 0;
+};
+
+const nlRecordFailure = () => {
+  nlCbFailures += 1;
+  if (nlCbFailures >= NL_CB_FAILURE_THRESHOLD) {
+    nlCbOpenedAt = Date.now();
+    console.warn(`NL query: circuit breaker opened after ${nlCbFailures} consecutive failures`);
+  }
+};
+
+const nlAllowInWindow = () => {
+  const now = Date.now();
+  if (now - nlWindowStart >= NL_RATE_WINDOW_MS) {
+    nlWindowStart = now;
+    nlWindowCount = 0;
+  }
+  if (nlWindowCount >= NL_RATE_MAX_REQUESTS) return false;
+  nlWindowCount += 1;
+  return true;
+};
 
 export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
   const cacheKey = query.toLowerCase().trim();
   const cached = nlQueryCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < NL_CACHE_TTL_MS) {
     return cached.result;
+  }
+
+  // Skip the upstream call (fall back to keyword search) when a guard trips.
+  if (nlCircuitOpen()) {
+    console.warn('NL query: circuit breaker open, skipping OpenAI call');
+    return null;
+  }
+  if (nlInFlight >= NL_MAX_CONCURRENT) {
+    console.warn('NL query: concurrency cap reached, skipping OpenAI call');
+    return null;
+  }
+  if (!nlAllowInWindow()) {
+    console.warn('NL query: rate limit reached, skipping OpenAI call');
+    return null;
   }
 
   const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
@@ -2104,19 +2181,31 @@ Extract the following fields if present in the query (return null for fields not
 - zipcodes: a 5-digit NYC zip code string if mentioned, otherwise null
 - taxonomyNames: an array of taxonomy names that match the user's query, or null if not applicable. Available top-level taxonomies: Food, Clothing, Personal Care, Shelter, Health, Other service. Available sub-taxonomies: Mental Health, Substance Use Treatment, General Health, Support Groups (under Health); Pets, Education, Employment, Legal Services, Immigration Services, Internship (under Other service); Interview-Ready Clothing, Baby Supplies, Thrift Shop, Coat Drive, Professional Clothing (under Clothing); Food Benefits, Food Delivery / Meals on Wheels, Appliances (under Food); Gym, Baby, Hygiene, Community Services, Activities (under Personal Care); Drop-in Center, Intake, Senior, Transitional Independent Living (TIL), Housing Lottery, Supportive Housing, Residential Recovery, Cooling Center, Referral, Youth, Warming Center, Veterans (under Shelter). Use the most specific matching taxonomy. For example "food" -> ["Food"], "men's shelter" -> ["Shelter"], "mental health support" -> ["Mental Health", "Support Groups"], "drug rehab" -> ["Substance Use Treatment"]`;
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: query },
-    ],
-    response_format: nlQuerySchema,
-  });
+  nlInFlight += 1;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query },
+      ],
+      response_format: nlQuerySchema,
+    }, {
+      timeout: NL_REQUEST_TIMEOUT_MS,
+      maxRetries: NL_MAX_RETRIES,
+    });
 
-  const rawResult = JSON.parse(completion.choices[0].message.content);
-  const result = sanitizeNlParams(rawResult);
-  nlQueryCache.set(cacheKey, { result, timestamp: Date.now() });
-  return result;
+    const rawResult = JSON.parse(completion.choices[0].message.content);
+    const result = sanitizeNlParams(rawResult);
+    nlCacheSet(cacheKey, { result, timestamp: Date.now() });
+    nlRecordSuccess();
+    return result;
+  } catch (err) {
+    nlRecordFailure();
+    throw err;
+  } finally {
+    nlInFlight -= 1;
+  }
 };
 
 export default getCommentsHighlights;
