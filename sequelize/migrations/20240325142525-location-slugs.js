@@ -62,12 +62,9 @@ module.exports = {
 
       // add support for manually-set neighborhood name for each physical location
       // add neighborhood field to physical_addresses table
-      .then(() =>
-        (!isTesting ?
-          queryInterface.addColumn('physical_addresses', 'neighborhood', {
-            type: Sequelize.DataTypes.STRING,
-          }) :
-          new Promise(resolve => resolve())))
+      .then(() => queryInterface.addColumn('physical_addresses', 'neighborhood', {
+        type: Sequelize.DataTypes.STRING,
+      }))
       // initialize new physical_address.neighborhood field from the spreadsheet
       .then(() => Promise.all(Object.entries(mergedNeighborhoodNamesByLocationId)
         .map(([locationId, neighborhood]) =>
