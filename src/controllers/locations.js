@@ -111,7 +111,6 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
       state: address.state_province,
       postalCode: address.postal_code,
       country: address.country,
-      neighborhood: address.neighborhood,
     },
   };
 
