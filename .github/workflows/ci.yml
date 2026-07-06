@@ -41,4 +41,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Ensure required Postgres extensions
+        run: psql -h localhost -U streetlives -d test -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;"
+        env:
+          PGPASSWORD: password
       - run: npm test
