@@ -2,9 +2,9 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     return queryInterface.createTable('comment_likes', {
       id: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.DataTypes.UUID,
         primaryKey: true,
-        autoIncrement: true,
+        defaultValue: Sequelize.DataTypes.UUIDV4,
         allowNull: false,
       },
       comment_id: {

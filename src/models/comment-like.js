@@ -2,10 +2,9 @@
 module.exports = (sequelize, DataTypes) => {
   const CommentLike = sequelize.define('CommentLike', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       primaryKey: true,
-      autoIncrement: true,
-      allowNull: false,
+      defaultValue: DataTypes.UUIDV4,
     },
     comment_id: {
       type: DataTypes.UUID,
