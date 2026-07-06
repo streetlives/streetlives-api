@@ -92,7 +92,10 @@
         "moduleNameMapper": {
           "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
           "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-        }
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
       },
       {
         "displayName": "integration",
@@ -105,7 +108,10 @@
         "moduleNameMapper": {
           "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
           "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-        }
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
       }
     ],
     "setupFilesAfterEnv": [
@@ -114,6 +120,9 @@
     "moduleNameMapper": {
       "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
       "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-    }
+    },
+    "setupFiles": [
+      "<rootDir>/test/env.js"
+    ]
   }
 }

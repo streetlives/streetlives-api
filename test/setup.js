@@ -3,9 +3,7 @@ const exec = util.promisify(require('child_process').exec);
 
 jest.setTimeout(10000);
 
-process.env.DATABASE_NAME = 'test';
-process.env.DATABASE_LOGGING = 'false';
-process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-key-placeholder';
+require('./env');
 
 const models = require('../src/models');
 
@@ -46,6 +44,10 @@ beforeAll(async () => {
   //  await models.sequelize.query(`drop table ${table} cascade`);
   // }
 
+  await models.sequelize.query('DROP TYPE IF EXISTS age_eligibility CASCADE');
+
+  await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch');
+
   await models.sequelize.sync({ force: true });
 
   // `sequelize.sync()` creates services.description_vector as a plain,
@@ -75,7 +77,5 @@ beforeAll(async () => {
   await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
 });
 afterAll(async () => {
-  // eslint-disable-next-line no-implied-eval
-  await execScript('npx sequelize-cli db:migrate:undo --name 20240607172205-age-filter');
   await models.sequelize.close();
 });
