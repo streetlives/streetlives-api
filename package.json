@@ -15,7 +15,7 @@
     "start": "NODE_ENV=production node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
-    "test": "NODE_ENV=test jest --runInBand --coverage",
+    "test": "NODE_ENV=test jest --runInBand --coverage --forceExit",
     "test:watch": "NODE_ENV=test jest --watch --runInBand",
     "build-zip": "npm run build && (cd dist; zip -r ../`date +%Y-%m-%d`-streetlives-api-`git rev-parse --short HEAD`.zip *)",
     "config": "node ./scripts/configure.js",
@@ -92,7 +92,10 @@
         "moduleNameMapper": {
           "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
           "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-        }
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
       },
       {
         "displayName": "integration",
@@ -105,7 +108,10 @@
         "moduleNameMapper": {
           "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
           "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-        }
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
       }
     ],
     "setupFilesAfterEnv": [
@@ -114,6 +120,9 @@
     "moduleNameMapper": {
       "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
       "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
-    }
+    },
+    "setupFiles": [
+      "<rootDir>/test/env.js"
+    ]
   }
 }
