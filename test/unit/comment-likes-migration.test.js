@@ -1,14 +1,14 @@
 const migration = require('../../sequelize/migrations/20250209132813-create_comment_likes_table');
 
 describe('comment-likes migration', () => {
-  it('creates comment_likes.id as a UUID to match existing databases', async () => {
+  it('creates comment_likes.id as an integer to match production', async () => {
     const queryInterface = {
       createTable: jest.fn(() => Promise.resolve()),
     };
     const Sequelize = {
+      INTEGER: 'INTEGER',
       DataTypes: {
         UUID: 'UUID',
-        UUIDV4: 'UUIDV4',
       },
       STRING: jest.fn(length => `STRING(${length})`),
     };
@@ -19,9 +19,9 @@ describe('comment-likes migration', () => {
       'comment_likes',
       expect.objectContaining({
         id: {
-          type: Sequelize.DataTypes.UUID,
+          type: Sequelize.INTEGER,
           primaryKey: true,
-          defaultValue: Sequelize.DataTypes.UUIDV4,
+          autoIncrement: true,
           allowNull: false,
         },
       }),
