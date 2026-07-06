@@ -35,6 +35,7 @@ beforeAll(async () => {
         p.tablename = t.table_name and p.schemaname = t.table_schema
         where table_schema = 'public' and 
           table_type='BASE TABLE' and p.tableowner = 'streetlives'
+          and t.table_name != 'spatial_ref_sys'
       LOOP
         EXECUTE format('drop table %I cascade',_table.table_name);
       END LOOP;
@@ -45,6 +46,8 @@ beforeAll(async () => {
   // }
 
   await models.sequelize.query('DROP TYPE IF EXISTS age_eligibility CASCADE');
+
+  await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS postgis');
 
   await models.sequelize.query('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch');
 
