@@ -48,6 +48,27 @@ beforeAll(async () => {
 
   await models.sequelize.sync({ force: true });
 
+  // `sequelize.sync()` creates services.description_vector as a plain,
+  // never-populated TSVECTOR column; in production it is a generated column
+  // (migration 20240516032309-full_text_search), so full-text search on
+  // descriptions finds nothing in tests. A generated column can't be used
+  // here because Sequelize's bulkCreate writes every model attribute and
+  // Postgres rejects explicit values for GENERATED ALWAYS columns, so
+  // populate it with a trigger instead — identical read behavior. Name
+  // vectors are intentionally left null: those searches are query-time and
+  // get-taxonomy.test.js asserts name_vector stays null.
+  await models.sequelize.query(`
+    CREATE OR REPLACE FUNCTION test_set_service_description_vector() RETURNS trigger AS $$
+    BEGIN
+      NEW.description_vector := to_tsvector('english', NEW.description);
+      RETURN NEW;
+    END $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS services_set_description_vector ON services;
+    CREATE TRIGGER services_set_description_vector BEFORE INSERT OR UPDATE ON services
+      FOR EACH ROW EXECUTE FUNCTION test_set_service_description_vector();
+  `);
+
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate --name 20240325142525-location-slugs');
   // eslint-disable-next-line no-implied-eval

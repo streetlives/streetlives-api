@@ -86,12 +86,26 @@
     "projects": [
       {
         "displayName": "unit",
-        "testMatch": ["<rootDir>/test/unit/**/*.test.js"]
+        "testMatch": [
+          "<rootDir>/test/unit/**/*.test.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
+        }
       },
       {
         "displayName": "integration",
-        "testMatch": ["<rootDir>/test/integration/**/*.test.js"],
-        "setupFilesAfterEnv": ["<rootDir>/test/setup.js"]
+        "testMatch": [
+          "<rootDir>/test/integration/**/*.test.js"
+        ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/test/setup.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
+        }
       }
     ],
     "setupFilesAfterEnv": [

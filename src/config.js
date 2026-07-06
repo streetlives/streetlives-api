@@ -30,10 +30,13 @@ export default {
       dialectOptions: {
         // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
         clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
-        ssl: {
-          require: true,
-          rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
-        },
+        // Local/CI test databases typically run without SSL; RDS in dev/prod requires it.
+        ...(process.env.NODE_ENV === 'test' ? {} : {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
+          },
+        }),
       },
     },
   },

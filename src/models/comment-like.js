@@ -4,7 +4,7 @@ module.exports = (sequelize, DataTypes) => {
     id: {
       type: DataTypes.UUID,
       primaryKey: true,
-      autoIncrement: true,
+      defaultValue: DataTypes.UUIDV4,
     },
     comment_id: {
       type: DataTypes.UUID,
@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     tableName: 'comment_likes',
     underscored: true,
-    timestamps: false
+    timestamps: false,
   });
 
   CommentLike.associate = (models) => {
