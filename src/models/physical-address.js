@@ -22,10 +22,6 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    neighborhood: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
     country: {
       type: DataTypes.TEXT,
       allowNull: false,
