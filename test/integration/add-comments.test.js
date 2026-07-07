@@ -47,7 +47,7 @@ describe('add comments', () => {
         expect(newComment).toMatchObject({
           content,
           posted_by: postedBy,
-          contact_info: contactInfo,
+          contact_info: null, // deliberately not persisted on create since #197 (consent)
         });
       }));
 
@@ -93,12 +93,12 @@ describe('add comments', () => {
         expect(firstComment).toMatchObject({
           content,
           posted_by: postedBy,
-          contact_info: contactInfo,
+          contact_info: null, // deliberately not persisted on create since #197 (consent)
         });
         expect(secondComment).toMatchObject({
           content: additionalContent,
           posted_by: postedBy,
-          contact_info: contactInfo,
+          contact_info: null, // deliberately not persisted on create since #197 (consent)
         });
       });
   });
