@@ -1,4 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
+  // Intentionally do not map `neighborhood` here. Migration
+  // 20240530015650-update-everything-to-use-geoqueries removes
+  // physical_addresses.neighborhood and replaces it with geocoded metadata.
   const PhysicalAddress = sequelize.define('PhysicalAddress', {
     id: {
       type: DataTypes.UUID,
@@ -21,10 +24,6 @@ module.exports = (sequelize, DataTypes) => {
     postal_code: {
       type: DataTypes.TEXT,
       allowNull: false,
-    },
-    neighborhood: {
-      type: DataTypes.STRING,
-      allowNull: true,
     },
     country: {
       type: DataTypes.TEXT,
