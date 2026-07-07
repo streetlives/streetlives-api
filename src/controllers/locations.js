@@ -108,7 +108,11 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
     additionalInfo,
     address: {
       // Do not return address.neighborhood; PhysicalAddress no longer maps that
-      // legacy column after the geoquery migration.
+      // legacy column after the geoquery migration. We checked the known clients
+      // (yourpeer.nyc and streetlives-web), and they do not read this nested
+      // field. Keep the deprecated mapping commented here to make that API
+      // transition explicit; clients should use the top-level neighborhood.
+      // neighborhood: address.neighborhood,
       street: address.address_1,
       city: address.city,
       region: address.region,
