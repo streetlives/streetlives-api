@@ -67,6 +67,8 @@ const serviceAssociations = {
   ],
 };
 
+// Location info still returns `neighborhood`, but as a top-level field derived
+// from location geometry rather than as address.neighborhood.
 const getNeighborhoodAttributeSubquery = {
   attributes: {
     include: [
@@ -105,6 +107,8 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
     ...unchangedProps,
     additionalInfo,
     address: {
+      // Do not return address.neighborhood; PhysicalAddress no longer maps that
+      // legacy column after the geoquery migration.
       street: address.address_1,
       city: address.city,
       region: address.region,

@@ -60,8 +60,10 @@ module.exports = {
           },
         ))))))
 
-      // add support for manually-set neighborhood name for each physical location
-      // add neighborhood field to physical_addresses table
+      // This is a historical intermediate schema. This migration's slug code uses
+      // physical_addresses.neighborhood, so replayed migrations and sync-based tests
+      // must create/backfill it here. A later geoquery migration removes this column
+      // and derives neighborhood from location geometry instead.
       .then(() => queryInterface.addColumn('physical_addresses', 'neighborhood', {
         type: Sequelize.DataTypes.STRING,
       }))
