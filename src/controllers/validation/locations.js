@@ -111,7 +111,9 @@ export default {
         pitch: Joi.number().min(-90).max(90).allow(null),
         fov: Joi.number().integer().min(10).max(120)
           .allow(null),
-      }).allow(null),
+        // {} would otherwise create an all-null streetview row; require at
+        // least one field (null still means delete, omission means unchanged)
+      }).min(1).allow(null),
       metadata: updateMetadataSchema,
     }).required(),
   },

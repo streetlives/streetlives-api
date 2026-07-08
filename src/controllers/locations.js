@@ -498,7 +498,9 @@ export default {
         where: { location_id: location.id, event: eventRelatedInfo.event },
         transaction,
       });
-      await Promise.all(existing.map(row => destroyInstance(req.user, row, { metadata, transaction })));
+      for (const row of existing) {
+        await destroyInstance(req.user, row, { metadata, transaction });
+      }
 
       if (eventRelatedInfo.information) {
         const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
@@ -564,25 +566,21 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
+      // Await each update in turn: with concurrent updates sharing the
+      // transaction, one rejection rolls it back while siblings are still
+      // issuing queries against the finished transaction.
       await models.sequelize.transaction(async (t) => {
-        const updatePromises = [updateLocation(location, req.body, metadata, t)];
-
         if (req.body.address) {
-          updatePromises.push(updateAddress(location, req.body.address, metadata, t));
+          await updateAddress(location, req.body.address, metadata, t);
         }
         if (req.body.eventRelatedInfo) {
-          updatePromises.push(updateEventRelatedInfo(
-            location,
-            req.body.eventRelatedInfo,
-            metadata,
-            t,
-          ));
+          await updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata, t);
         }
         if ('streetview' in req.body) {
-          updatePromises.push(handleStreetviewUpdate(locationId, streetview, metadata, t));
+          await handleStreetviewUpdate(locationId, streetview, metadata, t);
         }
 
-        await Promise.all(updatePromises);
+        await updateLocation(location, req.body, metadata, t);
       });
 
       res.sendStatus(204);

@@ -238,6 +238,7 @@ describe('update location streetview', () => {
       ['fov below 10', { fov: 9 }],
       ['non-integer fov', { fov: 90.5 }],
       ['pano_id longer than 128 characters', { pano_id: 'x'.repeat(129) }],
+      ['empty streetview object', {}],
       ['non-object streetview', 'not-an-object'],
     ];
 
@@ -250,6 +251,16 @@ describe('update location streetview', () => {
         expect(streetviewRow).toBeNull();
       },
     );
+
+    it('should reject an empty streetview object without touching an existing one', async () => {
+      await createStreetviewRow();
+
+      await patchLocation({ streetview: {} }).expect(400);
+
+      const streetview = await getStreetviewRow();
+      expect(streetview).not.toBeNull();
+      expect(streetview.pano_id).toEqual(fullStreetview.pano_id);
+    });
 
     it('should ignore unknown streetview fields (validated with allowUnknown)', async () => {
       await patchLocation({ streetview: { pano_id: 'known-field', bogus_field: 'value' } })
