@@ -76,6 +76,12 @@ beforeAll(async () => {
 
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate --name 20240325142525-location-slugs');
+  // Without this fix, the locations_update_trigger created by the slug migration
+  // calls update_last_validated_at_on_locations() with a scalar uuid instead of
+  // an array, making any UPDATE of the trigger-watched location fields fail.
+  // eslint-disable-next-line no-implied-eval
+  await execScript('npx sequelize-cli db:migrate' +
+    ' --name 20240510171256-fix-location-slug-update-trigger');
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
 });

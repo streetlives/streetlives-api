@@ -57,6 +57,7 @@ Object {
       "url": null,
     },
   },
+  "Streetview": null,
   "additionalInfo": "And some other, perhaps less standardized, information.",
   "address": Object {
     "city": "New York",
