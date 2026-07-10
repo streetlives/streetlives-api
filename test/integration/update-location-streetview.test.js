@@ -280,6 +280,29 @@ describe('update location streetview', () => {
     });
   });
 
+  describe('concurrent updates', () => {
+    it('should create a single streetview when concurrent requests race to create', async () => {
+      const responses = await Promise.all([
+        patchLocation({ streetview: { heading: 10 } }),
+        patchLocation({ streetview: { heading: 20 } }),
+        patchLocation({ streetview: { heading: 30 } }),
+        patchLocation({ streetview: { heading: 40 } }),
+      ]);
+
+      responses.forEach((response) => {
+        expect(response.status).toEqual(204);
+      });
+
+      const streetviewCount = await models.Streetview.count({
+        where: { location_id: location.id },
+      });
+      expect(streetviewCount).toEqual(1);
+
+      const streetview = await getStreetviewRow();
+      expect([10, 20, 30, 40]).toContain(Number(streetview.heading));
+    });
+  });
+
   describe('transaction rollback', () => {
     const nonExistentOrganizationId = '22222222-2222-2222-2222-222222222222';
 

@@ -513,6 +513,15 @@ export default {
     };
 
     const handleStreetviewUpdate = async (locationId, streetviewData, metadata, transaction) => {
+      // Lock the parent location row for the rest of the transaction:
+      // without it, concurrent requests can both find no streetview and both
+      // insert, and the loser hits the location_id unique constraint instead
+      // of turning into an update.
+      await models.Location.findByPk(locationId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
       const existing = await models.Streetview.findOne({
         where: { location_id: locationId },
         transaction,
