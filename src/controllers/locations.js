@@ -68,6 +68,8 @@ const serviceAssociations = {
   ],
 };
 
+// Location info still returns `neighborhood`, but as a top-level field derived
+// from location geometry rather than as address.neighborhood.
 const getNeighborhoodAttributeSubquery = {
   attributes: {
     include: [
@@ -106,13 +108,18 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
     ...unchangedProps,
     additionalInfo,
     address: {
+      // Do not return address.neighborhood; PhysicalAddress no longer maps that
+      // legacy column after the geoquery migration. We checked the known clients
+      // (yourpeer.nyc and streetlives-web), and they do not read this nested
+      // field. Keep the deprecated mapping commented here to make that API
+      // transition explicit; clients should use the top-level neighborhood.
+      // neighborhood: address.neighborhood,
       street: address.address_1,
       city: address.city,
       region: address.region,
       state: address.state_province,
       postalCode: address.postal_code,
       country: address.country,
-      neighborhood: address.neighborhood,
     },
   };
 
