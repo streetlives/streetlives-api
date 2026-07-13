@@ -349,15 +349,6 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     const whereConditions = [];
 
-    // exclude locations that closed for more than 3 months if search string is specified
-    if (searchString) {
-      whereConditions.push(sequelize.where(
-        // eslint-disable-next-line max-len
-        sequelize.literal('NOT EXISTS (SELECT 1 FROM event_related_info eri WHERE eri.location_id = "Location"."id" AND eri.event = \'CLOSURE\' AND eri.created_at <= NOW() - INTERVAL \'3 months\')'),
-        true,
-      ));
-    }
-
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
@@ -763,14 +754,6 @@ module.exports = (sequelize, DataTypes, Op) => {
     } else {
       // Sort by locationIds order
       sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
-    }
-
-    if (filterParameters.searchString) {
-      const isClosedLocation = loc =>
-        loc.EventRelatedInfos && loc.EventRelatedInfos.some(e => e.event === 'CLOSURE'); sortedLocationsWithAssociations = [
-        ...sortedLocationsWithAssociations.filter(loc => !isClosedLocation(loc)),
-        ...sortedLocationsWithAssociations.filter(loc => isClosedLocation(loc)),
-      ];
     }
 
     return {
