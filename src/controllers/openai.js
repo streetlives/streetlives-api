@@ -2063,7 +2063,7 @@ function sanitizeNlParams(raw) {
     if (valid.length > 0) taxonomyNames = valid;
   }
 
-  return {
+  const result = {
     searchString: str(raw.searchString),
     streetAddress: str(raw.streetAddress),
     neighborhood: str(raw.neighborhood),
@@ -2077,6 +2077,14 @@ function sanitizeNlParams(raw) {
     zipcodes,
     taxonomyNames,
   };
+
+  // A result where every field is null carries no filters at all; if we
+  // returned it, the caller would skip its raw-query fallback and run an
+  // unfiltered search. Treat it like a parser failure instead. (An explicit
+  // false — e.g. membership — is a real filter and must not collapse.)
+  if (Object.values(result).every(v => v === null)) return null;
+
+  return result;
 }
 
 const nlQueryCache = new Map();

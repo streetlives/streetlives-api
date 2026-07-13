@@ -138,8 +138,11 @@ describe('parseNaturalLanguageQuery', () => {
 
   describe('sanitization of model output', () => {
     let queryCounter = 0;
+    // Anchor every response with a benign extra field: an all-null result
+    // collapses to null, and these tests assert on individual fields of a
+    // result whose field under test may have been rejected.
     const parseWith = async (rawOverrides) => {
-      mockModelOutput(rawNlResponse(rawOverrides));
+      mockModelOutput(rawNlResponse({ searchString: 'anchor', ...rawOverrides }));
       queryCounter += 1;
       return parseNaturalLanguageQuery(`some query ${queryCounter}`, NOW);
     };
@@ -212,6 +215,39 @@ describe('parseNaturalLanguageQuery', () => {
       expect(result.taxonomyNames).toHaveLength(10);
       expect(result.taxonomyNames[0]).toBe('Food');
       expect(result.taxonomyNames).not.toContain('');
+    });
+  });
+
+  describe('effectively empty model output', () => {
+    // An all-null result carries no filters: if it were returned as an object,
+    // the caller would treat the parse as successful, skip its raw-query
+    // fallback and run an unfiltered search returning every location.
+    it('returns null when the model extracts no parameters at all', async () => {
+      mockModelOutput(rawNlResponse());
+
+      await expect(parseNaturalLanguageQuery('gibberish the model cannot parse', NOW))
+        .resolves.toBeNull();
+    });
+
+    it('returns null when every extracted field is rejected by sanitization', async () => {
+      mockModelOutput(rawNlResponse({
+        gender: 'everyone',
+        zipcodes: ['nozip'],
+        openAt: 'tonight',
+        taxonomyNames: ['', '   '],
+      }));
+
+      await expect(parseNaturalLanguageQuery('query with only invalid fields', NOW))
+        .resolves.toBeNull();
+    });
+
+    it('does not collapse a result whose only value is an explicit false', async () => {
+      mockModelOutput(rawNlResponse({ membership: false }));
+
+      const result = await parseNaturalLanguageQuery('no membership needed', NOW);
+
+      expect(result).not.toBeNull();
+      expect(result.membership).toBe(false);
     });
   });
 
