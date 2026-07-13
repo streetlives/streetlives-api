@@ -182,14 +182,17 @@ describe('find locations with a natural language query', () => {
       expectOnlyLocations(res, shelterLocation.name);
     });
 
-    it('applies no taxonomy filter when no taxonomyNames match', async () => {
+    it('falls back to the taxonomy names as a keyword search when none match', async () => {
+      // When the parser's taxonomy names don't match a known taxonomy, the search
+      // must stay scoped (using the names as a keyword search string) rather than
+      // dropping the constraint and broadening to an effectively unfiltered search.
       parseNaturalLanguageQuery
         .mockResolvedValue(nlResult({ taxonomyNames: ['No Such Taxonomy'] }));
 
       const res = await queryLocations({ naturalLanguageQuery: 'a place to sleep' })
         .expect(200);
 
-      expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
+      expectOnlyLocations(res);
     });
 
     it('uses the extracted searchString as the search string', async () => {

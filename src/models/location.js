@@ -135,7 +135,7 @@ module.exports = (sequelize, DataTypes, Op) => {
   });
 
   const getStreetAddressCondition = address => ({
-    '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${address}%` },
+    '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${escapeLike(address)}%` },
   });
 
   const getNeighborhoodCondition = neighborhood => sequelize.where(
@@ -522,11 +522,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       const stripDotsFromCol = col => sequelize.fn('regexp_replace', sequelize.col(col), '\\.', '', 'g');
       const dbNormalizedOrgNameCondition = sequelize.where(
         sequelize.fn('lower', stripDotsFromCol('Organization.name')),
-        { [Op.iLike]: `%${normalizedSearchString}%` },
+        { [Op.iLike]: `%${escapeLike(normalizedSearchString)}%` },
       );
       const dbNormalizedLocationNameCondition = sequelize.where(
         sequelize.fn('lower', stripDotsFromCol('Location.name')),
-        { [Op.iLike]: `%${normalizedSearchString}%` },
+        { [Op.iLike]: `%${escapeLike(normalizedSearchString)}%` },
       );
 
       // eslint-disable-next-line no-inner-declarations, no-shadow

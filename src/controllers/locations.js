@@ -309,6 +309,12 @@ export default {
           if (matchedTaxonomies.length > 0) {
             const matchedIds = matchedTaxonomies.map(t => t.id);
             filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(matchedIds);
+          } else if (!filterParameters.searchString) {
+            // None of the parser's taxonomy names matched a known taxonomy. Dropping
+            // the constraint entirely would broaden this to an effectively unfiltered
+            // search, so fall back to using the taxonomy names as a keyword search
+            // string to keep the results scoped to what the user asked for.
+            filterParameters.searchString = nlParams.taxonomyNames.join(' ');
           }
         }
       } else if (naturalLanguageQuery && !filterParameters.searchString) {
