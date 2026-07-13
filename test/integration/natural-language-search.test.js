@@ -467,6 +467,34 @@ describe('find locations with a natural language query', () => {
       expect(new Date(currentDatetime).getTime()).not.toBeNaN();
     });
 
+    it('redacts international phone numbers, unformatted SSNs and card numbers', async () => {
+      parseNaturalLanguageQuery.mockResolvedValue(nlResult());
+
+      await queryLocations({
+        // eslint-disable-next-line max-len
+        naturalLanguageQuery: 'shelter, call +44 20 7946 0958, ssn 123456789, card 4111 1111 1111 1111',
+      }).expect(200);
+
+      const [sanitizedQuery] = parseNaturalLanguageQuery.mock.calls[0];
+      expect(sanitizedQuery).toContain('[PHONE]');
+      expect(sanitizedQuery).toContain('[SSN]');
+      expect(sanitizedQuery).toContain('[CARD]');
+      expect(sanitizedQuery).not.toContain('7946 0958');
+      expect(sanitizedQuery).not.toContain('123456789');
+      expect(sanitizedQuery).not.toContain('4111 1111 1111 1111');
+    });
+
+    it('does not redact street addresses, which the parser is designed to extract', async () => {
+      parseNaturalLanguageQuery.mockResolvedValue(nlResult());
+
+      await queryLocations({
+        naturalLanguageQuery: 'food near 123 Main St, zip 10001',
+      }).expect(200);
+
+      const [sanitizedQuery] = parseNaturalLanguageQuery.mock.calls[0];
+      expect(sanitizedQuery).toBe('food near 123 Main St, zip 10001');
+    });
+
     it('does not call the parser when naturalLanguageQuery is absent', async () => {
       await queryLocations({ searchString: 'shelter' }).expect(200);
 

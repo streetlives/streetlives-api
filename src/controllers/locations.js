@@ -13,6 +13,7 @@ import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { formatIsoWithTimezone } from '../utils/times';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { redactPii } from '../utils/redact-pii';
 import { parseNaturalLanguageQuery } from './openai';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
@@ -197,10 +198,7 @@ export default {
       let nlParams = null;
       if (naturalLanguageQuery) {
         try {
-          const sanitizedQuery = naturalLanguageQuery
-            .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE]')
-            .replace(/\S+@\S+\.\S+/g, '[EMAIL]')
-            .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]');
+          const sanitizedQuery = redactPii(naturalLanguageQuery);
           // The NL prompt describes this value as America/New_York time, so
           // format it in that zone (with its UTC offset) rather than UTC —
           // otherwise relative dates ("tonight", "tomorrow") resolve to the

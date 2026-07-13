@@ -2162,6 +2162,10 @@ const nlAllowInWindow = () => {
   return true;
 };
 
+// `query` is expected to already have gone through `redactPii`
+// (src/utils/redact-pii.js) at the call site in controllers/locations.js
+// before it reaches here — see PRIVACY.md for what that does and doesn't
+// cover.
 export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
   // Relative time expressions ("open now", "tonight") resolve against
   // currentDatetime, so a cached result is only valid for queries made around
