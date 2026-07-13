@@ -1185,6 +1185,7 @@ describe('find locations', () => {
     };
 
     const FOUR_MONTHS_MS = 4 * 30 * 24 * 60 * 60 * 1000;
+    const FIVE_MONTHS_MS = 5 * 30 * 24 * 60 * 60 * 1000;
 
     const expectClosedLastForTextSearch = (res, closedLocation) => {
       const closed = res.body.find(l => l.name === closedLocation.name);
@@ -1202,6 +1203,33 @@ describe('find locations', () => {
 
     it('should exclude long-closed locations from a text search', async () => {
       await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should keep a location whose latest closure is recent despite an older one', async () => {
+      // An old closure plus a newer one: the location was re-closed recently, so it must be
+      // treated as recently closed (kept, sorted last) rather than long-closed (excluded).
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should exclude a location when every closure is older than 3 months', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
 
       const res = await request(app)
         .get('/locations')

@@ -67,12 +67,16 @@ module.exports = (sequelize, DataTypes, Op) => {
     IS_CLOSED_COLUMN_ALIAS,
   ];
 
-  // Excludes locations whose CLOSURE event was recorded more than MAX_CLOSED_AGE_INTERVAL ago.
+  // Excludes locations whose *latest* CLOSURE event was recorded more than
+  // MAX_CLOSED_AGE_INTERVAL ago. Keyed off MAX(created_at) so a location with an old closure
+  // record plus a newer one is treated as recently closed (kept) rather than long-closed. The
+  // aggregate subquery yields no rows when the location has no closures (MAX is NULL, so the
+  // HAVING is not satisfied), so non-closed locations are always kept.
   const CLOSED_TOO_LONG_EXCLUSION = sequelize.literal(`NOT EXISTS (
                 SELECT 1 FROM event_related_info eri
                 WHERE eri.location_id = "Location"."id"
                   AND eri.event = '${CLOSURE_EVENT_TYPE}'
-                  AND eri.created_at < now() - interval '${MAX_CLOSED_AGE_INTERVAL}'
+                HAVING MAX(eri.created_at) < now() - interval '${MAX_CLOSED_AGE_INTERVAL}'
             )`);
 
   Location.associate = (models) => {
