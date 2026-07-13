@@ -1262,6 +1262,32 @@ describe('find locations', () => {
       expectClosedLastForTextSearch(res, primaryLocation);
     });
 
+    it('should move recently closed locations to a later page than open matches', async () => {
+      // 'center' matches three locations (primary, other, far). Closing one leaves two open,
+      // so with a page size of 2 the closed location can only appear on the first page if it
+      // is partitioned *after* pagination. It should instead be pushed to the second page.
+      await markClosed(primaryLocation);
+
+      const firstPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 2 })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(2);
+      expect(firstPage.body.some(l => l.closed)).toBe(false);
+      expect(firstPage.body.map(l => l.name)).not.toContain(primaryLocation.name);
+
+      const secondPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 1, pageSize: 2 })
+        .expect(200);
+
+      const closedOnSecondPage = secondPage.body.find(l => l.name === primaryLocation.name);
+      expect(closedOnSecondPage).toBeDefined();
+      expect(closedOnSecondPage.closed).toBe(true);
+    });
+
     it('should keep closed locations last for a nearby-sorted text search', async () => {
       // primaryLocation is the closest to the origin, so a nearby sort would normally rank it
       // first; closing it must instead push it to the bottom of the results.
