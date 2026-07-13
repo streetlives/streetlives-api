@@ -321,6 +321,21 @@ describe('find locations', () => {
       makeRequestWithSearchString('center')
         .expect(200)
         .then(expectMatchNearbyLocations));
+
+    it('should not error on search strings containing regex or LIKE metacharacters', async () => {
+      const metacharacterQueries = [
+        '(', ')', '(unclosed', 'a[b', 'a*b+c', '\\', 'a|b', '%', '_', 'foo\\', 'test org (main)',
+      ];
+      await Promise.all(metacharacterQueries.map(input =>
+        makeRequestWithSearchString(input).expect(200)));
+    });
+
+    it('should treat regex metacharacters literally rather than as a pattern', () =>
+      // "cent.r" would match "center" if the "." were an unescaped regex
+      // wildcard; escaped, it is literal and matches nothing.
+      makeRequestWithSearchString('cent.r')
+        .expect(200)
+        .then(expectNoMatchingLocations));
   });
 
   describe('when an organization name is specified', () => {

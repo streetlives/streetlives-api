@@ -2,6 +2,17 @@ import assert from 'assert';
 import { SORT_ORDER } from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
+// Escape regex metacharacters so user-supplied search text can be safely
+// interpolated into POSIX regular-expression (Op.iRegexp) conditions.
+// Without this, input such as "(" produces an invalid regex and a DB error.
+const escapeRegExp = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Escape LIKE/ILIKE metacharacters (\ % _) so user text used as a whole-value
+// exact match is compared literally. Without this, a value that is (or ends
+// with) a lone backslash makes Postgres reject the pattern with
+// "LIKE pattern must not end with escape character" and return a 500.
+const escapeLike = str => str.replace(/[\\%_]/g, '\\$&');
+
 module.exports = (sequelize, DataTypes, Op) => {
   const Location = sequelize.define('Location', {
     id: {
@@ -489,19 +500,21 @@ module.exports = (sequelize, DataTypes, Op) => {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
-      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
-      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
-      const exactExactMatchCondition = { [Op.iLike]: searchString };
+      const escapedSearchString = escapeRegExp(searchString);
+      const escapedNormalizedSearchString = escapeRegExp(normalizedSearchString);
+      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${escapedSearchString}.*$` };
+      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${escapedSearchString}(\\b|$)` };
+      const exactExactMatchCondition = { [Op.iLike]: escapeLike(searchString) };
 
       // Conditions using normalized search string (for when user types "S.H.O.W." → match "SHOW")
       const normalizedPrefixCondition = normalizedSearchString !== searchString
-        ? { [Op.iRegexp]: `(^|\\b)${normalizedSearchString}.*$` }
+        ? { [Op.iRegexp]: `(^|\\b)${escapedNormalizedSearchString}.*$` }
         : null;
       const normalizedExactMatchCondition = normalizedSearchString !== searchString
-        ? { [Op.iRegexp]: `(^|\\b)${normalizedSearchString}(\\b|$)` }
+        ? { [Op.iRegexp]: `(^|\\b)${escapedNormalizedSearchString}(\\b|$)` }
         : null;
       const normalizedExactExactMatchCondition = normalizedSearchString !== searchString
-        ? { [Op.iLike]: normalizedSearchString }
+        ? { [Op.iLike]: escapeLike(normalizedSearchString) }
         : null;
 
       // DB-side acronym normalization: strip dots from column values to match "S.H.O.W." → "SHOW"
