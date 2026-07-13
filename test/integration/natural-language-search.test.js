@@ -481,7 +481,7 @@ describe('find locations with a natural language query', () => {
   describe('closed locations in search results', () => {
     afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
 
-    it('excludes locations closed for more than 3 months from search results', async () => {
+    it('includes locations closed for more than 3 months in search results', async () => {
       await models.EventRelatedInfo.create({
         event: 'CLOSURE',
         information: 'Location is closed',
@@ -493,10 +493,10 @@ describe('find locations with a natural language query', () => {
       const res = await queryLocations({ searchString: 'center' })
         .expect(200);
 
-      expectOnlyLocations(res, foodLocation.name);
+      expectOnlyLocations(res, foodLocation.name, shelterLocation.name);
     });
 
-    it('sorts recently closed locations after open ones in search results', async () => {
+    it('does not reorder closed locations in search results', async () => {
       await models.EventRelatedInfo.create({
         event: 'CLOSURE',
         information: 'Location is closed',
@@ -506,11 +506,11 @@ describe('find locations with a natural language query', () => {
       const res = await queryLocations({ searchString: 'center' })
         .expect(200);
 
-      // The shelter location is nearer, so it would sort first if it weren't closed.
+      // The shelter location is nearer, so it sorts first even though it's closed.
       expect(res.body).toHaveLength(2);
-      expect(res.body[0].name).toBe(foodLocation.name);
-      expect(res.body[1].name).toBe(shelterLocation.name);
-      expect(res.body[1].closed).toBe(true);
+      expect(res.body[0].name).toBe(shelterLocation.name);
+      expect(res.body[0].closed).toBe(true);
+      expect(res.body[1].name).toBe(foodLocation.name);
     });
   });
 
