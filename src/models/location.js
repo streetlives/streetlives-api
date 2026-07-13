@@ -49,6 +49,32 @@ module.exports = (sequelize, DataTypes, Op) => {
     SERVICE_COUNT_COLUMN_ALIAS,
   ];
 
+  const CLOSURE_EVENT_TYPE = 'CLOSURE';
+  // A location is considered closed while it has a CLOSURE event. Closures older than
+  // this are dropped from search results entirely; more recent ones are kept but sorted
+  // to the bottom of the results.
+  const MAX_CLOSED_AGE_INTERVAL = '3 months';
+
+  const IS_CLOSED_COLUMN_ALIAS = 'is_closed';
+  const IS_CLOSED_SUBQUERY = [
+    sequelize.literal(`(
+                EXISTS (
+                  SELECT 1 FROM event_related_info eri
+                  WHERE eri.location_id = "Location"."id"
+                    AND eri.event = '${CLOSURE_EVENT_TYPE}'
+                )
+            )`),
+    IS_CLOSED_COLUMN_ALIAS,
+  ];
+
+  // Excludes locations whose CLOSURE event was recorded more than MAX_CLOSED_AGE_INTERVAL ago.
+  const CLOSED_TOO_LONG_EXCLUSION = sequelize.literal(`NOT EXISTS (
+                SELECT 1 FROM event_related_info eri
+                WHERE eri.location_id = "Location"."id"
+                  AND eri.event = '${CLOSURE_EVENT_TYPE}'
+                  AND eri.created_at < now() - interval '${MAX_CLOSED_AGE_INTERVAL}'
+            )`);
+
   Location.associate = (models) => {
     Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
     Location.belongsToMany(models.Service, {
@@ -350,6 +376,11 @@ module.exports = (sequelize, DataTypes, Op) => {
     if (occasion) {
       whereConditions.push(getOccasionCondition(occasion));
     }
+    // For text search only: drop locations closed for longer than MAX_CLOSED_AGE_INTERVAL,
+    // and (further below) sort the remaining closed locations to the bottom of the results.
+    if (searchString) {
+      whereConditions.push(sequelize.where(CLOSED_TOO_LONG_EXCLUSION, true));
+    }
 
     // we put empty object in the having array to work around this bug in sequelize:
     // https://github.com/sequelize/sequelize/issues/10142
@@ -382,6 +413,8 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.fn('DISTINCT', sequelize.col('Location.id')),
           // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
           ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+          // For text search only: used to push closed locations to the bottom (see below).
+          ...(searchString ? [IS_CLOSED_SUBQUERY] : []),
         ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -509,6 +542,17 @@ module.exports = (sequelize, DataTypes, Op) => {
       locations = orderedLocations;
     } else {
       locations = await findAll(whereConditions);
+    }
+
+    // For text search only: closed (but not yet expired) locations always sort to the bottom
+    // of the results. This is a stable partition, so the relative order within each group is
+    // preserved. Applied before pagination so closed locations land on the final pages rather
+    // than being interleaved.
+    if (searchString) {
+      locations = [
+        ...locations.filter(location => !location[IS_CLOSED_COLUMN_ALIAS]),
+        ...locations.filter(location => location[IS_CLOSED_COLUMN_ALIAS]),
+      ];
     }
 
     // apply limit and offset in memory here
@@ -667,7 +711,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         }
       });
     } else {
-      // Sort by locationIds order
+      // For text search, findUniqueLocationIds already sorts closed locations to the bottom;
+      // preserving the locationIds order here keeps them there.
       sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
     }
 
