@@ -697,8 +697,14 @@ module.exports = (sequelize, DataTypes, Op) => {
     const allResults = (await Promise.all(queryPromises)).flat();
 
     // Apply sorting in memory
+    // For a text search, findUniqueLocationIds already produced the final order (search
+    // relevance, then the requested sort, then closed locations pushed to the bottom), so we
+    // must preserve that order here. Re-sorting by the requested attribute below would move
+    // closed locations back up when an explicit sort (e.g. nearby, most services) is combined
+    // with a search string, so it is only applied when there is no search string.
+    const isTextSearch = !!filterParameters.searchString;
     let sortedLocationsWithAssociations;
-    if (order) {
+    if (order && !isTextSearch) {
       // Sort by the specified order attribute (e.g., distance, service_count, last_validated_at)
       const [sortAttr, sortDir] = order[0]; // Assuming single-level order
       sortedLocationsWithAssociations = allResults.sort((a, b) => {
@@ -711,8 +717,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         }
       });
     } else {
-      // For text search, findUniqueLocationIds already sorts closed locations to the bottom;
-      // preserving the locationIds order here keeps them there.
+      // Preserve the locationIds order (which keeps closed locations at the bottom for a
+      // text search).
       sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
     }
 

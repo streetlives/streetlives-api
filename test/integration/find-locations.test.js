@@ -1234,6 +1234,38 @@ describe('find locations', () => {
       expectClosedLastForTextSearch(res, primaryLocation);
     });
 
+    it('should keep closed locations last for a nearby-sorted text search', async () => {
+      // primaryLocation is the closest to the origin, so a nearby sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({
+          searchString: 'center',
+          sortBy: 'nearby',
+          latitude: originLatitude,
+          longitude: originLongitude,
+        })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should keep closed locations last for a most-services-sorted text search', async () => {
+      // Give primaryLocation the most services so a mostServices sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await primaryLocation.addServices([aSpecificOffering2, aDifferentKindOfService]);
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', sortBy: 'mostServices' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
     it('should NOT exclude or reorder closed locations when not text searching', async () => {
       await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
 
