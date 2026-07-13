@@ -179,6 +179,16 @@ describe('parseNaturalLanguageQuery', () => {
       expect((await parseWith({ openAt: 'tonight' })).openAt).toBeNull();
     });
 
+    it('rejects openAt values without an explicit UTC offset', async () => {
+      // A naive datetime would be interpreted in the server's timezone,
+      // silently shifting the intended New York time.
+      expect((await parseWith({ openAt: '2026-07-13T20:00:00' })).openAt).toBeNull();
+      expect((await parseWith({ openAt: '2026-07-13T20:00:00-04:00' })).openAt)
+        .toBe('2026-07-13T20:00:00-04:00');
+      expect((await parseWith({ openAt: '2026-07-14T00:00:00Z' })).openAt)
+        .toBe('2026-07-14T00:00:00Z');
+    });
+
     it('truncates overlong strings', async () => {
       const result = await parseWith({ searchString: 'a'.repeat(500) });
       expect(result.searchString).toHaveLength(200);
@@ -214,6 +224,17 @@ describe('parseNaturalLanguageQuery', () => {
 
       expect(mockCreate).toHaveBeenCalledTimes(1);
       expect(second).toEqual(first);
+    });
+
+    it('does not reuse a cached result resolved against a different datetime', async () => {
+      mockModelOutput(rawNlResponse());
+
+      // Relative queries like "open now" resolve against the current
+      // datetime, so a result from one time bucket must not serve another.
+      await parseNaturalLanguageQuery('shelter open now', NOW);
+      await parseNaturalLanguageQuery('shelter open now', '2026-07-13T12:06:00-04:00');
+
+      expect(mockCreate).toHaveBeenCalledTimes(2);
     });
 
     it('calls OpenAI again for a different query', async () => {

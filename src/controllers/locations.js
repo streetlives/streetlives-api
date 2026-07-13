@@ -11,6 +11,7 @@ import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
+import { formatIsoWithTimezone } from '../utils/times';
 import { NotFoundError, ValidationError } from '../utils/errors';
 import { parseNaturalLanguageQuery } from './openai';
 
@@ -200,7 +201,14 @@ export default {
             .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE]')
             .replace(/\S+@\S+\.\S+/g, '[EMAIL]')
             .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]');
-          nlParams = await parseNaturalLanguageQuery(sanitizedQuery, new Date().toISOString());
+          // The NL prompt describes this value as America/New_York time, so
+          // format it in that zone (with its UTC offset) rather than UTC —
+          // otherwise relative dates ("tonight", "tomorrow") resolve to the
+          // wrong day near day boundaries.
+          nlParams = await parseNaturalLanguageQuery(
+            sanitizedQuery,
+            formatIsoWithTimezone(new Date(), 'America/New_York'),
+          );
         } catch (err) {
           console.error('NL query parse failed, falling back to raw search:', err.message);
         }

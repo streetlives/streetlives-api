@@ -514,6 +514,36 @@ describe('find locations with a natural language query', () => {
     });
   });
 
+  describe('neighborhood matching in plain search', () => {
+    it('matches locations by geometry when the search names a known neighborhood', async () => {
+      // The same midtown box used in the extracted-neighborhood test: contains
+      // the two nearby locations but not the far-off one.
+      await models.NycNeighborhoodGeometries.create({
+        neighborhood: 'Midtown West',
+        borough: 'Manhattan',
+        geometry: {
+          type: 'Polygon',
+          crs: { type: 'name', properties: { name: 'EPSG:4326' } },
+          coordinates: [[
+            [-74.05, 40.70],
+            [-74.05, 40.80],
+            [-73.97, 40.80],
+            [-73.97, 40.70],
+            [-74.05, 40.70],
+          ]],
+        },
+      });
+
+      // No coordinates: the neighborhood match is what narrows things down.
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'Midtown' })
+        .expect(200);
+
+      expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
+    });
+  });
+
   describe('acronym normalization in search', () => {
     it('matches dot-separated acronym names when searching without dots', async () => {
       const showLocation = await organization.createLocation({

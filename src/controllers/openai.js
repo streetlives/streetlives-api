@@ -2034,7 +2034,10 @@ function sanitizeNlParams(raw) {
   let openAt = null;
   if (typeof raw.openAt === 'string') {
     const d = new Date(raw.openAt);
-    if (!isNaN(d.getTime())) openAt = raw.openAt;
+    // Require an explicit UTC offset (or Z): a naive datetime string would be
+    // interpreted in the server's timezone, shifting the intended NY time.
+    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw.openAt.trim());
+    if (!Number.isNaN(d.getTime()) && hasOffset) openAt = raw.openAt;
   }
 
   let gender = null;
@@ -2143,7 +2146,12 @@ const nlAllowInWindow = () => {
 };
 
 export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
-  const cacheKey = query.toLowerCase().trim();
+  // Relative time expressions ("open now", "tonight") resolve against
+  // currentDatetime, so a cached result is only valid for queries made around
+  // the same time. Bucket the datetime at the cache TTL and include it in the
+  // key so an entry can never be reused across a time-bucket boundary.
+  const datetimeBucket = Math.floor(new Date(currentDatetime).getTime() / NL_CACHE_TTL_MS);
+  const cacheKey = `${datetimeBucket}:${query.toLowerCase().trim()}`;
   const cached = nlQueryCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < NL_CACHE_TTL_MS) {
     return cached.result;
@@ -2171,7 +2179,7 @@ Extract the following fields if present in the query (return null for fields not
 - searchString: additional keyword(s) NOT already captured by any other field (taxonomyNames, openAt, gender, membership, age, referralRequired, photoIdRequired, zipcodes, streetAddress). If the entire query is covered by other fields, set searchString to null. Only include words that add meaning beyond what other fields capture (e.g. "free clothes near me" -> taxonomyNames: ["Clothing"], searchString: null; "halal food pantry" -> taxonomyNames: ["Food"], searchString: "halal"; "shelter open tonight for women" -> taxonomyNames: ["Shelter"], openAt: ..., gender: "female", searchString: null)
 - streetAddress: a NYC street address if mentioned in the query (e.g. "123 Broadway", "456 W 42nd St", "250 Joralemon Street Brooklyn"). Extract only the street number and street name, omitting borough/city/state/zip if present. Return null if no street address is mentioned. Examples: "food near 123 Main St" -> streetAddress: "123 Main St"; "shelter at 250 Joralemon Street Brooklyn" -> streetAddress: "250 Joralemon Street"
 - neighborhood: a NYC neighborhood or borough name if mentioned in the query (e.g. "Harlem", "Bushwick", "Upper West Side", "Brooklyn", "Bronx", "Queens", "Staten Island", "Manhattan"). Return null if no neighborhood or borough is mentioned. Examples: "food pantry in Harlem" -> neighborhood: "Harlem"; "shelters in the Bronx" -> neighborhood: "Bronx"; "clothing near me" -> neighborhood: null
-- openAt: an ISO 8601 datetime string resolved from relative time expressions ("tonight" = today at 8pm, "now" = current time, "tomorrow morning" = tomorrow at 9am), or null
+- openAt: an ISO 8601 datetime string in America/New_York time including its UTC offset (e.g. "2026-07-13T20:00:00-04:00"), resolved from relative time expressions ("tonight" = today at 8pm, "now" = current time, "tomorrow morning" = tomorrow at 9am), or null
 - gender: "male" or "female" if the query specifies gender, otherwise null
 - membership: true if membership is required/mentioned, false if explicitly not required, null if not mentioned
 - ageMin: minimum age as integer if mentioned, otherwise null

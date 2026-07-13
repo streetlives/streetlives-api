@@ -476,6 +476,20 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
+      // getNeighborhoodCondition runs a correlated geometry (ST_Contains)
+      // subquery per location row, which is far too expensive to apply to
+      // every keyword search on this public endpoint. Gate it behind a cheap
+      // name lookup against the small geometries table so it only runs when
+      // the search text actually names a known neighborhood or borough.
+      const knownNeighborhoodMatch = await sequelize.models.NycNeighborhoodGeometries.findOne({
+        attributes: ['neighborhood'],
+        where: sequelize.or(
+          { neighborhood: { [Op.iLike]: `%${searchString}%` } },
+          { borough: { [Op.iLike]: `%${searchString}%` } },
+        ),
+        raw: true,
+      });
+
       // Normalize acronyms: convert "S.H.O.W." → "SHOW" to support dot-separated acronym queries
       const normalizeAcronyms = str => str.replace(/\b[A-Za-z](?:\.[A-Za-z])+\.?/g, m => m.replace(/\./g, ''));
       const normalizedSearchString = normalizeAcronyms(searchString);
@@ -525,7 +539,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       const searchConditions = [
         { '$PhysicalAddresses.postal_code$': zipCodeCondition },
         getStreetAddressCondition(searchString),
-        getNeighborhoodCondition(searchString),
+        ...(knownNeighborhoodMatch ? [getNeighborhoodCondition(searchString)] : []),
         getPhoneNumberCondition(searchString),
 
         { '$Organization.name$': exactExactMatchCondition },
