@@ -1,6 +1,7 @@
 /* eslint-disable max-len, no-console */
 
 import OpenAI from 'openai';
+import * as nlLimiter from './nl-limiter';
 
 const openai = new OpenAI();
 
@@ -2104,9 +2105,17 @@ function nlCacheSet(key, value) {
 
 // ---- Abuse / availability controls around the (paid) OpenAI call ----
 // This endpoint is public and each uncached query costs money + latency, so we
-// guard the upstream call with a timeout, a global rate cap, a concurrency cap
-// and a circuit breaker. When any guard trips we return null, which the caller
-// treats as "no structured params" and falls back to a plain keyword search.
+// guard the upstream call with a timeout, a rate cap, a concurrency cap and a
+// circuit breaker. When any guard trips we return null, which the caller treats
+// as "no structured params" and falls back to a plain keyword search.
+//
+// The in-memory guards below are per-instance: in Lambda each concurrent
+// instance has its own process, so on their own they don't bound total cost or
+// upstream abuse. They act as a cheap first line (and a fallback when the shared
+// store is down); the authoritative cross-instance rate limit and circuit
+// breaker live in Postgres via ./nl-limiter. The in-memory cache and
+// concurrency cap stay per-instance by design — the shared rate limit is what
+// bounds global cost regardless of any single instance's cache hit rate.
 
 const NL_REQUEST_TIMEOUT_MS = 8000; // hard per-call timeout (overrides SDK default)
 const NL_MAX_RETRIES = 1; // bound retry amplification of the upstream cost
@@ -2165,7 +2174,9 @@ export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
     return cached.result;
   }
 
-  // Skip the upstream call (fall back to keyword search) when a guard trips.
+  // Cheap per-instance guards first (avoid a DB round-trip on a hot instance
+  // that is already over its own limits). Skip the upstream call — the caller
+  // falls back to keyword search — when any guard trips.
   if (nlCircuitOpen()) {
     console.warn('NL query: circuit breaker open, skipping OpenAI call');
     return null;
@@ -2179,7 +2190,21 @@ export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
     return null;
   }
 
-  const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
+  // Reserve the in-flight slot before any awaits so the concurrency cap stays
+  // precise across the shared-store round-trips below; the finally releases it.
+  nlInFlight += 1;
+  try {
+    // Authoritative cross-instance guards backed by Postgres.
+    if (await nlLimiter.isCircuitOpen()) {
+      console.warn('NL query: global circuit breaker open, skipping OpenAI call');
+      return null;
+    }
+    if (!(await nlLimiter.allowInWindow())) {
+      console.warn('NL query: global rate limit reached, skipping OpenAI call');
+      return null;
+    }
+
+    const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
 
 The current datetime in America/New_York timezone is: ${currentDatetime}
 
@@ -2197,8 +2222,6 @@ Extract the following fields if present in the query (return null for fields not
 - zipcodes: a 5-digit NYC zip code string if mentioned, otherwise null
 - taxonomyNames: an array of taxonomy names that match the user's query, or null if not applicable. Available top-level taxonomies: Food, Clothing, Personal Care, Shelter, Health, Other service. Available sub-taxonomies: Mental Health, Substance Use Treatment, General Health, Support Groups (under Health); Pets, Education, Employment, Legal Services, Immigration Services, Internship (under Other service); Interview-Ready Clothing, Baby Supplies, Thrift Shop, Coat Drive, Professional Clothing (under Clothing); Food Benefits, Food Delivery / Meals on Wheels, Appliances (under Food); Gym, Baby, Hygiene, Community Services, Activities (under Personal Care); Drop-in Center, Intake, Senior, Transitional Independent Living (TIL), Housing Lottery, Supportive Housing, Residential Recovery, Cooling Center, Referral, Youth, Warming Center, Veterans (under Shelter). Use the most specific matching taxonomy. For example "food" -> ["Food"], "men's shelter" -> ["Shelter"], "mental health support" -> ["Mental Health", "Support Groups"], "drug rehab" -> ["Substance Use Treatment"]`;
 
-  nlInFlight += 1;
-  try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -2215,9 +2238,11 @@ Extract the following fields if present in the query (return null for fields not
     const result = sanitizeNlParams(rawResult);
     nlCacheSet(cacheKey, { result, timestamp: Date.now() });
     nlRecordSuccess();
+    await nlLimiter.recordSuccess();
     return result;
   } catch (err) {
     nlRecordFailure();
+    await nlLimiter.recordFailure();
     throw err;
   } finally {
     nlInFlight -= 1;

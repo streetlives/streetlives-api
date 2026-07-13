@@ -138,20 +138,26 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${escapeLike(address)}%` },
   });
 
-  const getNeighborhoodCondition = neighborhood => sequelize.where(
-    sequelize.literal(`(
-      SELECT COUNT(*) FROM nyc_neighborhood_geometries
-      WHERE (
-        nyc_neighborhood_geometries.neighborhood ILIKE ${sequelize.escape(`%${neighborhood}%`)}
-        OR nyc_neighborhood_geometries.borough ILIKE ${sequelize.escape(`%${neighborhood}%`)}
-      )
-      AND ST_Contains(
-        nyc_neighborhood_geometries.geometry,
-        ST_SetSRID("Location".position, 4326)
-      )
-    )`),
-    { [Op.gt]: 0 },
-  );
+  const getNeighborhoodCondition = (neighborhood) => {
+    // Escape LIKE metacharacters so "%"/"_" in the query are matched literally
+    // rather than acting as wildcards (which would match every neighborhood and
+    // trigger the expensive correlated PostGIS check below for all locations).
+    const pattern = sequelize.escape(`%${escapeLike(neighborhood)}%`);
+    return sequelize.where(
+      sequelize.literal(`(
+        SELECT COUNT(*) FROM nyc_neighborhood_geometries
+        WHERE (
+          nyc_neighborhood_geometries.neighborhood ILIKE ${pattern}
+          OR nyc_neighborhood_geometries.borough ILIKE ${pattern}
+        )
+        AND ST_Contains(
+          nyc_neighborhood_geometries.geometry,
+          ST_SetSRID("Location".position, 4326)
+        )
+      )`),
+      { [Op.gt]: 0 },
+    );
+  };
 
   const getTaxonomyCondition = (taxonomyIds) => {
     return {
@@ -486,8 +492,8 @@ module.exports = (sequelize, DataTypes, Op) => {
       const knownNeighborhoodMatch = await sequelize.models.NycNeighborhoodGeometries.findOne({
         attributes: ['neighborhood'],
         where: sequelize.or(
-          { neighborhood: { [Op.iLike]: `%${searchString}%` } },
-          { borough: { [Op.iLike]: `%${searchString}%` } },
+          { neighborhood: { [Op.iLike]: `%${escapeLike(searchString)}%` } },
+          { borough: { [Op.iLike]: `%${escapeLike(searchString)}%` } },
         ),
         raw: true,
       });

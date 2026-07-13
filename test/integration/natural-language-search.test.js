@@ -545,6 +545,37 @@ describe('find locations with a natural language query', () => {
 
       expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
     });
+
+    it('treats LIKE metacharacters in the search string literally for neighborhoods', async () => {
+      // Same midtown box as above, containing the two nearby locations.
+      await models.NycNeighborhoodGeometries.create({
+        neighborhood: 'Midtown West',
+        borough: 'Manhattan',
+        geometry: {
+          type: 'Polygon',
+          crs: { type: 'name', properties: { name: 'EPSG:4326' } },
+          coordinates: [[
+            [-74.05, 40.70],
+            [-74.05, 40.80],
+            [-73.97, 40.80],
+            [-73.97, 40.70],
+            [-74.05, 40.70],
+          ]],
+        },
+      });
+
+      // "Midtow_" is not a literal substring of "Midtown West"; only if the
+      // underscore is (wrongly) treated as a single-char LIKE wildcard would it
+      // match the neighborhood, trip the known-neighborhood gate, and pull in
+      // every location inside the geometry via the expensive PostGIS condition.
+      // No location name contains "midtow", so the fuzzy/text paths can't match.
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'Midtow_' })
+        .expect(200);
+
+      expectOnlyLocations(res);
+    });
   });
 
   describe('acronym normalization in search', () => {

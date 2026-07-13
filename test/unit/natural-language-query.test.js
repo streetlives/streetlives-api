@@ -16,6 +16,18 @@ jest.mock('openai', () => function OpenAI() {
   };
 });
 
+// The cross-instance (Postgres-backed) guards live in ./nl-limiter. Mock them so
+// these unit tests stay hermetic (no DB) and cover the per-instance guards in
+// openai.js; the shared limiter itself is covered by an integration test. The
+// defaults (set in beforeEach) let calls through so existing tests are unaffected.
+const mockLimiter = {
+  isCircuitOpen: jest.fn(),
+  allowInWindow: jest.fn(),
+  recordSuccess: jest.fn(),
+  recordFailure: jest.fn(),
+};
+jest.mock('../../src/controllers/nl-limiter', () => mockLimiter);
+
 // A full raw model response (every field the JSON schema requires), all nulls.
 const rawNlResponse = overrides => ({
   searchString: null,
@@ -51,6 +63,10 @@ describe('parseNaturalLanguageQuery', () => {
     // so load a fresh copy for every test.
     jest.resetModules();
     mockCreate.mockReset();
+    mockLimiter.isCircuitOpen.mockReset().mockResolvedValue(false);
+    mockLimiter.allowInWindow.mockReset().mockResolvedValue(true);
+    mockLimiter.recordSuccess.mockReset().mockResolvedValue();
+    mockLimiter.recordFailure.mockReset().mockResolvedValue();
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     // eslint-disable-next-line global-require
@@ -366,6 +382,11 @@ describe('parseNaturalLanguageQuery', () => {
         inFlight.push(parseNaturalLanguageQuery(`query ${i}`, NOW));
       }
 
+      // The 10 calls reserve their in-flight slots synchronously, but now clear
+      // the (async) shared-store guards before reaching OpenAI, so let those
+      // microtasks settle before asserting they all hit the upstream mock.
+      await new Promise(resolve => setImmediate(resolve));
+
       await expect(parseNaturalLanguageQuery('over the cap', NOW))
         .resolves.toBeNull();
       expect(mockCreate).toHaveBeenCalledTimes(10);
@@ -423,6 +444,44 @@ describe('parseNaturalLanguageQuery', () => {
       mockModelOutput(rawNlResponse());
       await parseNaturalLanguageQuery('still closed', NOW);
       expect(mockCreate).toHaveBeenCalledTimes(7);
+    });
+  });
+
+  describe('shared (cross-instance) limiter', () => {
+    it('skips OpenAI when the global circuit breaker is open', async () => {
+      mockLimiter.isCircuitOpen.mockResolvedValue(true);
+      mockModelOutput(rawNlResponse());
+
+      await expect(parseNaturalLanguageQuery('while global open', NOW))
+        .resolves.toBeNull();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('skips OpenAI when the global rate limit is hit', async () => {
+      mockLimiter.allowInWindow.mockResolvedValue(false);
+      mockModelOutput(rawNlResponse());
+
+      await expect(parseNaturalLanguageQuery('global rate hit', NOW))
+        .resolves.toBeNull();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('records success against the shared limiter on a successful call', async () => {
+      mockModelOutput(rawNlResponse({ searchString: 'food' }));
+
+      await parseNaturalLanguageQuery('food', NOW);
+
+      expect(mockLimiter.recordSuccess).toHaveBeenCalledTimes(1);
+      expect(mockLimiter.recordFailure).not.toHaveBeenCalled();
+    });
+
+    it('records failure against the shared limiter when the call throws', async () => {
+      mockCreate.mockRejectedValue(new Error('upstream down'));
+
+      await expect(parseNaturalLanguageQuery('boom', NOW)).rejects.toThrow();
+
+      expect(mockLimiter.recordFailure).toHaveBeenCalledTimes(1);
+      expect(mockLimiter.recordSuccess).not.toHaveBeenCalled();
     });
   });
 });
