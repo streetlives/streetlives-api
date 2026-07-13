@@ -74,9 +74,10 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
 The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
-text to the OpenAI API — see [PRIVACY.md](PRIVACY.md) for the data flow,
-redaction coverage/limitations, and requirements for any client enabling
-this feature publicly.
+text to the OpenAI API, but only when the request also sets
+`naturalLanguageConsent=true` — see [PRIVACY.md](PRIVACY.md) for the data
+flow, redaction coverage/limitations, and requirements for any client
+enabling this feature publicly.
 
 ## Running the tests
 

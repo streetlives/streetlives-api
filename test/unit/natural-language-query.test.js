@@ -23,6 +23,7 @@ jest.mock('openai', () => function OpenAI() {
 const mockLimiter = {
   isCircuitOpen: jest.fn(),
   allowInWindow: jest.fn(),
+  allowClientInWindow: jest.fn(),
   recordSuccess: jest.fn(),
   recordFailure: jest.fn(),
 };
@@ -65,6 +66,7 @@ describe('parseNaturalLanguageQuery', () => {
     mockCreate.mockReset();
     mockLimiter.isCircuitOpen.mockReset().mockResolvedValue(false);
     mockLimiter.allowInWindow.mockReset().mockResolvedValue(true);
+    mockLimiter.allowClientInWindow.mockReset().mockResolvedValue(true);
     mockLimiter.recordSuccess.mockReset().mockResolvedValue();
     mockLimiter.recordFailure.mockReset().mockResolvedValue();
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -464,6 +466,31 @@ describe('parseNaturalLanguageQuery', () => {
       await expect(parseNaturalLanguageQuery('global rate hit', NOW))
         .resolves.toBeNull();
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('skips OpenAI when the per-client rate limit is hit', async () => {
+      mockLimiter.allowClientInWindow.mockResolvedValue(false);
+      mockModelOutput(rawNlResponse());
+
+      await expect(parseNaturalLanguageQuery('client rate hit', NOW, '1.2.3.4'))
+        .resolves.toBeNull();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('passes the given clientId through to the per-client check', async () => {
+      mockModelOutput(rawNlResponse());
+
+      await parseNaturalLanguageQuery('food', NOW, '1.2.3.4');
+
+      expect(mockLimiter.allowClientInWindow).toHaveBeenCalledWith('1.2.3.4');
+    });
+
+    it('falls back to an "unknown" client bucket when no clientId is given', async () => {
+      mockModelOutput(rawNlResponse());
+
+      await parseNaturalLanguageQuery('food', NOW);
+
+      expect(mockLimiter.allowClientInWindow).toHaveBeenCalledWith('unknown');
     });
 
     it('records success against the shared limiter on a successful call', async () => {

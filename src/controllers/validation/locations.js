@@ -27,6 +27,11 @@ export default {
         .max(1000),
       searchString: Joi.string().allow(''),
       naturalLanguageQuery: Joi.string().max(500),
+      // Callers must acknowledge (via their own UI) that naturalLanguageQuery text
+      // is sent to a third-party AI provider before setting this to true — see
+      // PRIVACY.md. Without it, naturalLanguageQuery is only used as a local
+      // keyword search and never reaches OpenAI.
+      naturalLanguageConsent: Joi.boolean(),
       organizationName: Joi.string().min(3),
       zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
       taxonomyId: Joi.string(),

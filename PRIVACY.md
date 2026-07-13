@@ -18,7 +18,19 @@ exposing this feature to end users.
 Nothing else — no user identity, session, IP, or account data is included
 in the request.
 
-## Data-minimization controls in place
+## Consent is enforced by the API, not just documented
+
+`naturalLanguageQuery` is only ever sent to OpenAI if the request also sets
+`naturalLanguageConsent=true` (`src/controllers/locations.js`). Without it,
+the query is used only as a local keyword search (`ILIKE`/`tsvector`
+against Postgres) and never reaches a third party — silently, not as an
+error, so callers that haven't been updated keep working in degraded mode
+rather than breaking. A client must set this flag only after showing the
+user the notice described below; the API has no way to verify that
+happened, so this is a contract with API consumers, not a substitute for
+them actually asking.
+
+## Data-minimization and abuse controls in place
 
 - **Length cap**: queries over 500 characters are rejected before any
   processing (`src/controllers/validation/locations.js`).
@@ -32,9 +44,19 @@ in the request.
 - **No raw-query logging**: the query text (redacted or not) is never
   written to logs; only guard/error states are (`NL query: ...` warnings
   in `src/controllers/openai.js`).
-- **Rate limiting / circuit breaker**: `src/controllers/nl-limiter.js`
-  caps how often the endpoint can call OpenAI at all, cross-instance,
-  independent of redaction.
+- **Rate limiting / circuit breaker**: `src/controllers/nl-limiter.js` caps
+  how often the endpoint can call OpenAI, cross-instance (shared across all
+  Lambda instances via Postgres), independent of redaction — both a global
+  cap (60 uncached calls/min) and a **per-client cap** (8 uncached
+  calls/min, keyed on a hash of the caller's IP via
+  `src/utils/request.js`) so one caller cannot consume the entire global
+  budget and deny NL parsing to everyone else.
+- **Fails closed**: if the shared Postgres-backed limiter is itself
+  unavailable, admission checks (`allowInWindow`, `allowClientInWindow`,
+  `isCircuitOpen`) deny the OpenAI call rather than allowing it through.
+  A DB outage degrades natural-language search to plain keyword search
+  for everyone, rather than letting Lambda's per-instance concurrency
+  amplify unmetered, unbounded paid OpenAI calls during that outage.
 - **Caching**: successful results are cached (keyed on the *redacted*
   query) for a few minutes, so a repeated query is not re-sent.
 
@@ -59,7 +81,8 @@ called out here so it isn't mistaken for an oversight.
 ## Requirement for any client enabling this endpoint publicly
 
 Because redaction is best-effort, any product surface (web/mobile) that
-lets end users type into `naturalLanguageQuery` must, before launch:
+lets end users type into `naturalLanguageQuery` must, before setting
+`naturalLanguageConsent=true`:
 
 1. Display a notice near the search input (e.g. "Don't include personal
    details like your name, phone number, or SSN in your search — we send
@@ -71,7 +94,8 @@ lets end users type into `naturalLanguageQuery` must, before launch:
 3. Confirm the query is not required to complete a search — a client
    should always let users fall back to structured filters
    (`searchString`, `taxonomyId`, `zipcodes`, etc) without natural
-   language.
+   language. Omitting `naturalLanguageConsent` does exactly this
+   automatically (see above).
 
 Streetlives is a service used by people who are homeless or in poverty,
 often in vulnerable circumstances; treat any gap between "redaction we

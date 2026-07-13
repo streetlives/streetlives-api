@@ -2105,17 +2105,19 @@ function nlCacheSet(key, value) {
 
 // ---- Abuse / availability controls around the (paid) OpenAI call ----
 // This endpoint is public and each uncached query costs money + latency, so we
-// guard the upstream call with a timeout, a rate cap, a concurrency cap and a
-// circuit breaker. When any guard trips we return null, which the caller treats
-// as "no structured params" and falls back to a plain keyword search.
+// guard the upstream call with a timeout, a rate cap, a concurrency cap, a
+// per-client cap and a circuit breaker. When any guard trips we return null,
+// which the caller treats as "no structured params" and falls back to a plain
+// keyword search.
 //
 // The in-memory guards below are per-instance: in Lambda each concurrent
-// instance has its own process, so on their own they don't bound total cost or
-// upstream abuse. They act as a cheap first line (and a fallback when the shared
-// store is down); the authoritative cross-instance rate limit and circuit
-// breaker live in Postgres via ./nl-limiter. The in-memory cache and
-// concurrency cap stay per-instance by design — the shared rate limit is what
-// bounds global cost regardless of any single instance's cache hit rate.
+// instance has its own process, so on their own they don't bound total cost,
+// upstream abuse, or a single caller's share of it. They act as a cheap first
+// line before the shared-store round-trip; the authoritative cross-instance
+// rate limit, per-client limit and circuit breaker live in Postgres via
+// ./nl-limiter, and — unlike these in-memory guards — fail CLOSED (deny) if
+// that shared store is unavailable, rather than letting Lambda concurrency
+// amplify unmetered OpenAI calls during an outage.
 
 const NL_REQUEST_TIMEOUT_MS = 8000; // hard per-call timeout (overrides SDK default)
 const NL_MAX_RETRIES = 1; // bound retry amplification of the upstream cost
@@ -2165,8 +2167,10 @@ const nlAllowInWindow = () => {
 // `query` is expected to already have gone through `redactPii`
 // (src/utils/redact-pii.js) at the call site in controllers/locations.js
 // before it reaches here — see PRIVACY.md for what that does and doesn't
-// cover.
-export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
+// cover. `clientId` identifies the caller (e.g. their IP, via
+// utils/request.getClientIp) for the per-client rate limit below; callers
+// that can't identify a client share the 'unknown' bucket.
+export const parseNaturalLanguageQuery = async (query, currentDatetime, clientId = 'unknown') => {
   // Relative time expressions ("open now", "tonight") resolve against
   // currentDatetime, so a cached result is only valid for queries made around
   // the same time. Bucket the datetime at the cache TTL and include it in the
@@ -2205,6 +2209,10 @@ export const parseNaturalLanguageQuery = async (query, currentDatetime) => {
     }
     if (!(await nlLimiter.allowInWindow())) {
       console.warn('NL query: global rate limit reached, skipping OpenAI call');
+      return null;
+    }
+    if (!(await nlLimiter.allowClientInWindow(clientId))) {
+      console.warn('NL query: per-client rate limit reached, skipping OpenAI call');
       return null;
     }
 
