@@ -217,13 +217,57 @@ describe('find locations with a natural language query', () => {
       expectOnlyLocations(res, shelterLocation.name);
     });
 
-    it('filters by an extracted street address', async () => {
-      parseNaturalLanguageQuery.mockResolvedValue(nlResult({ streetAddress: '123 W 50th' }));
+    describe('with an extracted street address (proximity intent)', () => {
+      it('searches near the address instead of filtering by the address string', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ streetAddress: '123 W 50th' }));
 
-      const res = await queryLocations({ naturalLanguageQuery: 'help near 123 W 50th St' })
-        .expect(200);
+        const res = await queryLocations({ naturalLanguageQuery: 'help near 123 W 50th St' })
+          .expect(200);
 
-      expectOnlyLocations(res, shelterLocation.name);
+        // The food center is at a different address but within the proximity
+        // radius of the anchor, so it must be included — an address filter
+        // would wrongly return only the location sharing the address string.
+        expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
+      });
+
+      it('anchors the search at the resolved address without caller coordinates', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ streetAddress: '456 Broadway' }));
+
+        const res = await request(app)
+          .get('/locations')
+          .query({
+            naturalLanguageQuery: 'food near 456 Broadway',
+            naturalLanguageConsent: 'true',
+          })
+          .expect(200);
+
+        // The far-off location is outside the anchor's radius.
+        expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
+      });
+
+      it('combines the address anchor with other extracted filters', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({
+          streetAddress: '456 Broadway',
+          taxonomyNames: ['Food'],
+        }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'food near 456 Broadway' })
+          .expect(200);
+
+        expectOnlyLocations(res, foodLocation.name);
+      });
+
+      it('falls back to a scoped keyword search for an unresolvable address', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ streetAddress: '999 Nowhere Ave' }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'help near 999 Nowhere Ave' })
+          .expect(200);
+
+        // No geocoder exists for unknown addresses; the query must stay
+        // scoped (keyword search on the address) rather than broadening
+        // into an unfiltered everything-matches search.
+        expectOnlyLocations(res);
+      });
     });
 
     it('filters by an extracted neighborhood using the neighborhood geometries', async () => {
@@ -344,6 +388,110 @@ describe('find locations with a natural language query', () => {
       });
     });
 
+    describe('with extracted membership', () => {
+      beforeEach(async () => {
+        await models.Eligibility.destroy({ where: {} });
+        await models.EligibilityParameter.destroy({ where: {} });
+
+        const membershipParam =
+          await models.EligibilityParameter.create({ name: eligibilityParams.membership });
+        await shelterService.createEligibility({
+          parameter_id: membershipParam.id,
+          eligible_values: ['true'],
+        });
+        await foodService.createEligibility({
+          parameter_id: membershipParam.id,
+          eligible_values: ['false'],
+        });
+      });
+      afterAll(() => Promise.all([
+        models.Eligibility.destroy({ where: {} }),
+        models.EligibilityParameter.destroy({ where: {} }),
+      ]));
+
+      it('keeps only membership-based services when membership is extracted as true', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ membership: true }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'members-only services' })
+          .expect(200);
+
+        expectOnlyLocations(res, shelterLocation.name);
+      });
+
+      it('keeps only no-membership services when membership is extracted as false', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ membership: false }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'no membership needed' })
+          .expect(200);
+
+        expectOnlyLocations(res, foodLocation.name);
+      });
+    });
+
+    describe('with an extracted age range', () => {
+      beforeEach(async () => {
+        await models.Eligibility.destroy({ where: {} });
+        await models.EligibilityParameter.destroy({ where: {} });
+
+        const ageParam = await models.EligibilityParameter.create({ name: 'age' });
+        await shelterService.createEligibility({
+          parameter_id: ageParam.id,
+          eligible_values: [{
+            age_min: 18, age_max: 24, all_ages: null, population_served: '18-24',
+          }],
+        });
+        await foodService.createEligibility({
+          parameter_id: ageParam.id,
+          eligible_values: [{
+            age_min: 60, age_max: null, all_ages: null, population_served: '60+',
+          }],
+        });
+      });
+      afterAll(() => Promise.all([
+        models.Eligibility.destroy({ where: {} }),
+        models.EligibilityParameter.destroy({ where: {} }),
+      ]));
+
+      it('keeps only services whose age eligibility overlaps the extracted range', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ ageMin: 18, ageMax: 21 }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'help for 18 to 21 year olds' })
+          .expect(200);
+
+        expectOnlyLocations(res, shelterLocation.name);
+      });
+
+      it('applies a lone extracted minimum age', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ ageMin: 60 }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'services for seniors' })
+          .expect(200);
+
+        expectOnlyLocations(res, foodLocation.name);
+      });
+
+      it('applies a lone extracted maximum age', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ ageMax: 20 }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'help for people under 20' })
+          .expect(200);
+
+        expectOnlyLocations(res, shelterLocation.name);
+      });
+
+      it('handles an unsanitized conflicting range without erroring or broadening', async () => {
+        // parseNaturalLanguageQuery normally nulls out an inverted range, but
+        // the filter pipeline must stay defensive if one slips through: no
+        // 500, and no silent broadening into an unfiltered search.
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ ageMin: 30, ageMax: 20 }));
+
+        const res = await queryLocations({ naturalLanguageQuery: 'help for ages 30 to 20' })
+          .expect(200);
+
+        expectOnlyLocations(res);
+      });
+    });
+
     describe('with extracted document requirements', () => {
       beforeEach(async () => {
         await models.RequiredDocument.destroy({ where: {} });
@@ -417,6 +565,86 @@ describe('find locations with a natural language query', () => {
         .expect(200);
 
       expectOnlyLocations(res, foodLocation.name);
+    });
+
+    describe('explicit eligibility params vs extracted ones', () => {
+      // Shelter: women, members only, ages 18-24. Food: men, no membership,
+      // 60+. Every test picks explicit and extracted values that select
+      // opposite locations, so the result proves which one won.
+      beforeEach(async () => {
+        await models.Eligibility.destroy({ where: {} });
+        await models.EligibilityParameter.destroy({ where: {} });
+
+        const genderParam =
+          await models.EligibilityParameter.create({ name: eligibilityParams.gender });
+        const membershipParam =
+          await models.EligibilityParameter.create({ name: eligibilityParams.membership });
+        const ageParam = await models.EligibilityParameter.create({ name: 'age' });
+
+        await Promise.all([
+          shelterService.createEligibility({
+            parameter_id: genderParam.id, eligible_values: ['female'],
+          }),
+          shelterService.createEligibility({
+            parameter_id: membershipParam.id, eligible_values: ['true'],
+          }),
+          shelterService.createEligibility({
+            parameter_id: ageParam.id,
+            eligible_values: [{
+              age_min: 18, age_max: 24, all_ages: null, population_served: '18-24',
+            }],
+          }),
+          foodService.createEligibility({
+            parameter_id: genderParam.id, eligible_values: ['male'],
+          }),
+          foodService.createEligibility({
+            parameter_id: membershipParam.id, eligible_values: ['false'],
+          }),
+          foodService.createEligibility({
+            parameter_id: ageParam.id,
+            eligible_values: [{
+              age_min: 60, age_max: null, all_ages: null, population_served: '60+',
+            }],
+          }),
+        ]);
+      });
+      afterAll(() => Promise.all([
+        models.Eligibility.destroy({ where: {} }),
+        models.EligibilityParameter.destroy({ where: {} }),
+      ]));
+
+      it('prefers an explicit gender over the extracted one', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ gender: 'male' }));
+
+        const res = await queryLocations({
+          naturalLanguageQuery: 'services for men',
+          gender: 'female',
+        }).expect(200);
+
+        expectOnlyLocations(res, shelterLocation.name);
+      });
+
+      it('prefers an explicit membership over the extracted one', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ membership: true }));
+
+        const res = await queryLocations({
+          naturalLanguageQuery: 'members-only services',
+          membership: false,
+        }).expect(200);
+
+        expectOnlyLocations(res, foodLocation.name);
+      });
+
+      it('prefers an explicit age range over the extracted one', async () => {
+        parseNaturalLanguageQuery.mockResolvedValue(nlResult({ ageMin: 18, ageMax: 21 }));
+
+        const res = await queryLocations({
+          naturalLanguageQuery: 'help for 18 to 21 year olds',
+          ageMin: 60,
+        }).expect(200);
+
+        expectOnlyLocations(res, foodLocation.name);
+      });
     });
   });
 

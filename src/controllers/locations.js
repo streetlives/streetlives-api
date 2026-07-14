@@ -20,6 +20,11 @@ import { parseNaturalLanguageQuery } from './openai';
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
 
+// How far around a natural-language "near <address>" anchor to search, when
+// the address resolves to a point (see the nlParams.streetAddress handling in
+// find below). Roughly a mile — a walkable distance in NYC.
+const NL_STREET_ADDRESS_RADIUS_METERS = 1500;
+
 const CLOSURE_EVENT_TYPE = 'CLOSURE';
 
 const isLocationClosed = (eventRelatedInfos) => {
@@ -287,7 +292,11 @@ export default {
           filterParameters.eligibility[eligibilityParams.gender] = nlParams.gender;
         }
         if (membership == null && nlParams.membership != null) {
-          filterParameters.eligibility[eligibilityParams.membership] = nlParams.membership;
+          // The parser emits a boolean, but eligibility values are stored and
+          // matched as strings (explicit query params arrive as 'true'/'false'
+          // too) — the jsonb `?` containment check never matches a boolean.
+          filterParameters.eligibility[eligibilityParams.membership] =
+            String(nlParams.membership);
         }
         if (ageMin == null && ageMax == null && age == null) {
           if (nlParams.ageMin != null || nlParams.ageMax != null) {
@@ -307,7 +316,27 @@ export default {
           filterParameters.zipcodes = nlParams.zipcodes;
         }
         if (nlParams.streetAddress) {
-          filterParameters.streetAddress = nlParams.streetAddress;
+          // A street address in a natural-language query is a proximity
+          // intent ("food near 123 Main St"), not a requirement that results
+          // share that address string. There is no external geocoder in this
+          // stack, so the address is resolved against the directory's own
+          // stored addresses; a match anchors a radius filter around that
+          // point, composing with any explicit position/radius params the
+          // same way the extracted neighborhood/zipcode filters do. An
+          // address the directory doesn't know cannot be geocoded: fall back
+          // to using it as a keyword search (never as a hard address filter,
+          // which would exclude every nearby service) so results stay scoped
+          // rather than silently broadening to an unfiltered search.
+          const anchor =
+            await models.Location.findPositionByStreetAddress(nlParams.streetAddress);
+          if (anchor) {
+            filterParameters.proximity = {
+              position: anchor,
+              radiusMeters: NL_STREET_ADDRESS_RADIUS_METERS,
+            };
+          } else if (!filterParameters.searchString) {
+            filterParameters.searchString = nlParams.streetAddress;
+          }
         }
         if (nlParams.neighborhood) {
           filterParameters.neighborhood = nlParams.neighborhood;

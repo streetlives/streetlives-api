@@ -168,6 +168,20 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${escapeLike(address)}%` },
   });
 
+  // Keeps only locations within radiusMeters of the given GeoJSON point.
+  // Used for the natural-language "near <address>" intent, where the anchor
+  // point is resolved from the directory's own addresses (see
+  // findPositionByStreetAddress) — a distance search around a point, not a
+  // requirement that results share the address string.
+  const getProximityCondition = ({ position, radiusMeters }) => sequelize.where(
+    sequelize.fn(
+      'ST_DistanceSphere',
+      sequelize.col('Location.position'),
+      sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
+    ),
+    { [Op.lte]: radiusMeters },
+  );
+
   const getNeighborhoodCondition = (neighborhood) => {
     // Escape LIKE metacharacters so "%"/"_" in the query are matched literally
     // rather than acting as wildcards (which would match every neighborhood and
@@ -365,6 +379,27 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
+  // Resolve a street address (as extracted from a natural-language query) to
+  // coordinates, using the directory itself as the geocoder: if any location's
+  // stored address contains the given string, that location's position anchors
+  // a proximity search. There is no external geocoding service in this stack,
+  // so an address not present in the directory resolves to null and the caller
+  // falls back to a keyword search. Ordered by id (locations carry no
+  // timestamps) so ties resolve deterministically between runs.
+  Location.findPositionByStreetAddress = async (address) => {
+    const match = await Location.findOne({
+      attributes: ['id', 'position'],
+      include: [{
+        model: sequelize.models.PhysicalAddress,
+        attributes: [],
+        where: { address_1: { [Op.iLike]: `%${escapeLike(address)}%` } },
+        required: true,
+      }],
+      order: [['id', 'ASC']],
+    });
+    return match ? match.position : null;
+  };
+
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     originalQueryProps = {},
@@ -380,6 +415,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       zipcodes,
       streetAddress,
       neighborhood,
+      proximity,
       taxonomyIds,
       openAt,
       occasion,
@@ -407,6 +443,9 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
     if (neighborhood) {
       whereConditions.push(getNeighborhoodCondition(neighborhood));
+    }
+    if (proximity) {
+      whereConditions.push(getProximityCondition(proximity));
     }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));

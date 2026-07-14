@@ -79,6 +79,16 @@ text to the OpenAI API, but only when the request also sets
 flow, redaction coverage/limitations, and requirements for any client
 enabling this feature publicly.
 
+A street address extracted from the query ("food near 123 Main St") is a
+*proximity* input: it is resolved against the directory's own stored
+addresses and, when it matches one, anchors a radius search around that
+point (composing with any explicit `latitude`/`longitude` filter). There is
+no external geocoding service, so an address the directory doesn't know
+falls back to a keyword search rather than filtering results by address
+string. Explicit query params always win over their extracted counterparts
+(`searchString`, `taxonomyId`, `zipcodes`, `gender`, `membership`, age
+params, `openAt`).
+
 ## Running the tests
 
 Currently, this codebase has only integration tests, testing end-to-end from HTTP request to database.
