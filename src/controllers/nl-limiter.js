@@ -36,6 +36,19 @@ const CLIENT_MAX_REQUESTS = 8;
 const CB_FAILURE_THRESHOLD = 5;
 const CB_OPEN_MS = 60 * 1000;
 
+// Retention bound for per-client rows. A client row is a single-window
+// counter: once its window has elapsed it carries no admission state (the
+// next request resets it anyway), but each row's key is derived from a client
+// identifier, so leaving rows behind would grow the table without bound on a
+// public endpoint and retain pseudonymous client identifiers indefinitely.
+// Expired rows are swept opportunistically from the admission path (no
+// scheduled job exists on Lambda): a cheap prefix-indexed DELETE, gated to at
+// most once per CLEANUP_INTERVAL_MS per instance. Worst-case retention is
+// therefore CLIENT_ROW_TTL_MS plus one sweep interval plus however long the
+// endpoint goes without any NL traffic.
+const CLIENT_ROW_TTL_MS = 5 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+
 // Exposed for tests to assert against without duplicating the magic numbers.
 export const limiterConfig = {
   windowMs: WINDOW_MS,
@@ -44,14 +57,53 @@ export const limiterConfig = {
   clientMaxRequests: CLIENT_MAX_REQUESTS,
   cbFailureThreshold: CB_FAILURE_THRESHOLD,
   cbOpenMs: CB_OPEN_MS,
+  clientRowTtlMs: CLIENT_ROW_TTL_MS,
+  cleanupIntervalMs: CLEANUP_INTERVAL_MS,
 };
 
 // The shared table's primary key is free-text (see the migration), so a raw
 // per-client identifier (typically an IP) would work directly. Hash it so we
 // never store raw IPs in this table and so the key has a bounded, predictable
-// size regardless of what identifies the client.
-const clientKey = clientId =>
-  `nl_query:client:${crypto.createHash('sha256').update(clientId).digest('hex').slice(0, 32)}`;
+// size regardless of what identifies the client. The hash is additionally
+// scoped to the UTC day: an unsalted hash of an IPv4 address is trivially
+// reversible by enumerating the address space, so a stable hash would be a
+// persistent pseudonymous identifier. Mixing the day in means a leaked or
+// not-yet-swept row only de-pseudonymizes to (ip, that one day) and cannot be
+// linked across days. Deterministic (no shared salt state) so every Lambda
+// instance derives the same key. Side effect: a client's window resets at the
+// UTC day boundary — one extra window per day is negligible against an
+// 8/minute cap.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const clientKey = (clientId, now) => {
+  const dayBucket = Math.floor(now / DAY_MS);
+  const hash = crypto.createHash('sha256')
+    .update(`${dayBucket}:${clientId}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `nl_query:client:${hash}`;
+};
+
+// Delete per-client rows whose window ended more than CLIENT_ROW_TTL_MS ago.
+// Never touches the single global row (its key has no client prefix).
+export const cleanupExpiredClientRows = async (now = Date.now()) => {
+  await sequelize.query(`
+    DELETE FROM openai_rate_limit_state
+    WHERE key LIKE 'nl_query:client:%' AND window_start < :cutoff;
+  `, { replacements: { cutoff: now - CLIENT_ROW_TTL_MS } });
+};
+
+let lastCleanupAt = 0;
+const maybeCleanupClientRows = async (now) => {
+  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+  lastCleanupAt = now;
+  try {
+    await cleanupExpiredClientRows(now);
+  } catch (err) {
+    // Best-effort housekeeping: a failed sweep must not affect the admission
+    // decision that already happened; the next sweep will catch up.
+    console.warn(`NL limiter: expired client-row cleanup failed: ${err.message}`);
+  }
+};
 
 // Atomically reset-or-increment a fixed window for `key` and return whether
 // this call fits under `maxRequests`. A single UPSERT keeps the
@@ -86,7 +138,10 @@ export const allowInWindow = async (now = Date.now()) => {
 
 export const allowClientInWindow = async (clientId, now = Date.now()) => {
   try {
-    return await checkWindow(clientKey(clientId), CLIENT_WINDOW_MS, CLIENT_MAX_REQUESTS, now);
+    const allowed =
+      await checkWindow(clientKey(clientId, now), CLIENT_WINDOW_MS, CLIENT_MAX_REQUESTS, now);
+    await maybeCleanupClientRows(now);
+    return allowed;
   } catch (err) {
     console.warn(`NL limiter: per-client rate-limit check failed, denying: ${err.message}`);
     return false;

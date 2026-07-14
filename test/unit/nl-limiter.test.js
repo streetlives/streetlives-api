@@ -96,6 +96,55 @@ describe('nl-limiter', () => {
       const keyB = mockQuery.mock.calls[1][1].replacements.key;
       expect(keyA).not.toBe(keyB);
     });
+
+    it('scopes client hashes to the UTC day (not stable long-term identifiers)', async () => {
+      mockQuery.mockResolvedValue([[{ window_count: 1 }]]);
+      const dayMs = 24 * 60 * 60 * 1000;
+
+      await limiter.allowClientInWindow('1.2.3.4', 1000);
+      await limiter.allowClientInWindow('1.2.3.4', 1000 + dayMs);
+
+      const keyDay0 = mockQuery.mock.calls[0][1].replacements.key;
+      const keyDay1 = mockQuery.mock.calls[1][1].replacements.key;
+      expect(keyDay0).not.toBe(keyDay1);
+    });
+  });
+
+  describe('expired client-row cleanup', () => {
+    // A `now` far enough past the module-initial lastCleanupAt (0) to open the
+    // per-instance sweep gate.
+    const now = 100000;
+
+    const deleteCalls = () =>
+      mockQuery.mock.calls.filter(([sql]) => sql.includes('DELETE'));
+
+    it('sweeps expired rows from the admission path, at most once per interval', async () => {
+      mockQuery.mockResolvedValue([[{ window_count: 1 }]]);
+
+      await limiter.allowClientInWindow('1.2.3.4', now);
+      await limiter.allowClientInWindow('1.2.3.4', now);
+
+      expect(deleteCalls()).toHaveLength(1);
+      const [, options] = deleteCalls()[0];
+      expect(options.replacements.cutoff).toBe(now - limiter.limiterConfig.clientRowTtlMs);
+    });
+
+    it('sweeps again once the cleanup interval has elapsed', async () => {
+      mockQuery.mockResolvedValue([[{ window_count: 1 }]]);
+
+      await limiter.allowClientInWindow('1.2.3.4', now);
+      await limiter.allowClientInWindow('1.2.3.4', now + limiter.limiterConfig.cleanupIntervalMs);
+
+      expect(deleteCalls()).toHaveLength(2);
+    });
+
+    it('does not affect the admission decision when the sweep fails', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[{ window_count: 1 }]])
+        .mockRejectedValueOnce(new Error('db down'));
+
+      await expect(limiter.allowClientInWindow('1.2.3.4', now)).resolves.toBe(true);
+    });
   });
 
   describe('isCircuitOpen', () => {

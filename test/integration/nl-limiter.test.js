@@ -10,6 +10,8 @@
 import models from '../../src/models';
 import {
   allowInWindow,
+  allowClientInWindow,
+  cleanupExpiredClientRows,
   isCircuitOpen,
   recordSuccess,
   recordFailure,
@@ -101,6 +103,53 @@ describe('nl-limiter (shared Postgres guards)', () => {
       // One more failure must not open the breaker now that the count reset.
       await recordFailure(now);
       expect(await isCircuitOpen(now)).toBe(false);
+    });
+  });
+
+  describe('per-client row retention', () => {
+    const { clientRowTtlMs, cleanupIntervalMs } = limiterConfig;
+
+    const storedKeys = async () =>
+      (await models.OpenaiRateLimitState.findAll({ raw: true })).map(row => row.key);
+
+    it('deletes expired client rows but keeps live ones and the global row', async () => {
+      const now = 10000000;
+      await allowInWindow(now);
+      await allowClientInWindow('1.2.3.4', now);
+
+      // Rows sit at (global + one client) before the sweep.
+      expect((await storedKeys()).length).toBe(2);
+
+      // Deletion is strictly-older-than: a row is swept once its age exceeds
+      // the TTL, so sweep one tick past it.
+      await cleanupExpiredClientRows(now + clientRowTtlMs + 1);
+
+      const keys = await storedKeys();
+      expect(keys).toContain('nl_query');
+      expect(keys.filter(key => key.startsWith('nl_query:client:'))).toHaveLength(0);
+    });
+
+    it('does not delete client rows still within the retention TTL', async () => {
+      const now = 10000000;
+      await allowClientInWindow('1.2.3.4', now);
+
+      await cleanupExpiredClientRows((now + clientRowTtlMs) - 1);
+
+      expect((await storedKeys()).filter(key => key.startsWith('nl_query:client:')))
+        .toHaveLength(1);
+    });
+
+    it('sweeps expired rows as a side effect of a later admission check', async () => {
+      const now = 20000000;
+      await allowClientInWindow('1.2.3.4', now);
+
+      // A different client arriving after the TTL (and past the per-instance
+      // sweep gate) triggers the opportunistic cleanup of the stale row.
+      const later = now + clientRowTtlMs + cleanupIntervalMs;
+      expect(await allowClientInWindow('5.6.7.8', later)).toBe(true);
+
+      const clientKeys = (await storedKeys()).filter(key => key.startsWith('nl_query:client:'));
+      expect(clientKeys).toHaveLength(1);
     });
   });
 });

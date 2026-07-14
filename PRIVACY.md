@@ -51,6 +51,14 @@ them actually asking.
   calls/min, keyed on a hash of the caller's IP via
   `src/utils/request.js`) so one caller cannot consume the entire global
   budget and deny NL parsing to everyone else.
+- **Bounded retention of client keys**: the per-client rows above are the
+  only place a client identifier (even hashed) is stored. The hash is
+  scoped to the UTC day, so a stored key cannot be linked across days and
+  enumerating the IPv4 space only resolves a key to (IP, single day), and
+  expired rows are swept automatically from the admission path after a
+  short TTL (`clientRowTtlMs`, minutes) — there is no unbounded
+  accumulation of pseudonymous identifiers and no separate cleanup job to
+  operate.
 - **Fails closed**: if the shared Postgres-backed limiter is itself
   unavailable, admission checks (`allowInWindow`, `allowClientInWindow`,
   `isCircuitOpen`) deny the OpenAI call rather than allowing it through.
