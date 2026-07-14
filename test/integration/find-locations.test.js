@@ -1178,4 +1178,175 @@ describe('find locations', () => {
       expect(primary.closed).toBe(true);
     });
   });
+
+  describe('closed locations in search results', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    const markClosed = async (location, { closedAgoMs = 0 } = {}) => {
+      const closure = await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: location.id,
+      });
+
+      if (closedAgoMs) {
+        await models.sequelize.query(
+          'UPDATE event_related_info SET created_at = :createdAt WHERE id = :id',
+          { replacements: { createdAt: new Date(Date.now() - closedAgoMs), id: closure.id } },
+        );
+      }
+
+      return closure;
+    };
+
+    const FOUR_MONTHS_MS = 4 * 30 * 24 * 60 * 60 * 1000;
+    const FIVE_MONTHS_MS = 5 * 30 * 24 * 60 * 60 * 1000;
+
+    const expectClosedLastForTextSearch = (res, closedLocation) => {
+      const closed = res.body.find(l => l.name === closedLocation.name);
+      expect(closed).toBeDefined();
+      expect(closed.closed).toBe(true);
+
+      // The closed location must come after every open (non-closed) location.
+      const lastOpenIndex = res.body.reduce(
+        (acc, location, index) => (location.closed ? acc : index),
+        -1,
+      );
+      const closedIndex = res.body.findIndex(l => l.name === closedLocation.name);
+      expect(closedIndex).toBeGreaterThan(lastOpenIndex);
+    };
+
+    it('should exclude long-closed locations from a text search', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should keep a location whose latest closure is recent despite an older one', async () => {
+      // An old closure plus a newer one: the location was re-closed recently, so it must be
+      // treated as recently closed (kept, sorted last) rather than long-closed (excluded).
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should exclude a location when every closure is older than 3 months', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should sort recently closed locations to the bottom for a text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should sort closed locations to the bottom for a paginated text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should move recently closed locations to a later page than open matches', async () => {
+      // 'center' matches three locations (primary, other, far). Closing one leaves two open,
+      // so with a page size of 2 the closed location can only appear on the first page if it
+      // is partitioned *after* pagination. It should instead be pushed to the second page.
+      await markClosed(primaryLocation);
+
+      const firstPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 2 })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(2);
+      expect(firstPage.body.some(l => l.closed)).toBe(false);
+      expect(firstPage.body.map(l => l.name)).not.toContain(primaryLocation.name);
+
+      const secondPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 1, pageSize: 2 })
+        .expect(200);
+
+      const closedOnSecondPage = secondPage.body.find(l => l.name === primaryLocation.name);
+      expect(closedOnSecondPage).toBeDefined();
+      expect(closedOnSecondPage.closed).toBe(true);
+    });
+
+    it('should keep closed locations last for a nearby-sorted text search', async () => {
+      // primaryLocation is the closest to the origin, so a nearby sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({
+          searchString: 'center',
+          sortBy: 'nearby',
+          latitude: originLatitude,
+          longitude: originLongitude,
+        })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should keep closed locations last for a most-services-sorted text search', async () => {
+      // Give primaryLocation the most services so a mostServices sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await primaryLocation.addServices([aSpecificOffering2, aDifferentKindOfService]);
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', sortBy: 'mostServices' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should NOT exclude or reorder closed locations when not text searching', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      // Browsing (no searchString) is unaffected: the long-closed location is still returned.
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
+  });
 });
