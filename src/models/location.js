@@ -663,6 +663,20 @@ module.exports = (sequelize, DataTypes, Op) => {
       selectedAttributeForOrderBy = 'last_validated_at';
     }
 
+    // Keyword-search ids come back in match-quality tiers (see the
+    // searchConditions loop in findUniqueLocationIds), and within a tier the
+    // query has no ORDER BY, so Postgres returns ties in arbitrary heap order
+    // and the response order can change between identical requests. Break
+    // ties by distance (nearest first) in the id queries only — `order` must
+    // stay null so the final in-memory sort below preserves the tier order
+    // instead of re-sorting everything by distance.
+    let idOrder = order;
+    let idOrderAttribute = selectedAttributeForOrderBy;
+    if (filterParameters.searchString && position && !order) {
+      idOrder = [[distance, 'ASC']];
+      idOrderAttribute = distance;
+    }
+
     if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
@@ -674,11 +688,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition].filter(Boolean), {
-          order,
+          order: idOrder,
           limit,
           offset,
         },
-        selectedAttributeForOrderBy,
+        idOrderAttribute,
         noServices,
       );
 
@@ -691,18 +705,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       if (minResults && locationIds.length < minResults) {
         totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-          order,
+          order: idOrder,
           limit: minResults,
           offset,
-        }, selectedAttributeForOrderBy, noServices);
+        }, idOrderAttribute, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         limit,
         offset,
-        order,
-      }, selectedAttributeForOrderBy);
+        order: idOrder,
+      }, idOrderAttribute);
     }
 
     const additionalLocationData = locationFieldsOnly ? [

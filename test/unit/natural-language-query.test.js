@@ -477,6 +477,21 @@ describe('parseNaturalLanguageQuery', () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
+    it('does not charge the global window for requests the per-client limit rejects', async () => {
+      // allowInWindow charges the global counter as part of its check, so a
+      // client over its own limit must be rejected before the global check
+      // runs — otherwise one client's rejected requests could exhaust the
+      // global budget for everyone.
+      mockLimiter.allowClientInWindow.mockResolvedValue(false);
+      mockModelOutput(rawNlResponse());
+
+      await expect(parseNaturalLanguageQuery('client rate hit', NOW, '1.2.3.4'))
+        .resolves.toBeNull();
+
+      expect(mockLimiter.allowInWindow).not.toHaveBeenCalled();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
     it('passes the given clientId through to the per-client check', async () => {
       mockModelOutput(rawNlResponse());
 

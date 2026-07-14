@@ -2202,17 +2202,23 @@ export const parseNaturalLanguageQuery = async (query, currentDatetime, clientId
   // precise across the shared-store round-trips below; the finally releases it.
   nlInFlight += 1;
   try {
-    // Authoritative cross-instance guards backed by Postgres.
+    // Authoritative cross-instance guards backed by Postgres. The per-client
+    // check runs BEFORE the global one: both charge their window as part of
+    // the admission check, and if the global counter were charged first, a
+    // single client could spend the whole global budget on requests that the
+    // per-client limit then rejects, starving every other caller. In this
+    // order a rejected client only burns their own allowance, which caps how
+    // much global capacity any one client can consume.
     if (await nlLimiter.isCircuitOpen()) {
       console.warn('NL query: global circuit breaker open, skipping OpenAI call');
       return null;
     }
-    if (!(await nlLimiter.allowInWindow())) {
-      console.warn('NL query: global rate limit reached, skipping OpenAI call');
-      return null;
-    }
     if (!(await nlLimiter.allowClientInWindow(clientId))) {
       console.warn('NL query: per-client rate limit reached, skipping OpenAI call');
+      return null;
+    }
+    if (!(await nlLimiter.allowInWindow())) {
+      console.warn('NL query: global rate limit reached, skipping OpenAI call');
       return null;
     }
 
