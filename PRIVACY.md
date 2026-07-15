@@ -18,17 +18,23 @@ exposing this feature to end users.
 Nothing else — no user identity, session, IP, or account data is included
 in the request.
 
-## Consent is enforced by the API, not just documented
+## Consent model: sending the query is the consent signal
 
-`naturalLanguageQuery` is only ever sent to OpenAI if the request also sets
-`naturalLanguageConsent=true` (`src/controllers/locations.js`). Without it,
-the query is used only as a local keyword search (`ILIKE`/`tsvector`
-against Postgres) and never reaches a third party — silently, not as an
-error, so callers that haven't been updated keep working in degraded mode
-rather than breaking. A client must set this flag only after showing the
-user the notice described below; the API has no way to verify that
-happened, so this is a contract with API consumers, not a substitute for
-them actually asking.
+There is no separate consent parameter. Populating `naturalLanguageQuery`
+**is** the caller's acknowledgment that the query text (after redaction)
+is sent to OpenAI — a client must only populate it after showing the user
+the notice described below. The API has no way to verify that happened,
+so this is a contract with API consumers, not a substitute for them
+actually asking. A client that has not shown the notice must send the
+user's text as `searchString` instead, which is only ever used as a local
+keyword search (`ILIKE`/`tsvector` against Postgres) and never reaches a
+third party.
+
+The former `naturalLanguageConsent` parameter has been removed and is now
+ignored if sent — including `naturalLanguageConsent=false`, which no
+longer suppresses the OpenAI call. Clients that relied on it to gate
+consent must instead withhold `naturalLanguageQuery` itself until the
+user has seen the notice.
 
 ## Data-minimization and abuse controls in place
 
@@ -89,8 +95,8 @@ called out here so it isn't mistaken for an oversight.
 ## Requirement for any client enabling this endpoint publicly
 
 Because redaction is best-effort, any product surface (web/mobile) that
-lets end users type into `naturalLanguageQuery` must, before setting
-`naturalLanguageConsent=true`:
+lets end users type free text must, before sending that text as
+`naturalLanguageQuery`:
 
 1. Display a notice near the search input (e.g. "Don't include personal
    details like your name, phone number, or SSN in your search — we send
@@ -102,8 +108,8 @@ lets end users type into `naturalLanguageQuery` must, before setting
 3. Confirm the query is not required to complete a search — a client
    should always let users fall back to structured filters
    (`searchString`, `taxonomyId`, `zipcodes`, etc) without natural
-   language. Omitting `naturalLanguageConsent` does exactly this
-   automatically (see above).
+   language. Sending the user's text as `searchString` instead of
+   `naturalLanguageQuery` does exactly this (see above).
 
 Streetlives is a service used by people who are homeless or in poverty,
 often in vulnerable circumstances; treat any gap between "redaction we

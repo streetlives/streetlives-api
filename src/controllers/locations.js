@@ -189,7 +189,6 @@ export default {
         pageSize: _pageSize,
         sortBy,
         naturalLanguageQuery,
-        naturalLanguageConsent,
       } = req.query;
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
@@ -204,28 +203,24 @@ export default {
 
       let nlParams = null;
       if (naturalLanguageQuery) {
-        // The OpenAI call is only made once the caller has acknowledged (via
-        // its own UI, using this flag) that the query text is sent to a
-        // third-party AI provider — see PRIVACY.md. Without it we silently
-        // degrade to a local keyword search on the raw query below, rather
-        // than erroring, so unmigrated clients keep working.
-        if (!parseBoolean(naturalLanguageConsent, false)) {
-          console.warn('NL query: no consent acknowledgment provided, skipping OpenAI call');
-        } else {
-          try {
-            const sanitizedQuery = redactPii(naturalLanguageQuery);
-            // The NL prompt describes this value as America/New_York time, so
-            // format it in that zone (with its UTC offset) rather than UTC —
-            // otherwise relative dates ("tonight", "tomorrow") resolve to the
-            // wrong day near day boundaries.
-            nlParams = await parseNaturalLanguageQuery(
-              sanitizedQuery,
-              formatIsoWithTimezone(new Date(), 'America/New_York'),
-              getClientIp(req),
-            );
-          } catch (err) {
-            console.error('NL query parse failed, falling back to raw search:', err.message);
-          }
+        // Sending naturalLanguageQuery is itself the consent signal: a client
+        // must only populate this param after showing the user the
+        // third-party-AI notice described in PRIVACY.md. The query text is
+        // redacted and sent to OpenAI; on any failure we degrade to a local
+        // keyword search on the raw query below.
+        try {
+          const sanitizedQuery = redactPii(naturalLanguageQuery);
+          // The NL prompt describes this value as America/New_York time, so
+          // format it in that zone (with its UTC offset) rather than UTC —
+          // otherwise relative dates ("tonight", "tomorrow") resolve to the
+          // wrong day near day boundaries.
+          nlParams = await parseNaturalLanguageQuery(
+            sanitizedQuery,
+            formatIsoWithTimezone(new Date(), 'America/New_York'),
+            getClientIp(req),
+          );
+        } catch (err) {
+          console.error('NL query parse failed, falling back to raw search:', err.message);
         }
       }
 

@@ -158,9 +158,8 @@ describe('find locations with a natural language query', () => {
   });
   afterAll(clearData);
 
-  // Every test in this file exercises what happens once the caller has
-  // acknowledged the OpenAI consent notice; the "consent" describe block below
-  // covers the gate itself (naturalLanguageConsent omitted/false).
+  // Sending naturalLanguageQuery is itself the consent signal — see
+  // PRIVACY.md — so no separate consent param accompanies these requests.
   const queryLocations = params =>
     request(app)
       .get('/locations')
@@ -168,7 +167,6 @@ describe('find locations with a natural language query', () => {
         latitude: originLatitude,
         longitude: originLongitude,
         radius,
-        naturalLanguageConsent: 'true',
         ...params,
       });
 
@@ -237,7 +235,6 @@ describe('find locations with a natural language query', () => {
           .get('/locations')
           .query({
             naturalLanguageQuery: 'food near 456 Broadway',
-            naturalLanguageConsent: 'true',
           })
           .expect(200);
 
@@ -294,7 +291,7 @@ describe('find locations with a natural language query', () => {
       // No coordinates: the neighborhood filter is what narrows things down.
       const res = await request(app)
         .get('/locations')
-        .query({ naturalLanguageQuery: 'help in midtown', naturalLanguageConsent: 'true' })
+        .query({ naturalLanguageQuery: 'help in midtown' })
         .expect(200);
 
       expectOnlyLocations(res, shelterLocation.name, foodLocation.name);
@@ -559,7 +556,6 @@ describe('find locations with a natural language query', () => {
           longitude: originLongitude,
           radius,
           naturalLanguageQuery: 'services in 10001',
-          naturalLanguageConsent: 'true',
           zipcodes: ['10018'],
         }))
         .expect(200);
@@ -742,43 +738,16 @@ describe('find locations with a natural language query', () => {
     });
   });
 
-  describe('consent gate', () => {
-    // These override the default naturalLanguageConsent: 'true' set by
-    // queryLocations, so call supertest directly rather than through it.
-    const queryWithoutDefaultConsent = params =>
-      request(app)
-        .get('/locations')
-        .query({
-          latitude: originLatitude,
-          longitude: originLongitude,
-          radius,
-          ...params,
-        });
-
-    it('does not call OpenAI without consent, and falls back to a plain search', async () => {
-      const res = await queryWithoutDefaultConsent({ naturalLanguageQuery: 'shelter' })
-        .expect(200);
-
-      expect(parseNaturalLanguageQuery).not.toHaveBeenCalled();
-      expectOnlyLocations(res, shelterLocation.name);
-    });
-
-    it('does not call OpenAI when naturalLanguageConsent is explicitly false', async () => {
-      const res = await queryWithoutDefaultConsent({
-        naturalLanguageQuery: 'shelter',
-        naturalLanguageConsent: 'false',
-      }).expect(200);
-
-      expect(parseNaturalLanguageQuery).not.toHaveBeenCalled();
-      expectOnlyLocations(res, shelterLocation.name);
-    });
-
-    it('calls OpenAI once naturalLanguageConsent is true', async () => {
+  describe('legacy consent param', () => {
+    // naturalLanguageConsent was removed: sending naturalLanguageQuery is
+    // itself the consent signal. The old param must be ignored (not rejected,
+    // and not treated as a gate) so unmigrated clients keep working.
+    it('ignores naturalLanguageConsent and calls the parser regardless', async () => {
       parseNaturalLanguageQuery.mockResolvedValue(nlResult());
 
-      await queryWithoutDefaultConsent({
+      await queryLocations({
         naturalLanguageQuery: 'shelter',
-        naturalLanguageConsent: 'true',
+        naturalLanguageConsent: 'false',
       }).expect(200);
 
       expect(parseNaturalLanguageQuery).toHaveBeenCalledTimes(1);
