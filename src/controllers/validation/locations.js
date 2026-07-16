@@ -26,6 +26,9 @@ export default {
         .min(Joi.ref('minResults', { default: 0 }))
         .max(1000),
       searchString: Joi.string().allow(''),
+      // Populating naturalLanguageQuery implies the caller has shown the user
+      // the third-party-AI notice (the text is sent to OpenAI) — see PRIVACY.md.
+      naturalLanguageQuery: Joi.string().max(500),
       organizationName: Joi.string().min(3),
       zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
       taxonomyId: Joi.string(),

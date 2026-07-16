@@ -11,10 +11,19 @@ import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
+import { formatIsoWithTimezone } from '../utils/times';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { redactPii } from '../utils/redact-pii';
+import { getClientIp } from '../utils/request';
+import { parseNaturalLanguageQuery } from './openai';
 
 const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
 const MAX_TAXONOMY_IDS = 200;
+
+// How far around a natural-language "near <address>" anchor to search, when
+// the address resolves to a point (see the nlParams.streetAddress handling in
+// find below). Roughly a mile — a walkable distance in NYC.
+const NL_STREET_ADDRESS_RADIUS_METERS = 1500;
 
 const CLOSURE_EVENT_TYPE = 'CLOSURE';
 
@@ -179,6 +188,7 @@ export default {
         pageNumber: _pageNumber,
         pageSize: _pageSize,
         sortBy,
+        naturalLanguageQuery,
       } = req.query;
 
       const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
@@ -189,6 +199,29 @@ export default {
 
       if (ageMin != null && ageMax != null && ageMin > ageMax) {
         throw new ValidationError('ageMin cannot be greater than ageMax');
+      }
+
+      let nlParams = null;
+      if (naturalLanguageQuery) {
+        // Sending naturalLanguageQuery is itself the consent signal: a client
+        // must only populate this param after showing the user the
+        // third-party-AI notice described in PRIVACY.md. The query text is
+        // redacted and sent to OpenAI; on any failure we degrade to a local
+        // keyword search on the raw query below.
+        try {
+          const sanitizedQuery = redactPii(naturalLanguageQuery);
+          // The NL prompt describes this value as America/New_York time, so
+          // format it in that zone (with its UTC offset) rather than UTC —
+          // otherwise relative dates ("tonight", "tomorrow") resolve to the
+          // wrong day near day boundaries.
+          nlParams = await parseNaturalLanguageQuery(
+            sanitizedQuery,
+            formatIsoWithTimezone(new Date(), 'America/New_York'),
+            getClientIp(req),
+          );
+        } catch (err) {
+          console.error('NL query parse failed, falling back to raw search:', err.message);
+        }
       }
 
       let attributesObject;
@@ -238,6 +271,88 @@ export default {
       }
       if (zipcodes && zipcodes.length) {
         filterParameters.zipcodes = zipcodes;
+      }
+
+      if (nlParams) {
+        if (!filterParameters.searchString && nlParams.searchString) {
+          filterParameters.searchString = nlParams.searchString;
+        }
+        if (!openAt && nlParams.openAt) {
+          const parsedOpenAt = new Date(nlParams.openAt);
+          if (!isNaN(parsedOpenAt.getTime())) {
+            filterParameters.openAt = parsedOpenAt;
+          }
+        }
+        if (!gender && nlParams.gender) {
+          filterParameters.eligibility[eligibilityParams.gender] = nlParams.gender;
+        }
+        if (membership == null && nlParams.membership != null) {
+          // The parser emits a boolean, but eligibility values are stored and
+          // matched as strings (explicit query params arrive as 'true'/'false'
+          // too) — the jsonb `?` containment check never matches a boolean.
+          filterParameters.eligibility[eligibilityParams.membership] =
+            String(nlParams.membership);
+        }
+        if (ageMin == null && ageMax == null && age == null) {
+          if (nlParams.ageMin != null || nlParams.ageMax != null) {
+            filterParameters.eligibility.ageRange = {
+              ageMin: nlParams.ageMin,
+              ageMax: nlParams.ageMax,
+            };
+          }
+        }
+        if (referralRequired == null && nlParams.referralRequired != null) {
+          filterParameters.documents[documentTypes.referralLetter] = nlParams.referralRequired;
+        }
+        if (photoIdRequired == null && nlParams.photoIdRequired != null) {
+          filterParameters.documents[documentTypes.photoId] = nlParams.photoIdRequired;
+        }
+        if (!zipcodes && nlParams.zipcodes) {
+          filterParameters.zipcodes = nlParams.zipcodes;
+        }
+        if (nlParams.streetAddress) {
+          // A street address in a natural-language query is a proximity
+          // intent ("food near 123 Main St"), not a requirement that results
+          // share that address string. There is no external geocoder in this
+          // stack, so the address is resolved against the directory's own
+          // stored addresses; a match anchors a radius filter around that
+          // point, composing with any explicit position/radius params the
+          // same way the extracted neighborhood/zipcode filters do. An
+          // address the directory doesn't know cannot be geocoded: fall back
+          // to using it as a keyword search (never as a hard address filter,
+          // which would exclude every nearby service) so results stay scoped
+          // rather than silently broadening to an unfiltered search.
+          const anchor =
+            await models.Location.findPositionByStreetAddress(nlParams.streetAddress);
+          if (anchor) {
+            filterParameters.proximity = {
+              position: anchor,
+              radiusMeters: NL_STREET_ADDRESS_RADIUS_METERS,
+            };
+          } else if (!filterParameters.searchString) {
+            filterParameters.searchString = nlParams.streetAddress;
+          }
+        }
+        if (nlParams.neighborhood) {
+          filterParameters.neighborhood = nlParams.neighborhood;
+        }
+        if (!taxonomyId && nlParams.taxonomyNames && nlParams.taxonomyNames.length > 0) {
+          const matchedTaxonomies = await models.Taxonomy.findAll({
+            where: { name: nlParams.taxonomyNames },
+          });
+          if (matchedTaxonomies.length > 0) {
+            const matchedIds = matchedTaxonomies.map(t => t.id);
+            filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(matchedIds);
+          } else if (!filterParameters.searchString) {
+            // None of the parser's taxonomy names matched a known taxonomy. Dropping
+            // the constraint entirely would broaden this to an effectively unfiltered
+            // search, so fall back to using the taxonomy names as a keyword search
+            // string to keep the results scoped to what the user asked for.
+            filterParameters.searchString = nlParams.taxonomyNames.join(' ');
+          }
+        }
+      } else if (naturalLanguageQuery && !filterParameters.searchString) {
+        filterParameters.searchString = naturalLanguageQuery.trim();
       }
 
       if (taxonomyId) {
