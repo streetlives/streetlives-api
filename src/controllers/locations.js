@@ -21,10 +21,7 @@ const isLocationClosed = (occasion, eventRelatedInfos, services) => {
   }
   const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
   eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
-  const locationServicesAllClosed = !services ||
-  services.every(service => service.HolidaySchedules.every(holidaySchedule =>
-    holidaySchedule.closed));
-  return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+  return hasCOVIDEventRelatedInfo;
 };
 
 const getInfoAssociations = {
