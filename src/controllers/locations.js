@@ -17,7 +17,7 @@ import { redactPii } from '../utils/redact-pii';
 import { getClientIp } from '../utils/request';
 import { parseNaturalLanguageQuery } from './openai';
 
-const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
+const DEFAULT_MAX_LOCATIONS_RETURNED = 1700;
 const MAX_TAXONOMY_IDS = 200;
 
 // How far around a natural-language "near <address>" anchor to search, when
