@@ -4,6 +4,7 @@ import { SORT_OPTIONS, SORT_ORDER } from '../sort-by';
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
   lastUpdated: Joi.date().iso(),
+  copyedit: Joi.boolean(),
 });
 
 export default {

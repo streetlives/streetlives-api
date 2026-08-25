@@ -15,6 +15,7 @@ const hourRegex = /^\d{2}:\d{2}$/;
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
   lastUpdated: Joi.date().iso(),
+  copyedit: Joi.boolean(),
 });
 
 export default {

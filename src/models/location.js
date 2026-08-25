@@ -28,6 +28,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     hidden_from_search: DataTypes.BOOLEAN,
     slug: DataTypes.TEXT,
     last_validated_at: DataTypes.DATE,
+    script_updated_at: DataTypes.DATE,
     name_vector: DataTypes.TSVECTOR,
     streetview_url: DataTypes.TEXT,
   }, {
