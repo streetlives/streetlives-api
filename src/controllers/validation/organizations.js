@@ -3,6 +3,7 @@ import Joi from 'joi';
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
   lastUpdated: Joi.date().iso(),
+  copyedit: Joi.boolean(),
 });
 
 export default {
