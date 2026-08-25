@@ -266,15 +266,14 @@ export const updateService = (
   if (area) {
     updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
   }
- 
-  if(whoDoesItServe) {
 
+  if (whoDoesItServe) {
     updatePromises.push(updateEligibilityParam(
       service,
       'age',
       {
         eligible_values: whoDoesItServe,
-        description: ''
+        description: '',
       },
       { t, user, metadata },
     ));
@@ -366,42 +365,56 @@ export const createService = async (
   return createdService;
 });
 
-export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
-  const service = await models.Service.findByPk(serviceId, { include: [models.Location] });
-  if (!service) return;
+const startTransactionOrUseExisting = (options, callback) => {
+  if (options && options.transaction) {
+    return callback(options.transaction);
+  }
 
-  const destroyAssociation = model =>
-    model.destroy({ where: { service_id: serviceId }, transaction: t });
-  await Promise.all([
-    destroyAssociation(models.DocumentsInfo),
-    destroyAssociation(models.Eligibility),
-    destroyAssociation(models.HolidaySchedule),
-    destroyAssociation(models.RegularSchedule),
-    destroyAssociation(models.RequiredDocument),
-    destroyAssociation(models.ServiceArea),
-    destroyAssociation(models.Phone),
-    destroyAssociation(models.ServiceTaxonomySpecificAttribute),
-  ]);
+  return sequelize.transaction(callback);
+};
 
-  const recordLocationOfDeletedService = async () => {
-    const location = service.Locations[0];
-    await models.Metadata.create({
-      resource_table: models.ServiceAtLocation.tableName,
-      resource_id: location.ServiceAtLocation.id,
-      last_action_date: new Date(),
-      last_action_type: models.Metadata.actionTypes.delete,
-      field_name: 'location_id',
-      previous_value: location.id,
-      updated_by: user,
-      source: `${service.id} service deletion`,
-    }, { transaction: t });
-  };
+export const deleteService = (serviceId, user, options = {}) => startTransactionOrUseExisting(
+  options,
+  async (t) => {
+    const service = await models.Service.findByPk(serviceId, {
+      include: [models.Location],
+      transaction: t,
+    });
+    if (!service) return;
 
-  await Promise.all([
-    destroyInstance(user, service, { transaction: t }),
-    recordLocationOfDeletedService(),
-  ]);
-});
+    const destroyAssociation = model =>
+      model.destroy({ where: { service_id: serviceId }, transaction: t });
+    await Promise.all([
+      destroyAssociation(models.DocumentsInfo),
+      destroyAssociation(models.Eligibility),
+      destroyAssociation(models.HolidaySchedule),
+      destroyAssociation(models.RegularSchedule),
+      destroyAssociation(models.RequiredDocument),
+      destroyAssociation(models.ServiceArea),
+      destroyAssociation(models.Phone),
+      destroyAssociation(models.ServiceTaxonomySpecificAttribute),
+    ]);
+
+    const recordLocationOfDeletedService = async () => {
+      const location = service.Locations[0];
+      await models.Metadata.create({
+        resource_table: models.ServiceAtLocation.tableName,
+        resource_id: location.ServiceAtLocation.id,
+        last_action_date: new Date(),
+        last_action_type: models.Metadata.actionTypes.delete,
+        field_name: 'location_id',
+        previous_value: location.id,
+        updated_by: user,
+        source: `${service.id} service deletion`,
+      }, { transaction: t });
+    };
+
+    await Promise.all([
+      destroyInstance(user, service, { transaction: t }),
+      recordLocationOfDeletedService(),
+    ]);
+  },
+);
 
 export default {
   updateService,

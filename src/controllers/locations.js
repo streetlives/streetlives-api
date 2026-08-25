@@ -7,6 +7,13 @@ import {
   getMetadataForService,
   getLastValidatedDateForLocation,
 } from '../services/last-updates';
+import {
+  listScheduledLocationDeletions,
+  restoreLocationDeletion,
+  scheduleLocationDeletion,
+  serializeLocationDeletionSchedule,
+} from '../services/location-deletions';
+import slackNotifier from '../services/slack-notifier';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
@@ -515,6 +522,58 @@ export default {
       } else {
         res.status(404).send({ error: 'Location slug not found' });
       }
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getDeletionSchedules: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getDeletionSchedules, { allowUnknown: true });
+
+      const schedules = await listScheduledLocationDeletions();
+      res.send(schedules.map(serializeLocationDeletionSchedule));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  scheduleDeletion: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.scheduleDeletion, { allowUnknown: true });
+
+      const { locationId } = req.params;
+      const { note } = req.body;
+
+      const schedule = await scheduleLocationDeletion(locationId, note, req.user);
+
+      try {
+        await slackNotifier.notifyLocationDeletionScheduled({
+          location: schedule.Location,
+          note: schedule.note,
+          requestedBy: schedule.requested_by,
+          deletedServiceCount: schedule.deleted_service_count,
+          scheduledForPermanentDeletionAt: schedule.scheduled_for_permanent_deletion_at,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Error notifying Slack of scheduled location deletion', err);
+      }
+
+      res.status(201).send(serializeLocationDeletionSchedule(schedule));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  restoreDeletion: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.restoreDeletion, { allowUnknown: true });
+
+      const { locationId } = req.params;
+      await restoreLocationDeletion(locationId, req.user);
+
+      res.sendStatus(204);
     } catch (err) {
       next(err);
     }
