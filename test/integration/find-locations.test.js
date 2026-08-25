@@ -53,6 +53,7 @@ describe('find locations', () => {
       {
         name: 'The Test Org',
         description: 'An organization meant for testing purposes.',
+        email: 'contact@streetlives.org',
         Services: [
           {
             name: 'A specific offering',
@@ -208,6 +209,21 @@ describe('find locations', () => {
       })
       .expect(200)
       .then(expectMatchNearbyLocations));
+
+  it('should not expose organization email in public location results', () =>
+    request(app)
+      .get('/locations')
+      .query({
+        latitude: originLatitude,
+        longitude: originLongitude,
+        radius,
+      })
+      .expect(200)
+      .then((res) => {
+        res.body.forEach((returnedLocation) => {
+          expect(returnedLocation.Organization).not.toHaveProperty('email');
+        });
+      }));
 
   it('should not return locations marked "hidden from search" (meant for comments only)', () =>
     request(app)

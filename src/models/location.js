@@ -815,7 +815,10 @@ module.exports = (sequelize, DataTypes, Op) => {
         ],
       },
     ] : [
-      sequelize.models.Organization,
+      {
+        model: sequelize.models.Organization,
+        attributes: sequelize.models.Organization.getPublicAttributes(),
+      },
       sequelize.models.EventRelatedInfo,
       {
         model: sequelize.models.Service,

@@ -18,6 +18,7 @@ import {
 
 export default (app) => {
   app.get('/organizations', organizations.find);
+  app.get('/organizations/:organizationId', getUser, organizations.get);
   app.post('/organizations', getUser, dataEntryAuth, organizations.create);
   app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
   app.get('/organizations/:organizationId/locations', organizations.getLocations);

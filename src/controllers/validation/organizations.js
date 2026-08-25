@@ -4,6 +4,7 @@ const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
   lastUpdated: Joi.date().iso(),
 });
+const emailSchema = Joi.string().trim().email().allow('', null);
 
 export default {
   find: {
@@ -16,6 +17,7 @@ export default {
     body: Joi.object().keys({
       name: Joi.string().required(),
       description: Joi.string(),
+      email: emailSchema,
       url: Joi.string(),
       metadata: updateMetadataSchema,
     }).required(),
@@ -28,8 +30,15 @@ export default {
     body: Joi.object().keys({
       name: Joi.string(),
       description: Joi.string().allow(''),
+      email: emailSchema,
       url: Joi.string().allow(''),
       metadata: updateMetadataSchema,
+    }).required(),
+  },
+
+  get: {
+    params: Joi.object().keys({
+      organizationId: Joi.string().guid().required(),
     }).required(),
   },
 
