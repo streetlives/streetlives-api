@@ -73,9 +73,15 @@ jobs:
           set -euo pipefail
           mkdir -p .codex-run
 
-          git --no-pager diff --name-status "$BASE_SHA...$HEAD_SHA" > .codex-run/changed-files.txt
-          git --no-pager diff --stat "$BASE_SHA...$HEAD_SHA" > .codex-run/diff-stat.txt
-          git --no-pager log --oneline "$BASE_SHA...$HEAD_SHA" > .codex-run/commits.txt
+          if git merge-base "$BASE_SHA" "$HEAD_SHA" > /dev/null; then
+            DIFF_RANGE="$BASE_SHA...$HEAD_SHA"
+          else
+            DIFF_RANGE="$BASE_SHA..$HEAD_SHA"
+          fi
+
+          git --no-pager diff --name-status "$DIFF_RANGE" > .codex-run/changed-files.txt
+          git --no-pager diff --stat "$DIFF_RANGE" > .codex-run/diff-stat.txt
+          git --no-pager log --oneline "$DIFF_RANGE" > .codex-run/commits.txt
 
           jq '{
             number: .pull_request.number,
@@ -184,6 +190,7 @@ jobs:
           PR: #$PR_NUMBER
           Base: $PR_BASE_REF @ $BASE_SHA
           Head: $PR_HEAD_REF @ $HEAD_SHA
+          Diff range: $DIFF_RANGE
 
           Generated files:
           - .codex-run/pr.json
@@ -200,8 +207,8 @@ jobs:
           - .codex-run/linked-issue-comments.jsonl
 
           The full PR diff is intentionally not embedded in this prompt. Inspect it selectively with:
-          git --no-pager diff --unified=80 "$BASE_SHA...$HEAD_SHA" -- <path>
-          git --no-pager diff --name-only "$BASE_SHA...$HEAD_SHA"
+          git --no-pager diff --unified=80 "$DIFF_RANGE" -- <path>
+          git --no-pager diff --name-only "$DIFF_RANGE"
           EOF
 
           {
