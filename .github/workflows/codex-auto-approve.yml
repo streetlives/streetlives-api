@@ -41,7 +41,8 @@ jobs:
       - name: Materialize protected prompt/schema from develop branch head
         run: |
           set -euo pipefail
-          mkdir -p .codex-protected
+          rm -rf .codex-protected
+          mkdir .codex-protected
 
           git fetch --no-tags origin develop:refs/remotes/origin/develop --depth=1
 
@@ -75,7 +76,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p .codex-run
+          rm -rf .codex-run
+          mkdir .codex-run
 
           if git merge-base "$BASE_SHA" "$HEAD_SHA" > /dev/null; then
             DIFF_RANGE="$BASE_SHA...$HEAD_SHA"
