@@ -46,6 +46,7 @@ const locationAssociations = {
     models.PhysicalAddress,
     models.AccessibilityForDisabilities,
     models.EventRelatedInfo,
+    models.Streetview,
   ],
 };
 const serviceAssociations = {
@@ -566,7 +567,7 @@ export default {
   },
 
   update: async (req, res, next) => {
-    const updateLocation = (location, updateParams, metadata) => {
+    const updateLocation = (location, updateParams, metadata, transaction) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
       if (updateParams.streetview_url != null) {
@@ -586,10 +587,10 @@ export default {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
-      return updateInstance(req.user, location, locationUpdate, { metadata });
+      return updateInstance(req.user, location, locationUpdate, { metadata, transaction });
     };
 
-    const updateAddress = (location, updateParams, metadata) => {
+    const updateAddress = (location, updateParams, metadata, transaction) => {
       if (!location.PhysicalAddresses || location.PhysicalAddresses.length !== 1) {
         throw new Error('Trying to update address for location with no valid existing address');
       }
@@ -604,13 +605,17 @@ export default {
       if (updateParams.postalCode != null) { addressUpdate.postal_code = updateParams.postalCode; }
       if (updateParams.country != null) { addressUpdate.country = updateParams.country; }
 
-      return updateInstance(req.user, currentAddress, addressUpdate, { metadata });
+      return updateInstance(req.user, currentAddress, addressUpdate, { metadata, transaction });
     };
 
-    const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata) => {
-      await models.EventRelatedInfo.destroy({
+    const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata, transaction) => {
+      const existing = await models.EventRelatedInfo.findAll({
         where: { location_id: location.id, event: eventRelatedInfo.event },
+        transaction,
       });
+      for (const row of existing) {
+        await destroyInstance(req.user, row, { metadata, transaction });
+      }
 
       if (eventRelatedInfo.information) {
         const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
@@ -618,7 +623,56 @@ export default {
           location_id: location.id,
           event: eventRelatedInfo.event,
           information: eventRelatedInfo.information,
-        }, { metadata });
+        }, { metadata, transaction });
+      }
+    };
+
+    const handleStreetviewUpdate = async (locationId, streetviewData, metadata, transaction) => {
+      // Lock the parent location row for the rest of the transaction:
+      // without it, concurrent requests can both find no streetview and both
+      // insert, and the loser hits the location_id unique constraint instead
+      // of turning into an update.
+      await models.Location.findByPk(locationId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      const existing = await models.Streetview.findOne({
+        where: { location_id: locationId },
+        transaction,
+      });
+
+      if (streetviewData === null) {
+        if (existing) {
+          await destroyInstance(req.user, existing, { metadata, transaction });
+        }
+        return;
+      }
+
+      if (existing) {
+        const streetviewUpdate = {};
+        if ('pano_id' in streetviewData) streetviewUpdate.pano_id = streetviewData.pano_id;
+        if ('lat' in streetviewData) streetviewUpdate.lat = streetviewData.lat;
+        if ('lng' in streetviewData) streetviewUpdate.lng = streetviewData.lng;
+        if ('heading' in streetviewData) streetviewUpdate.heading = streetviewData.heading;
+        if ('pitch' in streetviewData) streetviewUpdate.pitch = streetviewData.pitch;
+        if ('fov' in streetviewData) streetviewUpdate.fov = streetviewData.fov;
+        await updateInstance(req.user, existing, streetviewUpdate, { metadata, transaction });
+      } else {
+        await createInstance(
+          req.user,
+          models.Streetview.create.bind(models.Streetview),
+          {
+            location_id: locationId,
+            pano_id: streetviewData.pano_id !== undefined ? streetviewData.pano_id : null,
+            lat: streetviewData.lat !== undefined ? streetviewData.lat : null,
+            lng: streetviewData.lng !== undefined ? streetviewData.lng : null,
+            heading: streetviewData.heading !== undefined ? streetviewData.heading : null,
+            pitch: streetviewData.pitch !== undefined ? streetviewData.pitch : null,
+            fov: streetviewData.fov !== undefined ? streetviewData.fov : null,
+          },
+          { metadata, transaction },
+        );
       }
     };
 
@@ -626,7 +680,7 @@ export default {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
       const { locationId } = req.params;
-      const { metadata } = req.body;
+      const { metadata, streetview } = req.body;
 
       const location = await models.Location.findByPk(locationId, {
         include: models.PhysicalAddress,
@@ -636,19 +690,22 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      const updatePromises = [];
+      // Await each update in turn: with concurrent updates sharing the
+      // transaction, one rejection rolls it back while siblings are still
+      // issuing queries against the finished transaction.
+      await models.sequelize.transaction(async (t) => {
+        if (req.body.address) {
+          await updateAddress(location, req.body.address, metadata, t);
+        }
+        if (req.body.eventRelatedInfo) {
+          await updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata, t);
+        }
+        if ('streetview' in req.body) {
+          await handleStreetviewUpdate(locationId, streetview, metadata, t);
+        }
 
-      if (req.body.address) {
-        updatePromises.push(updateAddress(location, req.body.address, metadata));
-      }
-
-      if (req.body.eventRelatedInfo) {
-        updatePromises.push(updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata));
-      }
-
-      updatePromises.push(updateLocation(location, req.body, metadata));
-
-      await Promise.all(updatePromises);
+        await updateLocation(location, req.body, metadata, t);
+      });
 
       res.sendStatus(204);
     } catch (err) {

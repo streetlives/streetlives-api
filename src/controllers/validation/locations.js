@@ -106,6 +106,21 @@ export default {
         event: Joi.string().required(),
         information: Joi.string().required().allow(null),
       }),
+      streetview: Joi.object().keys({
+        pano_id: Joi.string().max(128).allow(null),
+        lat: Joi.number().min(-90).max(90).allow(null),
+        lng: Joi.number().min(-180).max(180).allow(null),
+        heading: Joi.number().min(0).max(360).allow(null),
+        pitch: Joi.number().min(-90).max(90).allow(null),
+        fov: Joi.number().integer().min(10).max(120)
+          .allow(null),
+        // {} would otherwise create an all-null streetview row; require at
+        // least one field (null still means delete, omission means unchanged).
+        // unknown(false) opts out of the API-wide allowUnknown here: unknown
+        // keys would satisfy min(1) while being ignored by the controller,
+        // so {bogus: 'x'} would also create an all-null row.
+      }).min(1).allow(null)
+        .unknown(false),
       metadata: updateMetadataSchema,
     }).required(),
   },
