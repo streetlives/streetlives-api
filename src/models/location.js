@@ -2,6 +2,17 @@ import assert from 'assert';
 import { SORT_ORDER } from '../controllers/sort-by';
 import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
 
+// Escape regex metacharacters so user-supplied search text can be safely
+// interpolated into POSIX regular-expression (Op.iRegexp) conditions.
+// Without this, input such as "(" produces an invalid regex and a DB error.
+const escapeRegExp = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Escape LIKE/ILIKE metacharacters (\ % _) so user text used as a whole-value
+// exact match is compared literally. Without this, a value that is (or ends
+// with) a lone backslash makes Postgres reject the pattern with
+// "LIKE pattern must not end with escape character" and return a 500.
+const escapeLike = str => str.replace(/[\\%_]/g, '\\$&');
+
 module.exports = (sequelize, DataTypes, Op) => {
   const Location = sequelize.define('Location', {
     id: {
@@ -48,6 +59,36 @@ module.exports = (sequelize, DataTypes, Op) => {
             )`),
     SERVICE_COUNT_COLUMN_ALIAS,
   ];
+
+  const CLOSURE_EVENT_TYPE = 'CLOSURE';
+  // A location is considered closed while it has a CLOSURE event. Closures older than
+  // this are dropped from search results entirely; more recent ones are kept but sorted
+  // to the bottom of the results.
+  const MAX_CLOSED_AGE_INTERVAL = '3 months';
+
+  const IS_CLOSED_COLUMN_ALIAS = 'is_closed';
+  const IS_CLOSED_SUBQUERY = [
+    sequelize.literal(`(
+                EXISTS (
+                  SELECT 1 FROM event_related_info eri
+                  WHERE eri.location_id = "Location"."id"
+                    AND eri.event = '${CLOSURE_EVENT_TYPE}'
+                )
+            )`),
+    IS_CLOSED_COLUMN_ALIAS,
+  ];
+
+  // Excludes locations whose *latest* CLOSURE event was recorded more than
+  // MAX_CLOSED_AGE_INTERVAL ago. Keyed off MAX(created_at) so a location with an old closure
+  // record plus a newer one is treated as recently closed (kept) rather than long-closed. The
+  // aggregate subquery yields no rows when the location has no closures (MAX is NULL, so the
+  // HAVING is not satisfied), so non-closed locations are always kept.
+  const CLOSED_TOO_LONG_EXCLUSION = sequelize.literal(`NOT EXISTS (
+                SELECT 1 FROM event_related_info eri
+                WHERE eri.location_id = "Location"."id"
+                  AND eri.event = '${CLOSURE_EVENT_TYPE}'
+                HAVING MAX(eri.created_at) < now() - interval '${MAX_CLOSED_AGE_INTERVAL}'
+            )`);
 
   Location.associate = (models) => {
     Location.belongsTo(models.Organization, { foreignKey: 'organization_id' });
@@ -124,9 +165,50 @@ module.exports = (sequelize, DataTypes, Op) => {
     '$PhysicalAddresses.postal_code$': { [Op.in]: zipcodes },
   });
 
-  const getTaxonomyCondition = taxonomyIds => ({
-    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
+  const getStreetAddressCondition = address => ({
+    '$PhysicalAddresses.address_1$': { [Op.iLike]: `%${escapeLike(address)}%` },
   });
+
+  // Keeps only locations within radiusMeters of the given GeoJSON point.
+  // Used for the natural-language "near <address>" intent, where the anchor
+  // point is resolved from the directory's own addresses (see
+  // findPositionByStreetAddress) — a distance search around a point, not a
+  // requirement that results share the address string.
+  const getProximityCondition = ({ position, radiusMeters }) => sequelize.where(
+    sequelize.fn(
+      'ST_DistanceSphere',
+      sequelize.col('Location.position'),
+      sequelize.literal(`ST_GeomFromGeoJSON('${JSON.stringify(position)}')`),
+    ),
+    { [Op.lte]: radiusMeters },
+  );
+
+  const getNeighborhoodCondition = (neighborhood) => {
+    // Escape LIKE metacharacters so "%"/"_" in the query are matched literally
+    // rather than acting as wildcards (which would match every neighborhood and
+    // trigger the expensive correlated PostGIS check below for all locations).
+    const pattern = sequelize.escape(`%${escapeLike(neighborhood)}%`);
+    return sequelize.where(
+      sequelize.literal(`(
+        SELECT COUNT(*) FROM nyc_neighborhood_geometries
+        WHERE (
+          nyc_neighborhood_geometries.neighborhood ILIKE ${pattern}
+          OR nyc_neighborhood_geometries.borough ILIKE ${pattern}
+        )
+        AND ST_Contains(
+          nyc_neighborhood_geometries.geometry,
+          ST_SetSRID("Location".position, 4326)
+        )
+      )`),
+      { [Op.gt]: 0 },
+    );
+  };
+
+  const getTaxonomyCondition = (taxonomyIds) => {
+    return {
+    '$Services.Taxonomies.id$': { [Op.in]: taxonomyIds },
+  }
+};
 
   const getOpeningHoursCondition = (openAt, occasion) => {
     // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
@@ -298,6 +380,27 @@ module.exports = (sequelize, DataTypes, Op) => {
     return sequelize.and(requiredDocumentCondition, notRequiredDocumentCondition);
   };
 
+  // Resolve a street address (as extracted from a natural-language query) to
+  // coordinates, using the directory itself as the geocoder: if any location's
+  // stored address contains the given string, that location's position anchors
+  // a proximity search. There is no external geocoding service in this stack,
+  // so an address not present in the directory resolves to null and the caller
+  // falls back to a keyword search. Ordered by id (locations carry no
+  // timestamps) so ties resolve deterministically between runs.
+  Location.findPositionByStreetAddress = async (address) => {
+    const match = await Location.findOne({
+      attributes: ['id', 'position'],
+      include: [{
+        model: sequelize.models.PhysicalAddress,
+        attributes: [],
+        where: { address_1: { [Op.iLike]: `%${escapeLike(address)}%` } },
+        required: true,
+      }],
+      order: [['id', 'ASC']],
+    });
+    return match ? match.position : null;
+  };
+
   Location.findUniqueLocationIds = async (filterParameters,
     additionalConditions,
     originalQueryProps = {},
@@ -311,6 +414,9 @@ module.exports = (sequelize, DataTypes, Op) => {
       searchString,
       organizationName,
       zipcodes,
+      streetAddress,
+      neighborhood,
+      proximity,
       taxonomyIds,
       openAt,
       occasion,
@@ -326,11 +432,21 @@ module.exports = (sequelize, DataTypes, Op) => {
       taxonomySpecificAttributes && Object.keys(taxonomySpecificAttributes).length;
 
     const whereConditions = [];
+
     if (organizationName) {
       whereConditions.push(getOrganizationNameCondition(organizationName));
     }
     if (zipcodes) {
       whereConditions.push(getZipcodesCondition(zipcodes));
+    }
+    if (streetAddress) {
+      whereConditions.push(getStreetAddressCondition(streetAddress));
+    }
+    if (neighborhood) {
+      whereConditions.push(getNeighborhoodCondition(neighborhood));
+    }
+    if (proximity) {
+      whereConditions.push(getProximityCondition(proximity));
     }
     if (taxonomyIds) {
       whereConditions.push(getTaxonomyCondition(taxonomyIds));
@@ -350,6 +466,11 @@ module.exports = (sequelize, DataTypes, Op) => {
     }
     if (occasion) {
       whereConditions.push(getOccasionCondition(occasion));
+    }
+    // For text search only: drop locations closed for longer than MAX_CLOSED_AGE_INTERVAL,
+    // and (further below) sort the remaining closed locations to the bottom of the results.
+    if (searchString) {
+      whereConditions.push(sequelize.where(CLOSED_TOO_LONG_EXCLUSION, true));
     }
 
     // we put empty object in the having array to work around this bug in sequelize:
@@ -383,6 +504,8 @@ module.exports = (sequelize, DataTypes, Op) => {
           sequelize.fn('DISTINCT', sequelize.col('Location.id')),
           // For SELECT DISTINCT, ORDER BY expressions must appear in select list.
           ...(selectedAttributeForOrderBy ? [selectedAttributeForOrderBy] : []),
+          // For text search only: used to push closed locations to the bottom (see below).
+          ...(searchString ? [IS_CLOSED_SUBQUERY] : []),
         ],
         raw: true,
         // Not like associations and grouping work perfectly out of the box either though...
@@ -438,13 +561,56 @@ module.exports = (sequelize, DataTypes, Op) => {
 
     let locations;
     if (searchString) {
+      // getNeighborhoodCondition runs a correlated geometry (ST_Contains)
+      // subquery per location row, which is far too expensive to apply to
+      // every keyword search on this public endpoint. Gate it behind a cheap
+      // name lookup against the small geometries table so it only runs when
+      // the search text actually names a known neighborhood or borough.
+      const knownNeighborhoodMatch = await sequelize.models.NycNeighborhoodGeometries.findOne({
+        attributes: ['neighborhood'],
+        where: sequelize.or(
+          { neighborhood: { [Op.iLike]: `%${escapeLike(searchString)}%` } },
+          { borough: { [Op.iLike]: `%${escapeLike(searchString)}%` } },
+        ),
+        raw: true,
+      });
+
+      // Normalize acronyms: convert "S.H.O.W." → "SHOW" to support dot-separated acronym queries
+      const normalizeAcronyms = str => str.replace(/\b[A-Za-z](?:\.[A-Za-z])+\.?/g, m => m.replace(/\./g, ''));
+      const normalizedSearchString = normalizeAcronyms(searchString);
+
       const websearchToTsqueryCondition = {
         [Op.match]:
         sequelize.fn('websearch_to_tsquery', 'english', searchString),
       };
-      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${searchString}.*$` };
-      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${searchString}(\\b|$)` };
-      const exactExactMatchCondition = { [Op.iLike]: searchString };
+      const escapedSearchString = escapeRegExp(searchString);
+      const escapedNormalizedSearchString = escapeRegExp(normalizedSearchString);
+      const prefixCondition = { [Op.iRegexp]: `(^|\\b)${escapedSearchString}.*$` };
+      const exactMatchCondition = { [Op.iRegexp]: `(^|\\b)${escapedSearchString}(\\b|$)` };
+      const exactExactMatchCondition = { [Op.iLike]: escapeLike(searchString) };
+
+      // Conditions using normalized search string (for when user types "S.H.O.W." → match "SHOW")
+      const normalizedPrefixCondition = normalizedSearchString !== searchString
+        ? { [Op.iRegexp]: `(^|\\b)${escapedNormalizedSearchString}.*$` }
+        : null;
+      const normalizedExactMatchCondition = normalizedSearchString !== searchString
+        ? { [Op.iRegexp]: `(^|\\b)${escapedNormalizedSearchString}(\\b|$)` }
+        : null;
+      const normalizedExactExactMatchCondition = normalizedSearchString !== searchString
+        ? { [Op.iLike]: escapeLike(normalizedSearchString) }
+        : null;
+
+      // DB-side acronym normalization: strip dots from column values to match "S.H.O.W." → "SHOW"
+      // Used when searching "SHOW" against names stored as "S.H.O.W."
+      const stripDotsFromCol = col => sequelize.fn('regexp_replace', sequelize.col(col), '\\.', '', 'g');
+      const dbNormalizedOrgNameCondition = sequelize.where(
+        sequelize.fn('lower', stripDotsFromCol('Organization.name')),
+        { [Op.iLike]: `%${escapeLike(normalizedSearchString)}%` },
+      );
+      const dbNormalizedLocationNameCondition = sequelize.where(
+        sequelize.fn('lower', stripDotsFromCol('Location.name')),
+        { [Op.iLike]: `%${escapeLike(normalizedSearchString)}%` },
+      );
 
       // eslint-disable-next-line no-inner-declarations, no-shadow
       function parseZipCodes(searchString) {
@@ -459,23 +625,37 @@ module.exports = (sequelize, DataTypes, Op) => {
       const targetResultCount = Math.min(200, (offset || 0) + (limit || 200));
       const searchConditions = [
         { '$PhysicalAddresses.postal_code$': zipCodeCondition },
+        getStreetAddressCondition(searchString),
+        ...(knownNeighborhoodMatch ? [getNeighborhoodCondition(searchString)] : []),
         getPhoneNumberCondition(searchString),
 
         { '$Organization.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Organization.name$': normalizedExactExactMatchCondition }] : []),
         { '$Organization.name$': prefixCondition },
+        ...(normalizedPrefixCondition ? [{ '$Organization.name$': normalizedPrefixCondition }] : []),
+        dbNormalizedOrgNameCondition,
         { '$Organization.name_vector$': websearchToTsqueryCondition },
         getCombinedFuzzySearchCondition('Organization.name', searchString),
         { '$Location.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Location.name$': normalizedExactExactMatchCondition }] : []),
         { '$Location.name$': prefixCondition },
+        ...(normalizedPrefixCondition ? [{ '$Location.name$': normalizedPrefixCondition }] : []),
+        dbNormalizedLocationNameCondition,
         { '$Location.name_vector$': websearchToTsqueryCondition },
         getCombinedFuzzySearchCondition('Location.name', searchString),
 
         { '$Services.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Services.name$': normalizedExactExactMatchCondition }] : []),
         { '$Services.Taxonomies.name$': exactExactMatchCondition },
+        ...(normalizedExactExactMatchCondition ? [{ '$Services.Taxonomies.name$': normalizedExactExactMatchCondition }] : []),
         { '$Organization.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Organization.name$': normalizedExactMatchCondition }] : []),
         { '$Location.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Location.name$': normalizedExactMatchCondition }] : []),
         { '$Services.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Services.name$': normalizedExactMatchCondition }] : []),
         { '$Services.Taxonomies.name$': exactMatchCondition },
+        ...(normalizedExactMatchCondition ? [{ '$Services.Taxonomies.name$': normalizedExactMatchCondition }] : []),
 
         // prefix match
         { '$Services.name$': prefixCondition },
@@ -510,6 +690,17 @@ module.exports = (sequelize, DataTypes, Op) => {
       locations = orderedLocations;
     } else {
       locations = await findAll(whereConditions);
+    }
+
+    // For text search only: closed (but not yet expired) locations always sort to the bottom
+    // of the results. This is a stable partition, so the relative order within each group is
+    // preserved. Applied before pagination so closed locations land on the final pages rather
+    // than being interleaved.
+    if (searchString) {
+      locations = [
+        ...locations.filter(location => !location[IS_CLOSED_COLUMN_ALIAS]),
+        ...locations.filter(location => location[IS_CLOSED_COLUMN_ALIAS]),
+      ];
     }
 
     // apply limit and offset in memory here
@@ -560,6 +751,20 @@ module.exports = (sequelize, DataTypes, Op) => {
       selectedAttributeForOrderBy = 'last_validated_at';
     }
 
+    // Keyword-search ids come back in match-quality tiers (see the
+    // searchConditions loop in findUniqueLocationIds), and within a tier the
+    // query has no ORDER BY, so Postgres returns ties in arbitrary heap order
+    // and the response order can change between identical requests. Break
+    // ties by distance (nearest first) in the id queries only — `order` must
+    // stay null so the final in-memory sort below preserves the tier order
+    // instead of re-sorting everything by distance.
+    let idOrder = order;
+    let idOrderAttribute = selectedAttributeForOrderBy;
+    if (filterParameters.searchString && position && !order) {
+      idOrder = [[distance, 'ASC']];
+      idOrderAttribute = distance;
+    }
+
     if (radius && position) {
       const distanceCondition = sequelize.where(distance, { [Op.lte]: radius });
 
@@ -571,11 +776,11 @@ module.exports = (sequelize, DataTypes, Op) => {
       locationIds = await Location.findUniqueLocationIds(
         filterParameters,
         [distanceCondition].filter(Boolean), {
-          order,
+          order: idOrder,
           limit,
           offset,
         },
-        selectedAttributeForOrderBy,
+        idOrderAttribute,
         noServices,
       );
 
@@ -588,18 +793,18 @@ module.exports = (sequelize, DataTypes, Op) => {
       if (minResults && locationIds.length < minResults) {
         totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
         locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
-          order,
+          order: idOrder,
           limit: minResults,
           offset,
-        }, selectedAttributeForOrderBy, noServices);
+        }, idOrderAttribute, noServices);
       }
     } else {
       totalNumLocations = (await Location.findUniqueLocationIds(filterParameters, [])).length;
       locationIds = await Location.findUniqueLocationIds(filterParameters, [], {
         limit,
         offset,
-        order,
-      }, selectedAttributeForOrderBy);
+        order: idOrder,
+      }, idOrderAttribute);
     }
 
     const additionalLocationData = locationFieldsOnly ? [
@@ -654,8 +859,14 @@ module.exports = (sequelize, DataTypes, Op) => {
     const allResults = (await Promise.all(queryPromises)).flat();
 
     // Apply sorting in memory
+    // For a text search, findUniqueLocationIds already produced the final order (search
+    // relevance, then the requested sort, then closed locations pushed to the bottom), so we
+    // must preserve that order here. Re-sorting by the requested attribute below would move
+    // closed locations back up when an explicit sort (e.g. nearby, most services) is combined
+    // with a search string, so it is only applied when there is no search string.
+    const isTextSearch = !!filterParameters.searchString;
     let sortedLocationsWithAssociations;
-    if (order) {
+    if (order && !isTextSearch) {
       // Sort by the specified order attribute (e.g., distance, service_count, last_validated_at)
       const [sortAttr, sortDir] = order[0]; // Assuming single-level order
       sortedLocationsWithAssociations = allResults.sort((a, b) => {
@@ -668,7 +879,8 @@ module.exports = (sequelize, DataTypes, Op) => {
         }
       });
     } else {
-      // Sort by locationIds order
+      // Preserve the locationIds order (which keeps closed locations at the bottom for a
+      // text search).
       sortedLocationsWithAssociations = allResults.sort(sortByLocationIds);
     }
 

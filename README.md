@@ -73,6 +73,23 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
+The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
+text to the OpenAI API. Populating the param is itself the consent signal:
+clients must only send it after showing the user the third-party-AI notice —
+see [PRIVACY.md](PRIVACY.md) for the data flow, redaction
+coverage/limitations, and requirements for any client enabling this feature
+publicly.
+
+A street address extracted from the query ("food near 123 Main St") is a
+*proximity* input: it is resolved against the directory's own stored
+addresses and, when it matches one, anchors a radius search around that
+point (composing with any explicit `latitude`/`longitude` filter). There is
+no external geocoding service, so an address the directory doesn't know
+falls back to a keyword search rather than filtering results by address
+string. Explicit query params always win over their extracted counterparts
+(`searchString`, `taxonomyId`, `zipcodes`, `gender`, `membership`, age
+params, `openAt`).
+
 ## Running the tests
 
 Currently, this codebase has only integration tests, testing end-to-end from HTTP request to database.
