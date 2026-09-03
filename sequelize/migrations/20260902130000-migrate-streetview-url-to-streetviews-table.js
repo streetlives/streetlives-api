@@ -2,6 +2,11 @@ import { Op } from 'sequelize';
 import models from '../../src/models';
 import { createInstance, destroyInstance } from '../../src/services/data-changes';
 
+// Unique per-migration tag so down() only ever reverts rows this migration
+// created, not other migrations' or the API's Streetview writes that also
+// happen to use the generic 'migration' source.
+const METADATA_SOURCE = 'migration:20260902130000-migrate-streetview-url-to-streetviews-table';
+
 const safeDecodeURIComponent = (value) => {
   try {
     return decodeURIComponent(value);
@@ -118,14 +123,14 @@ const migrateLocation = async (location) => {
     '<System>',
     models.Streetview.create.bind(models.Streetview),
     { location_id: location.id, ...parsed },
-    { metadata: { source: 'migration' } },
+    { metadata: { source: METADATA_SOURCE } },
   );
 };
 
 const revertStreetview = async (metadatum) => {
   const streetview = await models.Streetview.findByPk(metadatum.resource_id);
   if (streetview) {
-    await destroyInstance('<System>', streetview, { metadata: { source: 'migration' } });
+    await destroyInstance('<System>', streetview, { metadata: { source: METADATA_SOURCE } });
   }
 };
 
@@ -147,7 +152,7 @@ module.exports = {
     const createdMetadata = await models.Metadata.findAll({
       where: {
         resource_table: 'streetviews',
-        source: 'migration',
+        source: METADATA_SOURCE,
         last_action_type: models.Metadata.actionTypes.create,
       },
     });
