@@ -58,8 +58,14 @@ All configuration options can be passed to the server using environment variable
 * `DATABASE_HOST` - The URL at which the database is hosted
 * `DATABASE_USER` - The username used to connect to the database
 * `DATABASE_PASSWORD` - The password used to connect to the database
+* `DATABASE_POOL_MAX` - Maximum number of DB connections used by one API process (Default: `1`)
+* `DATABASE_POOL_MIN` - Minimum number of DB connections used by one API process (Default: `0`)
 * `DATABASE_CLIENT_MIN_MESSAGES` - Postgres `client_min_messages` level. Keep as `ignore` with RDS Proxy to avoid connection pinning from session-level `SET` commands (Default: `ignore`)
 * `DATABASE_KEEP_DEFAULT_TIMEZONE` - When `true`, sequelize will not issue `SET TIME ZONE ...` per connection, which avoids RDS Proxy session pinning (Default: `true`)
+
+### Lambda connection pooling note
+
+This codebase uses multiple `Promise.all(...)` blocks around DB work (for example metadata lookups and chunked location queries). In AWS Lambda, setting `DATABASE_POOL_MAX=1` is still safe, because requests are handled one at a time per invocation environment and sequelize will queue concurrent query promises onto the single available connection. Keep in mind that pool size `1` can increase per-request latency for endpoints that fan out into many DB calls.
 
 Environment variables depends on the operating system, but can generally be set in the command-line when running the server.
 
