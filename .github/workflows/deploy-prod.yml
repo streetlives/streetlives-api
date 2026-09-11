@@ -295,6 +295,17 @@ jobs:
       # No `if:` guard on the URL. A Lambda update can settle successfully while
       # the handler or the API Gateway integration still returns errors, so a
       # deploy that cannot be exercised must not report green.
+      #
+      # /taxonomy, not /languages: only the paths declared explicitly on the API
+      # are `authorizationType: NONE`. Everything else falls through to
+      # `/{proxy+}`, which is behind the Cognito authorizer and answers an
+      # unauthenticated smoke check with 401 before the request ever reaches the
+      # Lambda. /taxonomy is public, goes through the handler and hits the
+      # database, so it exercises what this check is for.
+      #
+      # PROD_API_URL must be the execute-api URL for the prod stage, not
+      # api.yourpeer.nyc: the custom domain sits behind a bot filter that answers
+      # a runner's curl with 403.
       - name: Smoke check
         env:
           PROD_API_URL: ${{ vars.PROD_API_URL }}
@@ -306,11 +317,13 @@ jobs:
             exit 1
           fi
           for attempt in 1 2 3 4 5; do
-            if curl -fsS --max-time 30 "$PROD_API_URL/languages" > /dev/null; then
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+              "$PROD_API_URL/taxonomy" || echo "000")
+            if [ "$status" = "200" ]; then
               echo "Production API responded on attempt $attempt."
               exit 0
             fi
-            echo "Attempt $attempt failed; retrying in 10s..."
+            echo "Attempt $attempt failed (HTTP $status); retrying in 10s..."
             sleep 10
           done
           echo "Production API did not respond after the deploy." >&2

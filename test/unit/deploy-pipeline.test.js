@@ -570,10 +570,27 @@ describe('the stale-revision check', () => {
   });
 });
 
+// Only these are declared on the REST API with `authorizationType: NONE`;
+// anything else is served by `/{proxy+}`, which requires a Cognito token.
+const PUBLIC_PATHS = [
+  '/comment-highlights',
+  '/comments',
+  '/errorreports',
+  '/geocode/analytics/all',
+  '/locations',
+  '/taxonomy',
+];
+
+const smokePathIn = (step) => {
+  const match = step.run.match(/"\$[A-Z_]*API_URL(\/[a-z-]+)"/);
+  return match && match[1];
+};
+
 describe('the production smoke check', () => {
   const smoke = stepNamed(prod.jobs.deploy.steps, 'Smoke check');
   const runSmoke = runnerFor(smoke);
   const URL = 'https://api.example.test';
+  const PUBLIC_PATH = smokePathIn(smoke);
 
   it('cannot be skipped: a deploy nobody exercised is not a green deploy', () => {
     // A Lambda update can settle successfully while the handler or the API
@@ -591,7 +608,7 @@ describe('the production smoke check', () => {
     const result = runSmoke({ PROD_API_URL: URL });
 
     expect(result.status).toBe(0);
-    expect(result.calls.join(' ')).toContain(`${URL}/languages`);
+    expect(result.calls.join(' ')).toContain(`${URL}${PUBLIC_PATH}`);
   });
 
   it('retries a cold start before failing the deploy', () => {
@@ -599,6 +616,53 @@ describe('the production smoke check', () => {
 
     expect(result.status).toBe(1);
     expect(result.calls.filter(call => call.startsWith('curl')).length).toBe(5);
+  });
+
+  // The #219 pipeline smoke-checked /languages, which is not one of the paths
+  // declared on the API Gateway: it falls through to `/{proxy+}`, which sits
+  // behind the Cognito authorizer. Every attempt got a 401 from the gateway
+  // without the request reaching the Lambda, so the deploy failed on a check
+  // that could never have passed.
+  it('checks a path the gateway leaves unauthenticated', () => {
+    expect(PUBLIC_PATHS).toContain(PUBLIC_PATH);
+  });
+
+  // curl -f exits 22 on 4xx/5xx alike, so the log said only "Attempt 1 failed"
+  // and the 401 had to be reproduced by hand to be seen at all.
+  it('reports the status code it got, not just that the attempt failed', () => {
+    const result = runSmoke({ PROD_API_URL: URL, CURL_HTTP_CODE: '401' });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('401');
+  });
+});
+
+describe('the Stage smoke check', () => {
+  const smoke = stepNamed(stage.jobs.deploy.steps, 'Smoke check');
+  const runSmoke = runnerFor(smoke);
+  const PUBLIC_PATH = smokePathIn(smoke);
+
+  it('checks a path the gateway leaves unauthenticated', () => {
+    expect(PUBLIC_PATHS).toContain(PUBLIC_PATH);
+  });
+
+  it('falls back to a Stage URL when the variable is unset', () => {
+    // Stage has no STAGE_API_URL variable, so the literal default in the
+    // workflow is what every run actually calls.
+    const fallback = smoke.env.STAGE_API_URL.match(/'([^']+)'/)[1];
+
+    expect(fallback)
+      .toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/Stage$/);
+  });
+
+  it('reports the status code it got, not just that the attempt failed', () => {
+    const result = runSmoke({
+      STAGE_API_URL: 'https://stage.example.test',
+      CURL_HTTP_CODE: '401',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('401');
   });
 });
 

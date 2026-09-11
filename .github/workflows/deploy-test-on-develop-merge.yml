@@ -137,17 +137,25 @@ jobs:
           s3-bucket: ${{ steps.target.outputs.bucket }}
           s3-key: ${{ env.DEPLOY_S3_KEY }}
 
+      # /taxonomy, not /languages: only the paths declared explicitly on the API
+      # are `authorizationType: NONE`. Everything else falls through to
+      # `/{proxy+}`, which is behind the Cognito authorizer and answers an
+      # unauthenticated smoke check with 401 before the request ever reaches the
+      # Lambda. /taxonomy is public, goes through the handler and hits the
+      # database, so it exercises what this check is for.
       - name: Smoke check
         env:
-          STAGE_API_URL: ${{ vars.STAGE_API_URL || 'https://w6pkliozjh.execute-api.us-east-1.amazonaws.com/Stage' }}
+          STAGE_API_URL: ${{ vars.STAGE_API_URL || 'https://rdxk79h7wa.execute-api.us-east-1.amazonaws.com/Stage' }}
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
-            if curl -fsS --max-time 30 "$STAGE_API_URL/languages" > /dev/null; then
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+              "$STAGE_API_URL/taxonomy" || echo "000")
+            if [ "$status" = "200" ]; then
               echo "Stage API responded on attempt $attempt."
               exit 0
             fi
-            echo "Attempt $attempt failed; retrying in 10s..."
+            echo "Attempt $attempt failed (HTTP $status); retrying in 10s..."
             sleep 10
           done
           echo "Stage API did not respond after the deploy." >&2
