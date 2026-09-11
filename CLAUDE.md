@@ -54,13 +54,33 @@ npm run package-deploy:prod  # Same for production Lambda
 These upload to `$DEPLOY_S3_KEY`, defaulting to `dist.zip` when unset — so a manual deploy behaves
 as it always has. The pipelines set a per-run key instead, because Stage and prod deploys can
 overlap and a shared key lets one run overwrite or delete the other's artifact between the upload
-and `update-function-code`, which can push the Stage build to production.
+and `update-function-code`, which can push the Stage build to production. Both scripts then block
+on `lambda wait function-updated-v2`: `update-function-code` returns while Lambda is still serving
+the previous code, so without the wait a smoke check can pass against the old deployment.
 
 Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
 instance's security group to the runner's IP for the duration of the migration and revokes the
 rule in an `always()` step. Required secrets live in the `CI_CD_PIPELINE` (Stage) and `PRODUCTION`
 environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
 `{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`.
+
+`deploy-prod.yml` deploys the tree at the resolved SHA but takes the migration action *and*
+`sequelize/config` from the workflow's own revision, into `.deploy-helpers/` — the break-glass
+rollback path targets refs that predate this pipeline and have neither. The migrations applied are
+still the deployed ref's own.
+
+**Migration connections verify the RDS server certificate.** `sequelize/config/ssl.js` sets
+`rejectUnauthorized: true` and loads AWS's trust store; CI fetches
+`https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem` per run and points
+`DATABASE_SSL_CA_PATH` at it. To migrate by hand, fetch the same bundle to `certs/rds-global-bundle.pem`
+(gitignored) or set `DATABASE_SSL_CA_PATH` / `DATABASE_SSL_CA` — there is no skip-verification
+fallback, so a missing bundle fails with instructions rather than connecting unverified.
+`src/config.js` still runs with `rejectUnauthorized: false`; that is the Lambda's own connection
+and is a separate change, since the bundle would have to be packaged into `dist/`.
+
+The gates themselves are tested: `test/unit/deploy-pipeline.test.js` evaluates the workflows'
+`if:` conditions against simulated job results (red tests, failed migration, skipped migration,
+cancellation) using the small expression evaluator in `test/support/github-expression.js`.
 
 ## Architecture
 
@@ -93,6 +113,8 @@ environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
 | `DATABASE_PASSWORD` | — | |
 | `DATABASE_KEEP_DEFAULT_TIMEZONE` | `true` | Set to avoid RDS Proxy pinning |
 | `DATABASE_CLIENT_MIN_MESSAGES` | `ignore` | Set to avoid RDS Proxy pinning |
+| `DATABASE_SSL_CA_PATH` | `certs/rds-global-bundle.pem` | RDS trust store for migrations; CI points it at a per-run download |
+| `DATABASE_SSL_CA` | — | The same bundle inline, if a path is inconvenient |
 | `OPENAI_API_KEY` | — | Required for comment highlights |
 | `SLACK_WEBHOOK_URL` | — | Optional Slack notifications |
 | `ADMIN_GROUP_NAME` | `StreetlivesAdmins` | Cognito group for admin users |

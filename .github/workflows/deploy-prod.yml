@@ -134,16 +134,34 @@ jobs:
     environment: PRODUCTION
 
     steps:
-      - name: Checkout
+      - name: Checkout the revision being deployed
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.sha }}
+
+      # The rollback path deploys a ref that predates this pipeline, and such a
+      # tree has neither the composite action nor the SSL settings the CLI needs
+      # to reach RDS. Take both from the revision this workflow itself came
+      # from, so `run_migrations: true` does not break break-glass rollbacks.
+      # Only the connection machinery is borrowed - the migrations that get
+      # applied are still the deployed ref's own.
+      - name: Checkout the migration helper from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: |
+            .github/actions/db-migrate
+            sequelize/config
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+          # The helper checkout leaves a second package-lock.json in the
+          # workspace; pin the cache key to the deployed ref's own.
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -156,7 +174,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Migrate production database
-        uses: ./.github/actions/db-migrate
+        uses: ./.deploy-helpers/.github/actions/db-migrate
         with:
           security-group-id: ${{ secrets.PROD_RDS_SECURITY_GROUP_ID }}
           database-host: ${{ secrets.PROD_DATABASE_HOST }}
@@ -164,6 +182,7 @@ jobs:
           database-name: ${{ secrets.PROD_DATABASE_NAME }}
           database-user: ${{ secrets.PROD_DATABASE_USER }}
           database-password: ${{ secrets.PROD_DATABASE_PASSWORD }}
+          config-path: .deploy-helpers/sequelize/config/database.js
 
   deploy:
     needs: [resolve, snapshot, migrate]

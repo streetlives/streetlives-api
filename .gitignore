@@ -56,3 +56,6 @@ lambda-invoke-response.json
 packaged-sam.yaml
 
 .idea
+
+# RDS certificate bundle fetched for local migrations (see sequelize/config/ssl.js)
+/certs

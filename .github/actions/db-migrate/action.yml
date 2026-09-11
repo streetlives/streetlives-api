@@ -23,6 +23,14 @@ inputs:
   database-password:
     description: Database password.
     required: true
+  config-path:
+    description: >-
+      Sequelize CLI config to connect with. Defaults to the checked-out tree's
+      own. deploy-prod.yml overrides it so a rollback to a revision predating
+      the SSL settings still connects - the migrations come from the deployed
+      ref, the connection settings from the workflow's own revision.
+    required: false
+    default: sequelize/config/database.js
 
 runs:
   using: composite
@@ -38,6 +46,24 @@ runs:
       env:
         DATABASE_PASSWORD: ${{ inputs.database-password }}
       run: printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
+
+    # Migrations carry the production database credentials, so the connection
+    # verifies the server's certificate against AWS's published RDS trust store
+    # rather than accepting whatever certificate the endpoint offers.
+    - name: Fetch RDS certificate bundle
+      shell: bash
+      run: |
+        set -euo pipefail
+        ca_path="$RUNNER_TEMP/rds-global-bundle.pem"
+        curl -fsS --retry 3 --retry-delay 2 \
+          -o "$ca_path" \
+          https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+        if ! grep -q 'BEGIN CERTIFICATE' "$ca_path"; then
+          echo "Downloaded RDS bundle contains no certificates." >&2
+          exit 1
+        fi
+        echo "DATABASE_SSL_CA_PATH=$ca_path" >> "$GITHUB_ENV"
+        echo "Trusting $(grep -c 'BEGIN CERTIFICATE' "$ca_path") RDS certificate authorities."
 
     - name: Resolve runner egress IP
       id: runner-ip
@@ -86,7 +112,8 @@ runs:
         DATABASE_USER: ${{ inputs.database-user }}
         DATABASE_PASSWORD: ${{ inputs.database-password }}
         DATABASE_LOGGING: 'false'
-      run: npx sequelize-cli db:migrate:status
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate:status --config "$CONFIG_PATH"
 
     - name: Apply migrations
       shell: bash
@@ -98,7 +125,8 @@ runs:
         DATABASE_USER: ${{ inputs.database-user }}
         DATABASE_PASSWORD: ${{ inputs.database-password }}
         DATABASE_LOGGING: 'false'
-      run: npm run sequelize:db:migrate
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate --config "$CONFIG_PATH"
 
     - name: Migration status (after)
       if: always() && steps.open-sg.outcome == 'success'
@@ -111,7 +139,8 @@ runs:
         DATABASE_USER: ${{ inputs.database-user }}
         DATABASE_PASSWORD: ${{ inputs.database-password }}
         DATABASE_LOGGING: 'false'
-      run: npx sequelize-cli db:migrate:status
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate:status --config "$CONFIG_PATH"
 
     # Must be always(): a failed migration must not leave the database exposed.
     - name: Close RDS security group
