@@ -61,3 +61,7 @@ jobs:
         env:
           PGPASSWORD: password
       - run: npm test
+      - name: Public calling authorization, lifecycle and Postgres locking
+        run: node --test test/public-calling/*.node.cjs
+        env:
+          PUBLIC_CALLING_TEST_POSTGRES: 'true'

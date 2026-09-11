@@ -56,3 +56,8 @@ lambda-invoke-response.json
 packaged-sam.yaml
 
 .idea
+
+# Public calling gateway secrets, generated files, and certificates
+infrastructure/public-calling/runtime/
+infrastructure/public-calling/certs/
+!infrastructure/public-calling/.env.example
