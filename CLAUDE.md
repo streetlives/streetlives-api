@@ -21,10 +21,125 @@ To run a single test file: `NODE_ENV=test npx jest --runInBand test/integration/
 
 ### Deployment
 
+Deploys are automated. `develop` is the integration branch; **`master` is the production branch**.
+
+| Branch | Pipeline | What runs |
+|---|---|---|
+| `develop` | `.github/workflows/deploy-test-on-develop-merge.yml` | tests → migrate Stage DB → deploy test Lambda → smoke check |
+| `master` | `.github/workflows/deploy-prod.yml` | tests → RDS snapshot → migrate prod DB → deploy prod Lambda → smoke check |
+
+**Releasing to production** = opening a `develop` → `master` PR. The prod jobs run in the
+`PRODUCTION` GitHub Environment, which requires reviewer approval, so merging *requests* a release
+rather than silently shipping one. `deploy-prod.yml` also accepts a `workflow_dispatch` with a
+`ref` and a `run_migrations` toggle — that is the break-glass path for rollbacks and for
+redeploying an unchanged commit.
+
+**Hotfixes** branch from `master` and merge back to `master`, then must be **back-merged into
+`develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
+
+**Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
+Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new
+schema for the length of the deploy. Split a rename or a column drop across two releases: add and
+backfill in one, stop reading the old column in the same release, remove the column in a later one.
+Note also that `custom-analytics` queries this schema with raw SQL, so it is part of the blast
+radius of any migration.
+
+Break-glass manual deploys (no migration, no snapshot, no test gate):
+
 ```bash
 npm run package-deploy:dev   # Build, zip, upload to S3, deploy to dev Lambda
 npm run package-deploy:prod  # Same for production Lambda
 ```
+
+These upload to `$DEPLOY_S3_KEY`, defaulting to `dist.zip` when unset, and block on
+`lambda wait function-updated-v2` before returning.
+
+**The pipelines do not use these scripts.** They run only `clean` / `build` / `package` from the
+deployed tree and then deploy through `.github/actions/lambda-deploy`, which stages the artifact
+under a per-run S3 key, updates the function, waits for the update to settle, and removes the
+object again. The safeguards have to live in the workflow revision because the rollback path checks
+out revisions that predate this pipeline: their `deploy:prod` used `--zip-file`, ignored
+`DEPLOY_S3_KEY` and never waited, so a rollback would have smoke-tested the code it was replacing.
+The per-run key matters because Stage and prod deploys can overlap, and a shared key lets one run
+overwrite or delete the other's artifact between the upload and `update-function-code`.
+
+Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
+instance's security group to the runner's IP for the duration of the migration and revokes the rule
+in an unconditional `always()` step. That step never exits green on a guess:
+
+- the recorded rule id is a hint, not the only source — it also sweeps the group for rules whose
+  description carries this run's id, since a rule AWS created but never acknowledged would
+  otherwise stay open forever;
+- an empty sweep is retried when the authorize step left no id, because
+  `describe-security-group-rules` is eventually consistent and "not created" looks exactly like
+  "not visible yet";
+- a lookup that never completes **fails the step** rather than being read as "nothing there";
+- the revoke is confirmed by looking again, and a confirmation that cannot be obtained is not a
+  confirmation.
+
+Revoking is always by rule id, never by CIDR, so it cannot clobber an unrelated rule. A failed
+cleanup fails the migrate job and blocks the deploy — the right trade against leaving the database
+reachable from a runner address.
+
+Both workflows refuse a **superseded** revision, via `.github/actions/check-revision`. A concurrency
+group serializes runs but does not order them, so an older push could otherwise acquire it last and
+roll the environment back. The check runs twice, in two modes:
+
+- `on-stale: report` in the `resolve` (prod) / `gate` (Stage) job, which skips the whole pipeline
+  quietly when the branch has already moved on;
+- `on-stale: fail` immediately before each mutation, in the migrate and deploy jobs — because
+  re-running a single job reuses the earlier jobs' outputs, so the answer from the start of the run
+  proves nothing by the time a schema change is about to be applied.
+
+Only `push` is checked. Deploying an older ref deliberately is what `workflow_dispatch` is for, and
+the check does not even look the branch up for one. Required secrets live in the `CI_CD_PIPELINE` (Stage)
+and `PRODUCTION` environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
+`{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`. The `PRODUCTION` environment also
+needs a `PROD_API_URL` **variable** — the prod deploy fails rather than reporting green on a deploy
+nobody exercised.
+
+`deploy-prod.yml` deploys the tree at the resolved SHA but takes both composite actions, plus
+`sequelize/config`, `src/utils` and `src/certs`, from the workflow's own revision into
+`.deploy-helpers/` — the break-glass rollback path targets refs that predate this pipeline and have
+none of them. The migrations applied are still the deployed ref's own.
+
+**Every deployed database connection verifies the RDS server certificate.** `src/utils/ssl.js` is
+the single implementation, used by both `src/config.js` (the app, and therefore any migration that
+imports `src/models`) and `sequelize/config/database.js` (the CLI's own connection for
+`SequelizeMeta` and `queryInterface`).
+
+The trust store is **Node's public roots plus** `src/certs/rds-us-east-1-bundle.pem`. Both halves
+are load-bearing: instance endpoints are signed by Amazon's private RDS CAs, which no public store
+carries, while **RDS Proxy presents an ACM certificate** under a public Amazon root — and Node's
+`ca` option *replaces* the default store rather than adding to it, so a bundle-only trust store
+would fail against the proxy. The bundle is committed; `npm run build` copies it to `dist/certs`
+(babel's `-D`), so it ships in the Lambda zip, and `__dirname` resolves the same relative path in
+`src/` and in `dist/`. Refresh it, or move region, with:
+
+```bash
+curl -fsS -o src/certs/rds-us-east-1-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem
+```
+
+When TLS is required: **always** for any `*.rds.amazonaws.com` host (not negotiable — that is where
+the real credentials go) and always in `production`; **never** in `test`; and in `development` it
+follows the host — off for `localhost` / `127.0.0.1` / `::1`, which have no TLS to offer, on for
+anything else. `DATABASE_SSL=false` opts a non-RDS development host out; `DATABASE_SSL_CA_PATH` /
+`DATABASE_SSL_CA` replace the RDS bundle. There is no way to keep TLS while skipping verification.
+
+A revision that predates all of this cannot be pinned from outside, because a model-backed
+migration builds its connection from *its own* `src/config.js`. The migrate action therefore **fails
+closed**: if the deployed tree has no `src/utils/ssl.js` and any of its migrations import
+`src/models`, it stops and tells you to re-run with `run_migrations: false` — which is almost always
+right anyway, since `db:migrate` only applies migrations the database has not seen and an older
+tree has none.
+
+The pipeline is tested rather than just read: `test/unit/deploy-pipeline.test.js` evaluates the
+workflows' `if:` conditions against simulated job results (red tests, failed migration, skipped
+migration, cancellation) with the expression evaluator in `test/support/github-expression.js`, and
+runs the shell steps that matter — the security-group open/revoke cycle, the verified-TLS guard,
+the smoke check — under `test/support/shell-step.js`, which puts stub `aws` and `curl` binaries on
+the PATH and records what the script actually called.
 
 ## Architecture
 
@@ -57,6 +172,9 @@ npm run package-deploy:prod  # Same for production Lambda
 | `DATABASE_PASSWORD` | — | |
 | `DATABASE_KEEP_DEFAULT_TIMEZONE` | `true` | Set to avoid RDS Proxy pinning |
 | `DATABASE_CLIENT_MIN_MESSAGES` | `ignore` | Set to avoid RDS Proxy pinning |
+| `DATABASE_SSL` | host-dependent | `false` disables TLS for a non-RDS development host; ignored for RDS and in production |
+| `DATABASE_SSL_CA_PATH` | `src/certs/rds-us-east-1-bundle.pem` | RDS roots added to Node's public ones |
+| `DATABASE_SSL_CA` | — | The same bundle inline, if a path is inconvenient |
 | `OPENAI_API_KEY` | — | Required for comment highlights |
 | `SLACK_WEBHOOK_URL` | — | Optional Slack notifications |
 | `ADMIN_GROUP_NAME` | `StreetlivesAdmins` | Cognito group for admin users |

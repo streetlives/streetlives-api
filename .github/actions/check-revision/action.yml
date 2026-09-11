@@ -1,0 +1,83 @@
+name: Check the revision is still current
+description: >-
+  Reports, or refuses, when the branch has moved past the revision this run is
+  about to deploy.
+
+# The concurrency group serializes runs but does not order them: two pushes
+# landing close together can acquire it in either order, and re-running one job
+# of an old run reuses the other jobs' outputs - so the freshness answer from
+# the start of a run cannot be trusted at the moment of a mutation. Hence two
+# modes: `report` gates a pipeline before it starts, `fail` stands immediately
+# in front of anything that migrates or deploys.
+
+inputs:
+  branch:
+    description: Branch a push should still be the tip of.
+    required: true
+  event-name:
+    description: >-
+      Triggering event. Only a push is checked: deploying an older ref
+      deliberately is what the dispatch path is for.
+    required: true
+  sha:
+    description: Revision being deployed. Defaults to the checked-out HEAD.
+    required: false
+    default: ''
+  on-stale:
+    description: '`report` to record it and carry on, `fail` to stop.'
+    required: false
+    default: report
+
+outputs:
+  sha:
+    description: The resolved revision.
+    value: ${{ steps.check.outputs.sha }}
+  superseded:
+    description: '`true` when the branch has moved past it.'
+    value: ${{ steps.check.outputs.superseded }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        EVENT_NAME: ${{ inputs.event-name }}
+        SHA: ${{ inputs.sha }}
+        ON_STALE: ${{ inputs.on-stale }}
+      run: |
+        set -euo pipefail
+
+        # A branch or tag can move mid-run; everything downstream has to agree
+        # on one immutable revision.
+        sha="${SHA:-$(git rev-parse HEAD)}"
+        superseded=false
+        tip=""
+
+        if [ "$EVENT_NAME" = "push" ]; then
+          git fetch --no-tags --depth=1 origin "$BRANCH"
+          tip="$(git rev-parse FETCH_HEAD)"
+          if [ "$tip" != "$sha" ]; then
+            superseded=true
+          fi
+        fi
+
+        {
+          echo "sha=$sha"
+          echo "superseded=$superseded"
+        } >> "$GITHUB_OUTPUT"
+
+        if [ "$superseded" != true ]; then
+          echo "$sha is current for $BRANCH."
+          exit 0
+        fi
+
+        if [ "$ON_STALE" = "fail" ]; then
+          echo "::error::$BRANCH is at $tip, but this job would deploy $sha. Continuing would \
+        put the older revision live - a silent rollback. Deploy the current tip instead."
+          exit 1
+        fi
+
+        echo "::warning::$BRANCH has moved to $tip since this run started ($sha). The run for \
+        that commit deploys it; this one stops here rather than rolling production back."

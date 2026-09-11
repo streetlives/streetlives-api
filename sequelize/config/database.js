@@ -1,6 +1,8 @@
 /* eslint-disable import/no-extraneous-dependencies */
 require('@babel/register');
 
+const { sslDialectOptions } = require('../../src/utils/ssl');
+
 const env = process.env.NODE_ENV || 'development';
 
 module.exports = {
@@ -12,5 +14,9 @@ module.exports = {
     port: process.env.DATABASE_PORT || 5432,
     dialect: 'postgres',
     operatorsAliases: false,
+    // The CLI opens its own connection (SequelizeMeta, queryInterface), so it
+    // needs these settings independently of src/config.js - and shares them
+    // with it, so the two can never drift apart.
+    dialectOptions: sslDialectOptions(env),
   },
 };

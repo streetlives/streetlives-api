@@ -1,0 +1,329 @@
+name: Deploy production
+
+# master is the production branch: a release is a reviewed develop -> master PR.
+# workflow_dispatch stays available as the break-glass path for rollbacks and
+# for redeploying an unchanged commit.
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag or branch to deploy.
+        required: false
+        default: master
+      run_migrations:
+        description: Apply pending database migrations before deploying.
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  SNAPSHOT_PREFIX: streetlives-prod-predeploy-
+  # Manual RDS snapshots persist until deleted and the account quota is finite,
+  # so every release prunes its own history.
+  SNAPSHOT_KEEP: '10'
+
+jobs:
+  # Pins the run to one immutable SHA. inputs.ref may be a branch or tag that
+  # moves mid-run, and every downstream job must agree on the exact revision -
+  # otherwise the tests could green-light a different commit than is deployed.
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      superseded: ${{ steps.resolve.outputs.superseded }}
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      # From this workflow's revision, not the one being deployed: the rollback
+      # path targets refs that predate these actions entirely.
+      - name: Checkout the pipeline helpers from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: .github/actions
+
+      - name: Resolve to an immutable SHA
+        id: resolve
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: report
+
+  # Gating the first job is enough: snapshot, migrate and deploy are all
+  # downstream of it, and a skipped dependency skips them too.
+  test:
+    needs: resolve
+    if: needs.resolve.outputs.superseded != 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  # The rollback path for a bad migration. Must finish before any schema change.
+  snapshot:
+    needs: [resolve, test]
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+    outputs:
+      snapshot-id: ${{ steps.snapshot.outputs.snapshot-id }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Snapshot production database
+        id: snapshot
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_RDS_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          snapshot_id="${SNAPSHOT_PREFIX}${{ github.run_id }}-${{ github.run_attempt }}"
+          aws rds create-db-snapshot \
+            --db-instance-identifier "$INSTANCE_ID" \
+            --db-snapshot-identifier "$snapshot_id" \
+            --query 'DBSnapshot.DBSnapshotIdentifier' --output text
+          echo "Waiting for $snapshot_id to become available..."
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot_id"
+          echo "snapshot-id=$snapshot_id" >> "$GITHUB_OUTPUT"
+          echo "Snapshot $snapshot_id is available."
+
+      # Best-effort: a pruning failure should not block a release. If pruning
+      # stays broken the quota is eventually hit and create-db-snapshot above
+      # fails loudly, which is the signal we want.
+      - name: Prune old predeploy snapshots
+        continue-on-error: true
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_RDS_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          # Only ever considers snapshots this workflow created; other manual
+          # snapshots are left alone. sort_by is ascending, so oldest first.
+          snapshots=()
+          while IFS= read -r snapshot; do
+            [ -n "$snapshot" ] && snapshots+=("$snapshot")
+          done < <(aws rds describe-db-snapshots \
+            --db-instance-identifier "$INSTANCE_ID" \
+            --snapshot-type manual \
+            --query "sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, '$SNAPSHOT_PREFIX')], &SnapshotCreateTime)[].DBSnapshotIdentifier" \
+            --output text | tr '\t' '\n')
+
+          total=${#snapshots[@]}
+          echo "Found $total predeploy snapshot(s); keeping the newest $SNAPSHOT_KEEP."
+          if (( total <= SNAPSHOT_KEEP )); then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          for snapshot in "${snapshots[@]:0:total-SNAPSHOT_KEEP}"; do
+            echo "Deleting $snapshot"
+            aws rds delete-db-snapshot --db-snapshot-identifier "$snapshot" \
+              --query 'DBSnapshot.DBSnapshotIdentifier' --output text
+          done
+
+  migrate:
+    needs: [resolve, snapshot]
+    # The inputs context is empty on the push trigger, and GitHub coerces both
+    # '' and false to 0 when comparing across types - so any comparison against
+    # `false` would wrongly skip migrations on a release. Branch on the event
+    # instead: a master merge always migrates, dispatch honours the checkbox.
+    if: github.event_name == 'push' || inputs.run_migrations
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+
+    steps:
+      - name: Checkout the revision being deployed
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      # The rollback path deploys a ref that predates this pipeline, and such a
+      # tree has neither the composite action nor the SSL settings the CLI needs
+      # to reach RDS. Take both from the revision this workflow itself came
+      # from, so `run_migrations: true` does not break break-glass rollbacks.
+      # Only the connection machinery is borrowed - the migrations that get
+      # applied are still the deployed ref's own.
+      - name: Checkout the migration helper from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: |
+            .github/actions
+            sequelize/config
+            src/utils
+            src/certs
+
+      # resolve answered this once, at the start of the run. Re-running just
+      # this job after a newer release reuses that answer, so ask again with
+      # the schema change immediately behind it.
+      - name: Refuse a superseded revision
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          sha: ${{ needs.resolve.outputs.sha }}
+          on-stale: fail
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          # The helper checkout leaves a second package-lock.json in the
+          # workspace; pin the cache key to the deployed ref's own.
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Migrate production database
+        uses: ./.deploy-helpers/.github/actions/db-migrate
+        with:
+          security-group-id: ${{ secrets.PROD_RDS_SECURITY_GROUP_ID }}
+          database-host: ${{ secrets.PROD_DATABASE_HOST }}
+          database-port: ${{ vars.PROD_DATABASE_PORT || '5432' }}
+          database-name: ${{ secrets.PROD_DATABASE_NAME }}
+          database-user: ${{ secrets.PROD_DATABASE_USER }}
+          database-password: ${{ secrets.PROD_DATABASE_PASSWORD }}
+          config-path: .deploy-helpers/sequelize/config/database.js
+
+  deploy:
+    needs: [resolve, snapshot, migrate]
+    # Proceeds when migrate was *skipped* (run_migrations: false) but blocks on
+    # an actual migration failure. Requiring snapshot == 'success' matters:
+    # a failing test job leaves snapshot *skipped*, and skipped is not failure,
+    # so a bare `!failure()` would let a red build deploy to production.
+    if: always() && needs.snapshot.result == 'success' && needs.migrate.result != 'failure' && !cancelled()
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+    env:
+      # Stage and production deploys can overlap. A per-run key stops one from
+      # overwriting or deleting the other's artifact between the S3 upload and
+      # update-function-code. See package.json deploy:dev / deploy:prod.
+      DEPLOY_S3_KEY: deploys/prod-${{ github.run_id }}-${{ github.run_attempt }}.zip
+
+    steps:
+      - name: Checkout the revision being deployed
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      # Only the build comes from the deployed tree. A pre-pipeline revision's
+      # `deploy:prod` uploaded nothing to S3, ignored DEPLOY_S3_KEY and never
+      # waited for the update, so a rollback run through it would smoke-test the
+      # code it was replacing and delete an object it did not create.
+      - name: Checkout the deployment helper from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: .github/actions
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          # The helper checkout leaves a second package-lock.json in the
+          # workspace; pin the cache key to the deployed ref's own.
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # Same reason as in the migrate job: a re-run of this job alone would
+      # otherwise trust a freshness check from before the newer release.
+      - name: Refuse a superseded revision
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          sha: ${{ needs.resolve.outputs.sha }}
+          on-stale: fail
+
+      # clean/build/package predate this pipeline, so they exist on every ref a
+      # rollback can target.
+      - name: Build the deployment artifact
+        run: npm run clean && npm run build && npm run package
+
+      - name: Resolve the deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          manifest=./.deploy-helpers/package.json
+          echo "function-name=$(node -p "require('$manifest').config.prodFunctionName")" \
+            >> "$GITHUB_OUTPUT"
+          echo "bucket=$(node -p "require('$manifest').config.s3BucketName")" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to production
+        uses: ./.deploy-helpers/.github/actions/lambda-deploy
+        with:
+          function-name: ${{ steps.target.outputs.function-name }}
+          s3-bucket: ${{ steps.target.outputs.bucket }}
+          s3-key: ${{ env.DEPLOY_S3_KEY }}
+
+      # No `if:` guard on the URL. A Lambda update can settle successfully while
+      # the handler or the API Gateway integration still returns errors, so a
+      # deploy that cannot be exercised must not report green.
+      - name: Smoke check
+        env:
+          PROD_API_URL: ${{ vars.PROD_API_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROD_API_URL" ]; then
+            echo "::error::PROD_API_URL is not set on the PRODUCTION environment, so this deploy \
+          cannot be verified. Set it to the production API base URL."
+            exit 1
+          fi
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$PROD_API_URL/languages" > /dev/null; then
+              echo "Production API responded on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Production API did not respond after the deploy." >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production deploy"
+            echo ""
+            echo "- Commit: \`${{ needs.resolve.outputs.sha }}\`"
+            echo "- Snapshot: \`${{ needs.snapshot.outputs.snapshot-id }}\`"
+            echo "- Migrations: ${{ needs.migrate.result }}"
+            echo "- Result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -5,17 +5,54 @@ on:
     branches:
       - develop
 
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: false
+
 jobs:
-  deploy-test:
-    if: github.event_name == 'push'
+  # The concurrency group serializes runs without ordering them, and each run
+  # deploys its own triggering commit - so an older run finishing last would
+  # leave Stage on old code against newer migrations until someone noticed.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      superseded: ${{ steps.check.outputs.superseded }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check this is still the tip of develop
+        id: check
+        uses: ./.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: report
+
+  # Reuses the real CI job (postgis service + extensions + npm test) so a red
+  # build can no longer reach Stage.
+  test:
+    needs: gate
+    if: needs.gate.outputs.superseded != 'true'
+    uses: ./.github/workflows/ci.yml
+
+  migrate:
+    needs: test
     runs-on: ubuntu-latest
     environment: CI_CD_PIPELINE
 
     steps:
-      - name: Checkout develop branch
+      - name: Checkout
         uses: actions/checkout@v4
+
+      # gate answered this at the start of the run; re-running this job alone
+      # would reuse that answer while develop has moved on.
+      - name: Refuse a superseded revision
+        uses: ./.github/actions/check-revision
         with:
-          ref: develop
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: fail
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -33,5 +70,96 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Package and deploy to test environment
-        run: npm run package-deploy:dev
+      - name: Migrate Stage database
+        uses: ./.github/actions/db-migrate
+        with:
+          security-group-id: ${{ secrets.STAGE_RDS_SECURITY_GROUP_ID }}
+          database-host: ${{ secrets.STAGE_DATABASE_HOST }}
+          database-port: ${{ vars.STAGE_DATABASE_PORT || '5432' }}
+          database-name: ${{ secrets.STAGE_DATABASE_NAME }}
+          database-user: ${{ secrets.STAGE_DATABASE_USER }}
+          database-password: ${{ secrets.STAGE_DATABASE_PASSWORD }}
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: CI_CD_PIPELINE
+    env:
+      # Stage and production deploys can overlap. A per-run key stops one from
+      # overwriting or deleting the other's artifact between the S3 upload and
+      # update-function-code. See package.json deploy:dev / deploy:prod.
+      DEPLOY_S3_KEY: deploys/stage-${{ github.run_id }}-${{ github.run_attempt }}.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Refuse a superseded revision
+        uses: ./.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: fail
+
+      - name: Build the deployment artifact
+        run: npm run clean && npm run build && npm run package
+
+      - name: Resolve the deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          echo "function-name=$(node -p "require('./package.json').config.functionName")" \
+            >> "$GITHUB_OUTPUT"
+          echo "bucket=$(node -p "require('./package.json').config.s3BucketName")" >> "$GITHUB_OUTPUT"
+
+      # Same action the production workflow deploys through, so the upload,
+      # the update waiter and the artifact cleanup cannot drift between them.
+      - name: Deploy to the test environment
+        uses: ./.github/actions/lambda-deploy
+        with:
+          function-name: ${{ steps.target.outputs.function-name }}
+          s3-bucket: ${{ steps.target.outputs.bucket }}
+          s3-key: ${{ env.DEPLOY_S3_KEY }}
+
+      - name: Smoke check
+        env:
+          STAGE_API_URL: ${{ vars.STAGE_API_URL || 'https://w6pkliozjh.execute-api.us-east-1.amazonaws.com/Stage' }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$STAGE_API_URL/languages" > /dev/null; then
+              echo "Stage API responded on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Stage API did not respond after the deploy." >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Stage deploy"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Lambda: test function"
+            echo "- Result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

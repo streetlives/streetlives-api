@@ -4,6 +4,18 @@ on:
   push:
     branches: [develop, master, main]
   pull_request:
+  # Lets the deploy workflows gate on the real test job instead of duplicating
+  # the postgis service container. See deploy-test-on-develop-merge.yml.
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Commit to test. Callers that deploy a ref other than the triggering
+          commit (deploy-prod.yml's rollback path) must pass it, or the tests
+          would green-light a different revision than the one deployed.
+        type: string
+        required: false
+        default: ''
 
 jobs:
   test:
@@ -36,6 +48,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Empty on push/pull_request, where checkout's default is correct.
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
