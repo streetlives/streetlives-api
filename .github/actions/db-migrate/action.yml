@@ -27,8 +27,8 @@ inputs:
     description: >-
       Sequelize CLI config to connect with. Defaults to the checked-out tree's
       own. deploy-prod.yml overrides it so a rollback to a revision predating
-      the SSL settings still connects - the migrations come from the deployed
-      ref, the connection settings from the workflow's own revision.
+      the verified-TLS settings still connects - the migrations come from the
+      deployed ref, the connection settings from the workflow's own revision.
     required: false
     default: sequelize/config/database.js
 
@@ -47,23 +47,23 @@ runs:
         DATABASE_PASSWORD: ${{ inputs.database-password }}
       run: printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
 
-    # Migrations carry the production database credentials, so the connection
-    # verifies the server's certificate against AWS's published RDS trust store
-    # rather than accepting whatever certificate the endpoint offers.
-    - name: Fetch RDS certificate bundle
+    # The CLI's own connection is configured from `config-path`, which callers
+    # can pin to a current revision. A migration that imports src/models opens a
+    # second connection from the *deployed* tree's src/config.js, and that one
+    # cannot be pinned - so say so rather than let it pass unnoticed.
+    - name: Warn if the deployed tree connects without verified TLS
       shell: bash
       run: |
         set -euo pipefail
-        ca_path="$RUNNER_TEMP/rds-global-bundle.pem"
-        curl -fsS --retry 3 --retry-delay 2 \
-          -o "$ca_path" \
-          https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
-        if ! grep -q 'BEGIN CERTIFICATE' "$ca_path"; then
-          echo "Downloaded RDS bundle contains no certificates." >&2
-          exit 1
+        if [ -f src/utils/ssl.js ]; then
+          echo "Deployed tree verifies the RDS server certificate."
+          exit 0
         fi
-        echo "DATABASE_SSL_CA_PATH=$ca_path" >> "$GITHUB_ENV"
-        echo "Trusting $(grep -c 'BEGIN CERTIFICATE' "$ca_path") RDS certificate authorities."
+        if grep -rlq 'src/models' sequelize/migrations 2>/dev/null; then
+          echo "::warning::This revision predates verified TLS in src/config.js. A migration \
+        that imports src/models would open its connection without verifying the RDS certificate. \
+        Prefer run_migrations: false when rolling back this far."
+        fi
 
     - name: Resolve runner egress IP
       id: runner-ip

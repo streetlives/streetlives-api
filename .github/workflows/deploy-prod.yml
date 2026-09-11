@@ -151,8 +151,10 @@ jobs:
           ref: ${{ github.sha }}
           path: .deploy-helpers
           sparse-checkout: |
-            .github/actions/db-migrate
+            .github/actions
             sequelize/config
+            src/utils
+            src/certs
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -200,16 +202,30 @@ jobs:
       DEPLOY_S3_KEY: deploys/prod-${{ github.run_id }}-${{ github.run_attempt }}.zip
 
     steps:
-      - name: Checkout
+      - name: Checkout the revision being deployed
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.sha }}
+
+      # Only the build comes from the deployed tree. A pre-pipeline revision's
+      # `deploy:prod` uploaded nothing to S3, ignored DEPLOY_S3_KEY and never
+      # waited for the update, so a rollback run through it would smoke-test the
+      # code it was replacing and delete an object it did not create.
+      - name: Checkout the deployment helper from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: .github/actions
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+          # The helper checkout leaves a second package-lock.json in the
+          # workspace; pin the cache key to the deployed ref's own.
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -221,15 +237,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Package and deploy to production
-        run: npm run package-deploy:prod
+      # clean/build/package predate this pipeline, so they exist on every ref a
+      # rollback can target.
+      - name: Build the deployment artifact
+        run: npm run clean && npm run build && npm run package
 
-      # deploy:prod removes the object on success; this covers the failure path
-      # so aborted runs do not leave artifacts behind.
-      - name: Remove deployment artifact
-        if: always()
-        continue-on-error: true
-        run: aws s3 rm "s3://$(node -p "require('./package.json').config.s3BucketName")/$DEPLOY_S3_KEY"
+      - name: Resolve the deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          manifest=./.deploy-helpers/package.json
+          echo "function-name=$(node -p "require('$manifest').config.prodFunctionName")" \
+            >> "$GITHUB_OUTPUT"
+          echo "bucket=$(node -p "require('$manifest').config.s3BucketName")" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to production
+        uses: ./.deploy-helpers/.github/actions/lambda-deploy
+        with:
+          function-name: ${{ steps.target.outputs.function-name }}
+          s3-bucket: ${{ steps.target.outputs.bucket }}
+          s3-key: ${{ env.DEPLOY_S3_KEY }}
 
       - name: Smoke check
         if: vars.PROD_API_URL != ''

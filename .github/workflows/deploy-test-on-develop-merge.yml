@@ -80,15 +80,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Package and deploy to test environment
-        run: npm run package-deploy:dev
+      - name: Build the deployment artifact
+        run: npm run clean && npm run build && npm run package
 
-      # deploy:dev removes the object on success; this covers the failure path
-      # so aborted runs do not leave artifacts behind.
-      - name: Remove deployment artifact
-        if: always()
-        continue-on-error: true
-        run: aws s3 rm "s3://$(node -p "require('./package.json').config.s3BucketName")/$DEPLOY_S3_KEY"
+      - name: Resolve the deployment target
+        id: target
+        run: |
+          set -euo pipefail
+          echo "function-name=$(node -p "require('./package.json').config.functionName")" \
+            >> "$GITHUB_OUTPUT"
+          echo "bucket=$(node -p "require('./package.json').config.s3BucketName")" >> "$GITHUB_OUTPUT"
+
+      # Same action the production workflow deploys through, so the upload,
+      # the update waiter and the artifact cleanup cannot drift between them.
+      - name: Deploy to the test environment
+        uses: ./.github/actions/lambda-deploy
+        with:
+          function-name: ${{ steps.target.outputs.function-name }}
+          s3-bucket: ${{ steps.target.outputs.bucket }}
+          s3-key: ${{ env.DEPLOY_S3_KEY }}
 
       - name: Smoke check
         env:

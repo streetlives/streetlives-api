@@ -1,4 +1,5 @@
 import { parseBoolean, parseNumber } from './utils/strings';
+import { sslDialectOptions } from './utils/ssl';
 
 export default {
   port: process.env.PORT || 3000,
@@ -30,13 +31,10 @@ export default {
       dialectOptions: {
         // Prevent `SET client_min_messages` so RDS Proxy can reuse pooled connections.
         clientMinMessages: process.env.DATABASE_CLIENT_MIN_MESSAGES || 'ignore',
-        // Local/CI test databases typically run without SSL; RDS in dev/prod requires it.
-        ...(process.env.NODE_ENV === 'test' ? {} : {
-          ssl: {
-            require: true,
-            rejectUnauthorized: false, // For RDS, set to false to accept AWS certificates
-          },
-        }),
+        // Verified TLS against AWS's RDS trust store. Migrations reach this
+        // config too - any migration importing src/models opens a connection
+        // through it - so it has to be as safe as the CLI's own.
+        ...sslDialectOptions(process.env.NODE_ENV),
       },
     },
   },

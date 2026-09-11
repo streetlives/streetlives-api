@@ -11,6 +11,7 @@ const load = file => yaml.safeLoad(fs.readFileSync(path.resolve(__dirname, '../.
 const prod = load('.github/workflows/deploy-prod.yml');
 const stage = load('.github/workflows/deploy-test-on-develop-merge.yml');
 const migrateAction = load('.github/actions/db-migrate/action.yml');
+const deployAction = load('.github/actions/lambda-deploy/action.yml');
 
 // YAML 1.1 reads a bare `on:` key as the boolean true.
 const ON_KEY = true;
@@ -115,7 +116,8 @@ describe('production pipeline gates', () => {
     expect(prod.jobs.test.with.ref).toBe(DEPLOYED_SHA);
     expect(stepNamed(prod.jobs.migrate.steps, 'Checkout the revision being deployed').with.ref)
       .toBe(DEPLOYED_SHA);
-    expect(stepNamed(prod.jobs.deploy.steps, 'Checkout').with.ref).toBe(DEPLOYED_SHA);
+    expect(stepNamed(prod.jobs.deploy.steps, 'Checkout the revision being deployed').with.ref)
+      .toBe(DEPLOYED_SHA);
   });
 
   it('takes the migration helper from the workflow revision, not the deployed one', () => {
@@ -132,6 +134,10 @@ describe('production pipeline gates', () => {
     expect(migrateStep.uses).toBe(`./${helperCheckout.with.path}/.github/actions/db-migrate`);
     expect(migrateStep.with['config-path'])
       .toBe(`${helperCheckout.with.path}/sequelize/config/database.js`);
+    // The CLI config requires the shared SSL helper and its certificate bundle,
+    // so those have to come along or the pinned config cannot even load.
+    expect(helperCheckout.with['sparse-checkout']).toMatch(/src\/utils/);
+    expect(helperCheckout.with['sparse-checkout']).toMatch(/src\/certs/);
     // The migrations themselves still come from the tree being deployed.
     expect(helperCheckout.with['sparse-checkout']).not.toMatch(/sequelize\/migrations/);
   });
@@ -200,16 +206,91 @@ describe('the database migration action', () => {
     });
   });
 
-  it('verifies the RDS server certificate before sending credentials', () => {
-    const caStep = stepNamed(steps, 'Fetch RDS certificate bundle');
+  it('connects through the pinned, certificate-verifying config', () => {
     const sequelizeSteps = steps.filter(step => (step.run || '').includes('sequelize-cli'));
 
-    expect(caStep.run).toContain('truststore.pki.rds.amazonaws.com');
-    expect(steps.indexOf(caStep)).toBeLessThan(steps.indexOf(sequelizeSteps[0]));
     expect(sequelizeSteps.length).toBeGreaterThan(0);
     sequelizeSteps.forEach((step) => {
+      // .sequelizerc resolves its config from the cwd, which on a rollback is
+      // the old tree - so the config has to be named explicitly.
       expect(step.run).toContain('--config "$CONFIG_PATH"');
       expect(step.env.CONFIG_PATH).toBe('${{ inputs.config-path }}');
     });
+  });
+
+  it('flags a deployed tree whose own connections skip verification', () => {
+    // The CLI's connection is pinned; the second one a migration opens by
+    // importing src/models comes from the deployed tree and cannot be.
+    const warnStep = stepNamed(steps, 'Warn if the deployed tree connects without verified TLS');
+
+    expect(warnStep.run).toContain('src/utils/ssl.js');
+    expect(warnStep.run).toContain('sequelize/migrations');
+    expect(warnStep.run).toContain('::warning::');
+    const applyStep = stepNamed(steps, 'Apply migrations');
+    expect(steps.indexOf(warnStep)).toBeLessThan(steps.indexOf(applyStep));
+  });
+});
+
+describe('deploying a ref that predates this pipeline', () => {
+  const { steps } = prod.jobs.deploy;
+  const scriptsRun = steps
+    .filter(step => step.run)
+    .map(step => step.run)
+    .join('\n');
+
+  it('never runs the deployed tree\'s own deploy script', () => {
+    // A pre-pipeline `deploy:prod` used --zip-file, ignored DEPLOY_S3_KEY and
+    // never waited for the update to settle.
+    expect(scriptsRun).not.toMatch(/deploy:prod|package-deploy/);
+  });
+
+  it('only runs npm scripts that every rollback target already has', () => {
+    const invoked = (scriptsRun.match(/npm run [\w:-]+/g) || [])
+      .map(command => command.replace('npm run ', ''))
+      .sort();
+
+    expect(invoked).toEqual(['build', 'clean', 'package']);
+  });
+
+  it('uploads, updates and waits from the workflow\'s own revision', () => {
+    const helper = stepNamed(steps, "Checkout the deployment helper from this workflow's revision");
+    const deployStep = stepNamed(steps, 'Deploy to production');
+
+    expect(helper.with.ref).toBe('${{ github.sha }}');
+    expect(deployStep.uses).toBe(`./${helper.with.path}/.github/actions/lambda-deploy`);
+    expect(deployStep.with['s3-key']).toBe('${{ env.DEPLOY_S3_KEY }}');
+  });
+
+  it('smoke-checks only once the update has settled', () => {
+    const names = steps.map(step => step.name);
+    const update = stepNamed(
+      deployAction.runs.steps,
+      'Update the function and wait for it to settle',
+    );
+
+    expect(names.indexOf('Deploy to production')).toBeLessThan(names.indexOf('Smoke check'));
+    expect(update.run.indexOf('update-function-code'))
+      .toBeLessThan(update.run.indexOf('wait function-updated-v2'));
+    // The #216 guard: no function configuration in the deploy log.
+    expect(update.run).toContain('--query FunctionArn --output text');
+  });
+
+  it('removes the artifact it staged even when the deploy fails', () => {
+    const remove = stepNamed(deployAction.runs.steps, 'Remove the artifact');
+
+    expect(remove.if).toBe('always()');
+    expect(remove.run).toContain('"s3://$S3_BUCKET/$S3_KEY"');
+  });
+
+  it('stages the two environments under distinct per-run keys', () => {
+    const keys = [prod.jobs.deploy.env.DEPLOY_S3_KEY, stage.jobs.deploy.env.DEPLOY_S3_KEY];
+
+    expect(keys[0]).not.toBe(keys[1]);
+    keys.forEach(key => expect(key).toMatch(/github\.run_id/));
+  });
+
+  it('deploys stage through the very same action', () => {
+    expect(stepNamed(stage.jobs.deploy.steps, 'Deploy to the test environment').uses)
+      .toBe('./.github/actions/lambda-deploy');
   });
 });
