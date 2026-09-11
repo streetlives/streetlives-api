@@ -156,8 +156,13 @@ runs:
     # authorize call created the rule but its response never came back - a
     # dropped connection, a killed runner - there is nothing recorded to revoke
     # and the database would stay open to that address. So the id is treated as
-    # a hint, and the group is swept as well. The description carries this run's
+    # a hint and the group is swept as well. The description carries this run's
     # id, so the sweep can only ever match rules this run created.
+    #
+    # This step does not get to exit green on a guess: if the sweep cannot be
+    # completed, or anything from this run is still on the group afterwards, it
+    # fails loudly so a human closes it. A failed cleanup blocks the deploy,
+    # which is the right trade against leaving the database reachable.
     - name: Close RDS security group
       if: always()
       shell: bash
@@ -167,32 +172,60 @@ runs:
         RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
-        if ! discovered="$(aws ec2 describe-security-group-rules \
-          --filters "Name=group-id,Values=$SECURITY_GROUP_ID" \
-          --query "SecurityGroupRules[?Description=='gha run $RUN_ID'].SecurityGroupRuleId" \
-          --output text 2>&1)"; then
-          # Do not let this cost us the revoke we already know how to do.
-          echo "::warning::Could not list security group rules: $discovered"
+
+        lookup() {
+          aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$SECURITY_GROUP_ID" \
+            --query "SecurityGroupRules[?Description=='gha run $RUN_ID'].SecurityGroupRuleId" \
+            --output text
+        }
+
+        # --output text returns a tab-separated list, and prints "None" when
+        # empty; keep only things that are actually rule ids.
+        rule_ids_in() {
+          printf '%s\n' "$@" | tr '\t' '\n' | grep -E '^sgr-[0-9a-f]+$' | sort -u || true
+        }
+
+        discovered=""
+        swept=false
+        for attempt in 1 2 3; do
+          if discovered="$(lookup 2>&1)"; then
+            swept=true
+            break
+          fi
+          echo "Rule lookup attempt $attempt failed: $discovered"
           discovered=""
+          if [ "$attempt" -lt 3 ]; then
+            sleep 5
+          fi
+        done
+
+        # Revoke whatever we know about first, even if the sweep never worked -
+        # a failed lookup must not cost us the revoke we can already do.
+        rule_ids="$(rule_ids_in "${RULE_ID:-}" "$discovered")"
+        if [ -n "$rule_ids" ]; then
+          # By rule id, never by CIDR: matching on --ip-permissions could revoke
+          # an unrelated rule that happens to share the address.
+          # shellcheck disable=SC2086
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SECURITY_GROUP_ID" \
+            --security-group-rule-ids $rule_ids \
+            --query 'Return' --output text
+          echo "Revoked: $(echo $rule_ids | tr '\n' ' ')"
         fi
 
-        # Both sources, deduplicated, and nothing that is not a rule id - the
-        # CLI prints "None" for an empty result.
-        rule_ids="$(printf '%s\n%s\n' "${RULE_ID:-}" "$discovered" \
-          | tr '\t' '\n' \
-          | grep -E '^sgr-[0-9a-f]+$' \
-          | sort -u || true)"
-
-        if [ -z "$rule_ids" ]; then
-          echo "No ingress rule left to revoke."
-          exit 0
+        if [ "$swept" != true ]; then
+          echo "::error::Could not list the rules on $SECURITY_GROUP_ID after 3 attempts, so this \
+        run cannot show it left no ingress open. If the rule was created but its id never came \
+        back, it is still there: look for one described 'gha run $RUN_ID' and remove it."
+          exit 1
         fi
 
-        # Revoking by rule id can never clobber an unrelated rule that happens
-        # to share the CIDR, which matching on --ip-permissions could.
-        # shellcheck disable=SC2086
-        aws ec2 revoke-security-group-ingress \
-          --group-id "$SECURITY_GROUP_ID" \
-          --security-group-rule-ids $rule_ids \
-          --query 'Return' --output text
-        echo "Revoked $(echo $rule_ids | wc -w | tr -d ' ') rule(s): $(echo $rule_ids | tr '\n' ' ')"
+        remaining="$(rule_ids_in "$(lookup 2>/dev/null || true)")"
+        if [ -n "$remaining" ]; then
+          echo "::error::Ingress described 'gha run $RUN_ID' is still on $SECURITY_GROUP_ID after \
+        the revoke: $(echo $remaining | tr '\n' ' '). Remove it manually."
+          exit 1
+        fi
+
+        echo "No ingress from this run remains on $SECURITY_GROUP_ID."

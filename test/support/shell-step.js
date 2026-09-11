@@ -15,16 +15,33 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// Stateful enough to be worth trusting: revoked rules stop coming back from
+// describe, so a step that re-checks its own cleanup sees a real answer.
+// DESCRIBE_FAILS makes every lookup fail; DESCRIBE_FAILS_FIRST makes the first
+// N fail. REVOKE_NOOP makes revoke report success without removing anything.
 const AWS_STUB = [
   '#!/bin/bash',
   'printf \'%s\\n\' "aws $*" >> "$CALLS_LOG"',
+  'revoked="${CALLS_LOG}.revoked"',
+  'attempts="${CALLS_LOG}.describes"',
   'case "$1 $2" in',
   '  "ec2 authorize-security-group-ingress")',
   '    printf \'%s\\n\' "${AUTHORIZE_OUTPUT-sgr-0000000000000000a}" ;;',
   '  "ec2 describe-security-group-rules")',
-  '    if [ -n "${DESCRIBE_FAILS:-}" ]; then echo "AccessDeniedException" >&2; exit 255; fi',
-  '    printf \'%s\\n\' "${DESCRIBE_OUTPUT-None}" ;;',
+  '    n=$(( $(cat "$attempts" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$attempts"',
+  '    if [ -n "${DESCRIBE_FAILS:-}" ] || [ "$n" -le "${DESCRIBE_FAILS_FIRST:-0}" ]; then',
+  '      echo "AccessDeniedException" >&2; exit 255',
+  '    fi',
+  '    out=""',
+  '    for id in ${DESCRIBE_OUTPUT-None}; do',
+  '      grep -qx "$id" "$revoked" 2>/dev/null && continue',
+  '      if [ -z "$out" ]; then out="$id"; else out="$out$(printf \'\\t\')$id"; fi',
+  '    done',
+  '    printf \'%s\\n\' "${out:-None}" ;;',
   '  "ec2 revoke-security-group-ingress")',
+  '    if [ -z "${REVOKE_NOOP:-}" ]; then',
+  '      for arg in "$@"; do case "$arg" in sgr-*) echo "$arg" >> "$revoked" ;; esac; done',
+  '    fi',
   '    printf \'True\\n\' ;;',
   '  *) echo "unexpected aws call: $*" >&2; exit 9 ;;',
   'esac',

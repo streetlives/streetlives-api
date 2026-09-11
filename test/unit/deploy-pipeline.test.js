@@ -266,16 +266,46 @@ describe('the database migration action', () => {
       const result = closeRule(closing({ RULE_ID: '', DESCRIBE_OUTPUT: 'None' }));
 
       expect(result.status).toBe(0);
-      expect(result.stdout).toContain('No ingress rule left to revoke');
+      expect(result.stdout).toContain('No ingress from this run remains');
       expect(revokedIn(result)).toBe('');
     });
 
-    it('still revokes what it recorded when the sweep itself fails', () => {
+    it('fails when a lost creation response meets a failed lookup', () => {
+      // The one case where a rule can exist that nothing knows the id of. It
+      // must not be reported as a clean exit.
+      const result = closeRule(closing({ RULE_ID: '', DESCRIBE_FAILS: '1' }));
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('::error::');
+      expect(result.stdout).toContain(`gha run ${RUN}`);
+      expect(result.stdout).not.toContain('No ingress from this run remains');
+    });
+
+    it('revokes what it recorded but still fails when the lookup never works', () => {
+      // The revoke probably closed it; "probably" is not a state to exit 0 on.
       const result = closeRule(closing({ DESCRIBE_FAILS: '1' }));
 
-      expect(result.status).toBe(0);
-      expect(result.stdout).toContain('::warning::');
       expect(revokedIn(result)).toContain(CREATED);
+      expect(result.status).toBe(1);
+    });
+
+    it('retries a lookup that fails transiently rather than giving up', () => {
+      const result = closeRule(closing({
+        RULE_ID: '',
+        DESCRIBE_OUTPUT: LEFTOVER,
+        DESCRIBE_FAILS_FIRST: '2',
+      }));
+
+      expect(result.status).toBe(0);
+      expect(revokedIn(result)).toContain(LEFTOVER);
+    });
+
+    it('fails when the rule is still there after the revoke', () => {
+      // Verifies its own work instead of trusting the API's answer.
+      const result = closeRule(closing({ DESCRIBE_OUTPUT: CREATED, REVOKE_NOOP: '1' }));
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('still on');
     });
 
     it('closes the group after a failed migration', () => {
