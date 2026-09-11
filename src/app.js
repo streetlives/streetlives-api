@@ -10,7 +10,12 @@ const app = express();
 app.use(morgan('dev'));
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({
+  type: ['application/json', 'application/webhook+json'],
+  verify: (req, res, buffer) => {
+    if (req.path === '/public-calling/webhook') req.publicCallingRawBody = buffer.toString('utf8');
+  },
+}));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== 'test') {
