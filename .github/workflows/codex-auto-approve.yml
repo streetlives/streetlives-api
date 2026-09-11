@@ -230,7 +230,6 @@ jobs:
           output-schema-file: .codex-run/linked-issue-extraction.schema.json
           output-file: .codex-run/linked-issue-extraction.json
           permission-profile: ":read-only"
-          safety-strategy: drop-sudo
 
       - name: Fetch linked issue context
         env:
