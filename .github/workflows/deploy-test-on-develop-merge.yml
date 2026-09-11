@@ -54,6 +54,11 @@ jobs:
     needs: migrate
     runs-on: ubuntu-latest
     environment: CI_CD_PIPELINE
+    env:
+      # Stage and production deploys can overlap. A per-run key stops one from
+      # overwriting or deleting the other's artifact between the S3 upload and
+      # update-function-code. See package.json deploy:dev / deploy:prod.
+      DEPLOY_S3_KEY: deploys/stage-${{ github.run_id }}-${{ github.run_attempt }}.zip
 
     steps:
       - name: Checkout
@@ -77,6 +82,13 @@ jobs:
 
       - name: Package and deploy to test environment
         run: npm run package-deploy:dev
+
+      # deploy:dev removes the object on success; this covers the failure path
+      # so aborted runs do not leave artifacts behind.
+      - name: Remove deployment artifact
+        if: always()
+        continue-on-error: true
+        run: aws s3 rm "s3://$(node -p "require('./package.json').config.s3BucketName")/$DEPLOY_S3_KEY"
 
       - name: Smoke check
         env:

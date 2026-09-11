@@ -28,10 +28,16 @@ runs:
   using: composite
   steps:
     # Composite-action inputs are not secrets, so mask the password explicitly
-    # before it can reach any log line.
+    # before it can reach any log line. Every step below passes inputs through
+    # `env:` rather than interpolating them into the script: Actions substitutes
+    # expressions as literal text before bash parses the line, so a value
+    # containing a backtick or $(...) would otherwise break the step or execute
+    # under the deployment job's credentials.
     - name: Mask credentials
       shell: bash
-      run: echo "::add-mask::${{ inputs.database-password }}"
+      env:
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+      run: printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
 
     - name: Resolve runner egress IP
       id: runner-ip
@@ -49,11 +55,16 @@ runs:
     - name: Open RDS security group to this runner
       id: open-sg
       shell: bash
+      env:
+        SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        RUNNER_IP: ${{ steps.runner-ip.outputs.ip }}
+        RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
         rule_id="$(aws ec2 authorize-security-group-ingress \
-          --group-id '${{ inputs.security-group-id }}' \
-          --ip-permissions "IpProtocol=tcp,FromPort=${{ inputs.database-port }},ToPort=${{ inputs.database-port }},IpRanges=[{CidrIp=${{ steps.runner-ip.outputs.ip }}/32,Description='gha run ${{ github.run_id }}'}]" \
+          --group-id "$SECURITY_GROUP_ID" \
+          --ip-permissions "IpProtocol=tcp,FromPort=$DATABASE_PORT,ToPort=$DATABASE_PORT,IpRanges=[{CidrIp=$RUNNER_IP/32,Description='gha run $RUN_ID'}]" \
           --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
           --output text)"
         if [[ -z "$rule_id" || "$rule_id" == "None" ]]; then
@@ -63,7 +74,7 @@ runs:
         # Recorded so the revoke step targets this exact rule and can never
         # clobber an unrelated one that happens to share the CIDR.
         echo "rule-id=$rule_id" >> "$GITHUB_OUTPUT"
-        echo "Opened port ${{ inputs.database-port }} via rule $rule_id"
+        echo "Opened port $DATABASE_PORT via rule $rule_id"
 
     - name: Pending migrations (before)
       shell: bash
@@ -106,10 +117,13 @@ runs:
     - name: Close RDS security group
       if: always() && steps.open-sg.outputs.rule-id != ''
       shell: bash
+      env:
+        SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
+        RULE_ID: ${{ steps.open-sg.outputs.rule-id }}
       run: |
         set -euo pipefail
         aws ec2 revoke-security-group-ingress \
-          --group-id '${{ inputs.security-group-id }}' \
-          --security-group-rule-ids '${{ steps.open-sg.outputs.rule-id }}' \
+          --group-id "$SECURITY_GROUP_ID" \
+          --security-group-rule-ids "$RULE_ID" \
           --query 'Return' --output text
-        echo "Revoked rule ${{ steps.open-sg.outputs.rule-id }}"
+        echo "Revoked rule $RULE_ID"

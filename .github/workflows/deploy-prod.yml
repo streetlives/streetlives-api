@@ -23,13 +23,44 @@ concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
+env:
+  SNAPSHOT_PREFIX: streetlives-prod-predeploy-
+  # Manual RDS snapshots persist until deleted and the account quota is finite,
+  # so every release prunes its own history.
+  SNAPSHOT_KEEP: '10'
+
 jobs:
+  # Pins the run to one immutable SHA. inputs.ref may be a branch or tag that
+  # moves mid-run, and every downstream job must agree on the exact revision -
+  # otherwise the tests could green-light a different commit than is deployed.
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Resolve to an immutable SHA
+        id: resolve
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying $sha"
+
   test:
+    needs: resolve
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
 
   # The rollback path for a bad migration. Must finish before any schema change.
   snapshot:
-    needs: test
+    needs: [resolve, test]
     runs-on: ubuntu-latest
     environment: PRODUCTION
     outputs:
@@ -45,11 +76,13 @@ jobs:
 
       - name: Snapshot production database
         id: snapshot
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_RDS_INSTANCE_ID }}
         run: |
           set -euo pipefail
-          snapshot_id="streetlives-prod-predeploy-${{ github.run_id }}"
+          snapshot_id="${SNAPSHOT_PREFIX}${{ github.run_id }}-${{ github.run_attempt }}"
           aws rds create-db-snapshot \
-            --db-instance-identifier '${{ secrets.PROD_RDS_INSTANCE_ID }}' \
+            --db-instance-identifier "$INSTANCE_ID" \
             --db-snapshot-identifier "$snapshot_id" \
             --query 'DBSnapshot.DBSnapshotIdentifier' --output text
           echo "Waiting for $snapshot_id to become available..."
@@ -57,8 +90,41 @@ jobs:
           echo "snapshot-id=$snapshot_id" >> "$GITHUB_OUTPUT"
           echo "Snapshot $snapshot_id is available."
 
+      # Best-effort: a pruning failure should not block a release. If pruning
+      # stays broken the quota is eventually hit and create-db-snapshot above
+      # fails loudly, which is the signal we want.
+      - name: Prune old predeploy snapshots
+        continue-on-error: true
+        env:
+          INSTANCE_ID: ${{ secrets.PROD_RDS_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          # Only ever considers snapshots this workflow created; other manual
+          # snapshots are left alone. sort_by is ascending, so oldest first.
+          snapshots=()
+          while IFS= read -r snapshot; do
+            [ -n "$snapshot" ] && snapshots+=("$snapshot")
+          done < <(aws rds describe-db-snapshots \
+            --db-instance-identifier "$INSTANCE_ID" \
+            --snapshot-type manual \
+            --query "sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, '$SNAPSHOT_PREFIX')], &SnapshotCreateTime)[].DBSnapshotIdentifier" \
+            --output text | tr '\t' '\n')
+
+          total=${#snapshots[@]}
+          echo "Found $total predeploy snapshot(s); keeping the newest $SNAPSHOT_KEEP."
+          if (( total <= SNAPSHOT_KEEP )); then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          for snapshot in "${snapshots[@]:0:total-SNAPSHOT_KEEP}"; do
+            echo "Deleting $snapshot"
+            aws rds delete-db-snapshot --db-snapshot-identifier "$snapshot" \
+              --query 'DBSnapshot.DBSnapshotIdentifier' --output text
+          done
+
   migrate:
-    needs: snapshot
+    needs: [resolve, snapshot]
     # The inputs context is empty on the push trigger, and GitHub coerces both
     # '' and false to 0 when comparing across types - so any comparison against
     # `false` would wrongly skip migrations on a release. Branch on the event
@@ -71,7 +137,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -100,7 +166,7 @@ jobs:
           database-password: ${{ secrets.PROD_DATABASE_PASSWORD }}
 
   deploy:
-    needs: [snapshot, migrate]
+    needs: [resolve, snapshot, migrate]
     # Proceeds when migrate was *skipped* (run_migrations: false) but blocks on
     # an actual migration failure. Requiring snapshot == 'success' matters:
     # a failing test job leaves snapshot *skipped*, and skipped is not failure,
@@ -108,12 +174,17 @@ jobs:
     if: always() && needs.snapshot.result == 'success' && needs.migrate.result != 'failure' && !cancelled()
     runs-on: ubuntu-latest
     environment: PRODUCTION
+    env:
+      # Stage and production deploys can overlap. A per-run key stops one from
+      # overwriting or deleting the other's artifact between the S3 upload and
+      # update-function-code. See package.json deploy:dev / deploy:prod.
+      DEPLOY_S3_KEY: deploys/prod-${{ github.run_id }}-${{ github.run_attempt }}.zip
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -133,6 +204,13 @@ jobs:
 
       - name: Package and deploy to production
         run: npm run package-deploy:prod
+
+      # deploy:prod removes the object on success; this covers the failure path
+      # so aborted runs do not leave artifacts behind.
+      - name: Remove deployment artifact
+        if: always()
+        continue-on-error: true
+        run: aws s3 rm "s3://$(node -p "require('./package.json').config.s3BucketName")/$DEPLOY_S3_KEY"
 
       - name: Smoke check
         if: vars.PROD_API_URL != ''
@@ -157,7 +235,7 @@ jobs:
           {
             echo "### Production deploy"
             echo ""
-            echo "- Commit: \`${{ inputs.ref || github.sha }}\`"
+            echo "- Commit: \`${{ needs.resolve.outputs.sha }}\`"
             echo "- Snapshot: \`${{ needs.snapshot.outputs.snapshot-id }}\`"
             echo "- Migrations: ${{ needs.migrate.result }}"
             echo "- Result: ${{ job.status }}"

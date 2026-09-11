@@ -51,6 +51,11 @@ npm run package-deploy:dev   # Build, zip, upload to S3, deploy to dev Lambda
 npm run package-deploy:prod  # Same for production Lambda
 ```
 
+These upload to `$DEPLOY_S3_KEY`, defaulting to `dist.zip` when unset — so a manual deploy behaves
+as it always has. The pipelines set a per-run key instead, because Stage and prod deploys can
+overlap and a shared key lets one run overwrite or delete the other's artifact between the upload
+and `update-function-code`, which can push the Stage build to production.
+
 Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
 instance's security group to the runner's IP for the duration of the migration and revokes the
 rule in an `always()` step. Required secrets live in the `CI_CD_PIPELINE` (Stage) and `PRODUCTION`
