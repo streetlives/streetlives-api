@@ -248,7 +248,7 @@ jobs:
 
       - name: Run Codex (structured decision using protected prompt)
         id: run_codex
-        uses: openai/codex-action@086169432f1d2ab2f4057540b1754d550f6a1189 # v1.4 (tag v1)
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1.12 (tag v1)
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .codex-run/prompt.md
