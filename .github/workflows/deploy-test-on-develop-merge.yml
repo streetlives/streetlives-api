@@ -10,9 +10,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The concurrency group serializes runs without ordering them, and each run
+  # deploys its own triggering commit - so an older run finishing last would
+  # leave Stage on old code against newer migrations until someone noticed.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      superseded: ${{ steps.check.outputs.superseded }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check this is still the tip of develop
+        id: check
+        uses: ./.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: report
+
   # Reuses the real CI job (postgis service + extensions + npm test) so a red
   # build can no longer reach Stage.
   test:
+    needs: gate
+    if: needs.gate.outputs.superseded != 'true'
     uses: ./.github/workflows/ci.yml
 
   migrate:
@@ -23,6 +44,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # gate answered this at the start of the run; re-running this job alone
+      # would reuse that answer while develop has moved on.
+      - name: Refuse a superseded revision
+        uses: ./.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: fail
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -79,6 +109,13 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+
+      - name: Refuse a superseded revision
+        uses: ./.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: fail
 
       - name: Build the deployment artifact
         run: npm run clean && npm run build && npm run package

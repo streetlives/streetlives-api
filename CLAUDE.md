@@ -81,12 +81,18 @@ Revoking is always by rule id, never by CIDR, so it cannot clobber an unrelated 
 cleanup fails the migrate job and blocks the deploy — the right trade against leaving the database
 reachable from a runner address.
 
-`deploy-prod.yml` also refuses a **superseded** revision: the concurrency group serializes runs but
-does not order them, so an older push (or a re-run of an old run) could otherwise acquire the group
-last and roll production back. The `resolve` job compares the commit against the branch tip and
-skips the pipeline if it has moved. Only `push` is gated — deploying an older ref on purpose is
-what `workflow_dispatch` is for. The Stage workflow has no equivalent gate; a brief out-of-order
-Stage deploy is self-correcting in a way a production rollback is not. Required secrets live in the `CI_CD_PIPELINE` (Stage)
+Both workflows refuse a **superseded** revision, via `.github/actions/check-revision`. A concurrency
+group serializes runs but does not order them, so an older push could otherwise acquire it last and
+roll the environment back. The check runs twice, in two modes:
+
+- `on-stale: report` in the `resolve` (prod) / `gate` (Stage) job, which skips the whole pipeline
+  quietly when the branch has already moved on;
+- `on-stale: fail` immediately before each mutation, in the migrate and deploy jobs — because
+  re-running a single job reuses the earlier jobs' outputs, so the answer from the start of the run
+  proves nothing by the time a schema change is about to be applied.
+
+Only `push` is checked. Deploying an older ref deliberately is what `workflow_dispatch` is for, and
+the check does not even look the branch up for one. Required secrets live in the `CI_CD_PIPELINE` (Stage)
 and `PRODUCTION` environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
 `{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`. The `PRODUCTION` environment also
 needs a `PROD_API_URL` **variable** — the prod deploy fails rather than reporting green on a deploy

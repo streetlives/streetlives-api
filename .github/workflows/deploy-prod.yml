@@ -45,34 +45,22 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
+      # From this workflow's revision, not the one being deployed: the rollback
+      # path targets refs that predate these actions entirely.
+      - name: Checkout the pipeline helpers from this workflow's revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-helpers
+          sparse-checkout: .github/actions
+
       - name: Resolve to an immutable SHA
         id: resolve
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-
-          # The concurrency group serializes runs but does not order them: two
-          # pushes landing close together can acquire it in either order, and
-          # re-running an old run would deploy an old commit. Either way the
-          # older revision reaches production last and silently rolls it back.
-          # Only a push is gated - deploying an older ref deliberately is what
-          # the dispatch path is for.
-          superseded=false
-          if [ "$EVENT_NAME" = "push" ]; then
-            git fetch --no-tags --depth=1 origin "$BRANCH"
-            tip="$(git rev-parse FETCH_HEAD)"
-            if [ "$tip" != "$sha" ]; then
-              superseded=true
-              echo "::warning::$BRANCH has moved to $tip since this run started ($sha). The run \
-          for that commit deploys it; this one stops here rather than rolling production back."
-            fi
-          fi
-          echo "superseded=$superseded" >> "$GITHUB_OUTPUT"
-          echo "Deploying $sha (superseded: $superseded)"
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          on-stale: report
 
   # Gating the first job is enough: snapshot, migrate and deploy are all
   # downstream of it, and a skipped dependency skips them too.
@@ -181,6 +169,17 @@ jobs:
             src/utils
             src/certs
 
+      # resolve answered this once, at the start of the run. Re-running just
+      # this job after a newer release reuses that answer, so ask again with
+      # the schema change immediately behind it.
+      - name: Refuse a superseded revision
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          sha: ${{ needs.resolve.outputs.sha }}
+          on-stale: fail
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -261,6 +260,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+
+      # Same reason as in the migrate job: a re-run of this job alone would
+      # otherwise trust a freshness check from before the newer release.
+      - name: Refuse a superseded revision
+        uses: ./.deploy-helpers/.github/actions/check-revision
+        with:
+          branch: ${{ github.ref_name }}
+          event-name: ${{ github.event_name }}
+          sha: ${{ needs.resolve.outputs.sha }}
+          on-stale: fail
 
       # clean/build/package predate this pipeline, so they exist on every ref a
       # rollback can target.

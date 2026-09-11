@@ -15,6 +15,7 @@ const prod = load('.github/workflows/deploy-prod.yml');
 const stage = load('.github/workflows/deploy-test-on-develop-merge.yml');
 const migrateAction = load('.github/actions/db-migrate/action.yml');
 const deployAction = load('.github/actions/lambda-deploy/action.yml');
+const revisionAction = load('.github/actions/check-revision/action.yml');
 
 // YAML 1.1 reads a bare `on:` key as the boolean true.
 const ON_KEY = true;
@@ -117,6 +118,7 @@ describe('production pipeline gates', () => {
     // A branch or tag can move mid-run; the tests must green-light exactly the
     // revision that is deployed.
     expect(prod.jobs.test.with.ref).toBe(DEPLOYED_SHA);
+    expect(prod.jobs.resolve.outputs.sha).toBe('${{ steps.resolve.outputs.sha }}');
     expect(stepNamed(prod.jobs.migrate.steps, 'Checkout the revision being deployed').with.ref)
       .toBe(DEPLOYED_SHA);
     expect(stepNamed(prod.jobs.deploy.steps, 'Checkout the revision being deployed').with.ref)
@@ -464,50 +466,107 @@ describe('the database migration action', () => {
   });
 });
 
-describe('the stale-revision gate', () => {
-  const resolveStep = stepNamed(prod.jobs.resolve.steps, 'Resolve to an immutable SHA');
-  const runResolve = runnerFor(resolveStep);
+describe('the stale-revision check', () => {
+  const runCheck = runnerFor(revisionAction.runs.steps[0]);
   const OURS = '1111111111111111111111111111111111111111';
   const NEWER = '2222222222222222222222222222222222222222';
 
-  const resolving = extra => Object.assign({
+  const checking = extra => Object.assign({
     EVENT_NAME: 'push',
     BRANCH: 'master',
-    HEAD_SHA: OURS,
+    SHA: OURS,
     TIP_SHA: OURS,
+    ON_STALE: 'report',
   }, extra);
 
-  it('deploys a push that is still the tip of the branch', () => {
-    const result = runResolve(resolving());
+  it('passes a push that is still the tip of the branch', () => {
+    const result = runCheck(checking());
 
     expect(result.outputs).toContain(`sha=${OURS}`);
     expect(result.outputs).toContain('superseded=false');
+    expect(result.status).toBe(0);
   });
 
-  it('stops a push that a newer release has overtaken', () => {
+  it('reports a push that a newer release has overtaken', () => {
     // The concurrency group serializes runs without ordering them, so an older
     // run can acquire it second and roll production back.
-    const result = runResolve(resolving({ TIP_SHA: NEWER }));
+    const result = runCheck(checking({ TIP_SHA: NEWER }));
 
     expect(result.outputs).toContain('superseded=true');
     expect(result.stdout).toContain('::warning::');
     expect(result.stdout).toContain(NEWER);
+    expect(result.status).toBe(0);
+  });
+
+  it('refuses to go ahead in fail mode, which is what a job re-run hits', () => {
+    // Re-running one job of an older run reuses the other jobs' outputs, so the
+    // freshness answer from the start of that run is worthless here.
+    const result = runCheck(checking({ TIP_SHA: NEWER, ON_STALE: 'fail' }));
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('::error::');
+    expect(result.stdout).toContain('silent rollback');
+  });
+
+  it('resolves HEAD when given no explicit revision', () => {
+    const result = runCheck(checking({ SHA: '', HEAD_SHA: OURS }));
+
+    expect(result.outputs).toContain(`sha=${OURS}`);
   });
 
   it('never stands in the way of a deliberate rollback', () => {
-    const result = runResolve(resolving({ EVENT_NAME: 'workflow_dispatch', TIP_SHA: NEWER }));
+    const result = runCheck(checking({
+      EVENT_NAME: 'workflow_dispatch',
+      TIP_SHA: NEWER,
+      ON_STALE: 'fail',
+    }));
 
+    expect(result.status).toBe(0);
     expect(result.outputs).toContain('superseded=false');
     // It does not even ask where the branch is: dispatch means "this ref".
     expect(result.calls.some(call => call.startsWith('git fetch'))).toBe(false);
   });
 
-  it('gates the pipeline on the answer', () => {
-    expect(prod.jobs.resolve.outputs.superseded).toBe('${{ steps.resolve.outputs.superseded }}');
-    expect(prod.jobs.test.if).toBe("needs.resolve.outputs.superseded != 'true'");
-    // Everything else is downstream of the test job, so it cascades.
-    expect(jobRuns(prod.jobs.snapshot, needsResults({ resolve: 'success', test: 'skipped' })))
-      .toBe(false);
+  describe('is wired in before every mutation', () => {
+    const refusalIn = (job, helperPath) => {
+      const step = stepNamed(job.steps, 'Refuse a superseded revision');
+
+      expect(step.with['on-stale']).toBe('fail');
+      expect(step.uses).toBe(`.${helperPath}/.github/actions/check-revision`);
+      return job.steps.indexOf(step);
+    };
+
+    it('gates the production pipeline, then re-checks at each mutation', () => {
+      expect(prod.jobs.resolve.outputs.superseded).toBe('${{ steps.resolve.outputs.superseded }}');
+      expect(prod.jobs.test.if).toBe("needs.resolve.outputs.superseded != 'true'");
+      // Everything else is downstream of the test job, so it cascades.
+      expect(jobRuns(prod.jobs.snapshot, needsResults({ resolve: 'success', test: 'skipped' })))
+        .toBe(false);
+
+      // Taken from the workflow's revision: a rollback target predates the action.
+      const migrateAt = refusalIn(prod.jobs.migrate, '/.deploy-helpers');
+      const deployAt = refusalIn(prod.jobs.deploy, '/.deploy-helpers');
+      const names = job => job.steps.map(step => step.name);
+
+      const migrateStep = names(prod.jobs.migrate).indexOf('Migrate production database');
+      const buildStep = names(prod.jobs.deploy).indexOf('Build the deployment artifact');
+      expect(migrateAt).toBeLessThan(migrateStep);
+      expect(deployAt).toBeLessThan(buildStep);
+    });
+
+    it('gates the stage pipeline the same way', () => {
+      expect(stage.jobs.test.if).toBe("needs.gate.outputs.superseded != 'true'");
+      expect(stage.jobs.test.needs).toBe('gate');
+
+      const migrateAt = refusalIn(stage.jobs.migrate, '');
+      const deployAt = refusalIn(stage.jobs.deploy, '');
+      const names = job => job.steps.map(step => step.name);
+
+      const migrateStep = names(stage.jobs.migrate).indexOf('Migrate Stage database');
+      const buildStep = names(stage.jobs.deploy).indexOf('Build the deployment artifact');
+      expect(migrateAt).toBeLessThan(migrateStep);
+      expect(deployAt).toBeLessThan(buildStep);
+    });
   });
 });
 
