@@ -6,17 +6,16 @@
   "config": {
     "s3BucketName": "streetlives",
     "region": "us-east-1",
-    "cloudFormationStackName": "StreetlivesApiServerlessStack",
-    "functionName": "StreetlivesApiServerlessS-StreetlivesApiTestFuncti-19TCRUPMR00MW",
-    "accountId": "710263499164"
+    "functionName": "StreetlivesApiServerlessS-StreetlivesApiTestFuncti-O15R8ZABRT1P",
+    "prodFunctionName": "StreetlivesApiProdFunction"
   },
   "scripts": {
-    "dev": "NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
+    "dev": "PORT=3001 NODE_ENV=development nodemon -w src --exec \"babel-node src\"",
     "build": "babel src -s -D -d dist",
     "start": "NODE_ENV=production node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
-    "test": "NODE_ENV=test jest --runInBand --coverage",
+    "test": "NODE_ENV=test jest --runInBand --coverage --forceExit",
     "test:watch": "NODE_ENV=test jest --watch --runInBand",
     "build-zip": "npm run build && (cd dist; zip -r ../`date +%Y-%m-%d`-streetlives-api-`git rev-parse --short HEAD`.zip *)",
     "config": "node ./scripts/configure.js",
@@ -25,11 +24,15 @@
     "invoke-lambda": "aws lambda invoke --function-name $npm_package_config_functionName --region $npm_package_config_region --payload file://api-gateway-event.json lambda-invoke-response.json && cat lambda-invoke-response.json",
     "create-bucket": "aws s3 mb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
     "delete-bucket": "aws s3 rb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
-    "package": "cp -r node_modules dist/; aws cloudformation package --template ./cloudformation.yaml --s3-bucket $npm_package_config_s3BucketName --output-template packaged-sam.yaml --region $npm_package_config_region",
-    "deploy": "aws cloudformation deploy --template-file packaged-sam.yaml --stack-name $npm_package_config_cloudFormationStackName --capabilities CAPABILITY_IAM --region $npm_package_config_region",
-    "package-deploy": "npm run package && npm run deploy",
-    "delete-stack": "aws cloudformation delete-stack --stack-name $npm_package_config_cloudFormationStackName --region $npm_package_config_region",
-    "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy"
+    "package": "cp -r node_modules dist/; cd dist && zip -r ../dist.zip *",
+    "clean": "rm -rf dist/ dist.zip",
+    "deploy:dev": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName && aws lambda update-function-code --function-name $npm_package_config_functionName --s3-bucket $npm_package_config_s3BucketName --s3-key dist.zip --publish --query FunctionArn --output text && aws s3 rm s3://$npm_package_config_s3BucketName/dist.zip",
+    "deploy:prod": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName && aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --s3-bucket $npm_package_config_s3BucketName --s3-key dist.zip --publish --query FunctionArn --output text && aws s3 rm s3://$npm_package_config_s3BucketName/dist.zip",
+    "package-deploy:dev": "npm run clean && npm run build && npm run package && npm run deploy:dev",
+    "package-deploy:prod": "npm run clean && npm run build && npm run package && npm run deploy:prod",
+    "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy",
+    "sequelize:migration:generate": "sequelize-cli migration:generate --name",
+    "sequelize:db:migrate": "sequelize-cli db:migrate"
   },
   "author": "",
   "license": "MIT",
@@ -41,6 +44,8 @@
     "streetlives"
   ],
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.812.0",
+    "@aws-sdk/credential-provider-ini": "^3.812.0",
     "aws-serverless-express": "^3.1.3",
     "axios": "^0.21.2",
     "body-parser": "^1.18.2",
@@ -49,9 +54,11 @@
     "joi": "^13.1.2",
     "minimist": "^1.2.6",
     "morgan": "^1.9.1",
-    "pg": "^6.4.2",
+    "nodemailer": "^6.10.1",
+    "openai": "^4.85.4",
+    "pg": "^8.11.3",
     "pg-hstore": "^2.3.2",
-    "sequelize": "^4.32.2"
+    "sequelize": "^6.37.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.12.1",
@@ -66,6 +73,7 @@
     "nodemon": "^1.18.7",
     "pre-commit": "^1.2.2",
     "qs": "^6.9.4",
+    "sequelize-cli": "^6.6.2",
     "supertest": "^3.0.0",
     "trace": "^3.1.1",
     "uuid": "^3.2.1"
@@ -75,8 +83,46 @@
     "test"
   ],
   "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "testMatch": [
+          "<rootDir>/test/unit/**/*.test.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
+      },
+      {
+        "displayName": "integration",
+        "testMatch": [
+          "<rootDir>/test/integration/**/*.test.js"
+        ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/test/setup.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ]
+      }
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/test/setup.js"
+    ],
+    "moduleNameMapper": {
+      "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+      "^node:stream$": "<rootDir>/test/__mocks__/node-stream-shim.js"
+    },
+    "setupFiles": [
+      "<rootDir>/test/env.js"
     ]
   }
 }

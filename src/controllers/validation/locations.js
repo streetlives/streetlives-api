@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { SORT_OPTIONS, SORT_ORDER } from '../sort-by';
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -8,8 +9,14 @@ const updateMetadataSchema = Joi.object().keys({
 export default {
   find: {
     query: Joi.object().keys({
-      latitude: Joi.number(),
-      longitude: Joi.number(),
+      latitude: Joi.number().when('sortBy', {
+        is: SORT_ORDER.NEARBY,
+        then: Joi.required(),
+      }),
+      longitude: Joi.number().when('sortBy', {
+        is: SORT_ORDER.NEARBY,
+        then: Joi.required(),
+      }),
       radius: Joi.number()
         .integer().positive().max(50000),
       minResults: Joi.number()
@@ -19,8 +26,11 @@ export default {
         .min(Joi.ref('minResults', { default: 0 }))
         .max(1000),
       searchString: Joi.string().allow(''),
+      // Populating naturalLanguageQuery implies the caller has shown the user
+      // the third-party-AI notice (the text is sent to OpenAI) — see PRIVACY.md.
+      naturalLanguageQuery: Joi.string().max(500),
       organizationName: Joi.string().min(3),
-      zipcodes: Joi.array().items(Joi.string().length(5).regex(/\d+/)),
+      zipcodes: Joi.array().max(200).items(Joi.string().length(5).regex(/\d+/)),
       taxonomyId: Joi.string(),
       openAt: Joi.date().iso(),
       occasion: Joi.string(),
@@ -29,15 +39,27 @@ export default {
       membership: Joi.boolean(),
       gender: Joi.string(),
       servesZipcode: Joi.string().length(5).regex(/\d+/),
-      taxonomySpecificAttributes: Joi.array().items(Joi.string()),
+      taxonomySpecificAttributes: Joi.array().max(200).items(Joi.string()),
+      pageNumber: Joi.number(),
+      pageSize: Joi.number(),
+      age: Joi.number(),
+      ageMin: Joi.number(),
+      ageMax: Joi.number(),
+      sortBy: Joi.string().valid(SORT_OPTIONS),
     })
-      .and('radius', 'latitude', 'longitude')
+      .with('radius', ['latitude', 'longitude'])
       .required(),
   },
 
   getInfo: {
     params: Joi.object().keys({
       locationId: Joi.string().guid().required(),
+    }).required(),
+  },
+
+  getInfoBySlug: {
+    params: Joi.object().keys({
+      slug: Joi.string().required(),
     }).required(),
   },
 
@@ -84,6 +106,21 @@ export default {
         event: Joi.string().required(),
         information: Joi.string().required().allow(null),
       }),
+      streetview: Joi.object().keys({
+        pano_id: Joi.string().max(128).allow(null),
+        lat: Joi.number().min(-90).max(90).allow(null),
+        lng: Joi.number().min(-180).max(180).allow(null),
+        heading: Joi.number().min(0).max(360).allow(null),
+        pitch: Joi.number().min(-90).max(90).allow(null),
+        fov: Joi.number().integer().min(10).max(120)
+          .allow(null),
+        // {} would otherwise create an all-null streetview row; require at
+        // least one field (null still means delete, omission means unchanged).
+        // unknown(false) opts out of the API-wide allowUnknown here: unknown
+        // keys would satisfy min(1) while being ignored by the controller,
+        // so {bogus: 'x'} would also create an all-null row.
+      }).min(1).allow(null)
+        .unknown(false),
       metadata: updateMetadataSchema,
     }).required(),
   },
@@ -119,6 +156,15 @@ export default {
   deletePhone: {
     params: Joi.object().keys({
       phoneId: Joi.string().guid().required(),
+    }).required(),
+  },
+
+  updateStreetview: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      streetview_url: Joi.string(),
     }).required(),
   },
 

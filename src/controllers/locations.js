@@ -2,26 +2,161 @@ import Joi from 'joi';
 import locationSchemas from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
-import { getMetadataForLocation, getMetadataForService } from '../services/last-updates';
+import {
+  getMetadataForLocation,
+  getMetadataForService,
+  getLastValidatedDateForLocation,
+} from '../services/last-updates';
 import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
+import { formatIsoWithTimezone } from '../utils/times';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { redactPii } from '../utils/redact-pii';
+import { getClientIp } from '../utils/request';
+import { parseNaturalLanguageQuery } from './openai';
 
-const DEFAULT_MAX_LOCATIONS_RETURNED = 1000;
+const DEFAULT_MAX_LOCATIONS_RETURNED = 1700;
+const MAX_TAXONOMY_IDS = 200;
 
-const isLocationClosed = (occasion, eventRelatedInfos, services) => {
-  if (!occasion) {
+// How far around a natural-language "near <address>" anchor to search, when
+// the address resolves to a point (see the nlParams.streetAddress handling in
+// find below). Roughly a mile — a walkable distance in NYC.
+const NL_STREET_ADDRESS_RADIUS_METERS = 1500;
+
+const CLOSURE_EVENT_TYPE = 'CLOSURE';
+
+const isLocationClosed = (eventRelatedInfos) => {
+  if (!eventRelatedInfos) {
     return false;
   }
-  const hasCOVIDEventRelatedInfo = eventRelatedInfos &&
-  eventRelatedInfos.some(eventRelatedInfo => eventRelatedInfo.event === occasion);
-  const locationServicesAllClosed = !services ||
-  services.every(service => service.HolidaySchedules.every(holidaySchedule =>
-    holidaySchedule.closed));
-  return hasCOVIDEventRelatedInfo && locationServicesAllClosed;
+  return eventRelatedInfos.some(info => info.event === CLOSURE_EVENT_TYPE);
 };
+
+// Get location and service associations separately to reduce SQL size
+// (avoids 16KB+ queries, which would result in session pinning)
+const locationAssociations = {
+  include: [
+    {
+      model: models.Organization,
+      include: [models.Phone],
+    },
+    models.Phone,
+    models.PhysicalAddress,
+    models.AccessibilityForDisabilities,
+    models.EventRelatedInfo,
+    models.Streetview,
+  ],
+};
+const serviceAssociations = {
+  include: [
+    {
+      model: models.Eligibility,
+      include: [models.EligibilityParameter],
+    },
+    {
+      model: models.ServiceTaxonomySpecificAttribute,
+      include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
+    },
+    {
+      model: models.Taxonomy,
+      through: { attributes: [] },
+    },
+    models.RegularSchedule,
+    models.HolidaySchedule,
+    {
+      model: models.Language,
+      through: { attributes: [] },
+    },
+    models.RequiredDocument,
+    models.DocumentsInfo,
+    models.Phone,
+    models.EventRelatedInfo,
+    models.ServiceArea,
+  ],
+};
+
+// Location info still returns `neighborhood`, but as a top-level field derived
+// from location geometry rather than as address.neighborhood.
+const getNeighborhoodAttributeSubquery = {
+  attributes: {
+    include: [
+      [
+        models.sequelize.literal(`(
+            SELECT neighborhood
+            FROM nyc_neighborhood_geometries
+            WHERE ST_Contains(
+              nyc_neighborhood_geometries.geometry,
+              ST_SetSRID(position,4326)
+            )
+        )`),
+        'neighborhood',
+      ],
+    ],
+  },
+};
+
+async function handleGetInfoResponse(location, locationWithServices, excludeMetadata) {
+  const {
+    PhysicalAddresses: addresses,
+    additional_info: additionalInfo,
+    ...unchangedProps
+  } = location.get({ plain: true });
+  const services = locationWithServices && locationWithServices.Services
+    ? locationWithServices.Services.map(s => s.get({ plain: true }))
+    : [];
+
+  if (!addresses || addresses.length !== 1) {
+    throw new Error('Location does not have a valid address');
+  }
+
+  const address = addresses[0];
+
+  const responseData = {
+    ...unchangedProps,
+    additionalInfo,
+    address: {
+      // Do not return address.neighborhood; PhysicalAddress no longer maps that
+      // legacy column after the geoquery migration. We checked the known clients
+      // (yourpeer.nyc and streetlives-web), and they do not read this nested
+      // field. Keep the deprecated mapping commented here to make that API
+      // transition explicit; clients should use the top-level neighborhood.
+      // neighborhood: address.neighborhood,
+      street: address.address_1,
+      city: address.city,
+      region: address.region,
+      state: address.state_province,
+      postalCode: address.postal_code,
+      country: address.country,
+    },
+  };
+
+  const { EventRelatedInfos } = location;
+  const closed = isLocationClosed(EventRelatedInfos);
+
+  if (excludeMetadata) {
+    const [{ lastValidatedDateForLocation }] = await getLastValidatedDateForLocation(location.id);
+    return {
+      ...responseData,
+      Services: services,
+      lastValidatedDateForLocation,
+      closed,
+    };
+  }
+  const locationMetadata = await getMetadataForLocation(location, address);
+  const servicesWithMetadata = await Promise.all(services.map(async service => ({
+    ...service,
+    metadata: await getMetadataForService(service),
+  })));
+
+  return {
+    ...responseData,
+    Services: servicesWithMetadata,
+    metadata: locationMetadata,
+    closed,
+  };
+}
 
 export default {
   find: async (req, res, next) => {
@@ -31,6 +166,7 @@ export default {
       const {
         latitude,
         longitude,
+        noServices,
         radius,
         minResults,
         maxResults = DEFAULT_MAX_LOCATIONS_RETURNED,
@@ -45,9 +181,49 @@ export default {
         membership,
         gender,
         servesZipcode,
+        age: _age,
+        ageMin: _ageMin,
+        ageMax: _ageMax,
         taxonomySpecificAttributes,
         locationFieldsOnly,
+        pageNumber: _pageNumber,
+        pageSize: _pageSize,
+        sortBy,
+        naturalLanguageQuery,
       } = req.query;
+
+      const pageNumber = _pageNumber ? parseInt(_pageNumber, 10) : undefined;
+      const pageSize = _pageNumber ? parseInt(_pageSize, 10) : undefined;
+      const age = _age ? parseInt(_age, 10) : undefined;
+      const ageMin = _ageMin ? parseInt(_ageMin, 10) : undefined;
+      const ageMax = _ageMax ? parseInt(_ageMax, 10) : undefined;
+
+      if (ageMin != null && ageMax != null && ageMin > ageMax) {
+        throw new ValidationError('ageMin cannot be greater than ageMax');
+      }
+
+      let nlParams = null;
+      if (naturalLanguageQuery) {
+        // Sending naturalLanguageQuery is itself the consent signal: a client
+        // must only populate this param after showing the user the
+        // third-party-AI notice described in PRIVACY.md. The query text is
+        // redacted and sent to OpenAI; on any failure we degrade to a local
+        // keyword search on the raw query below.
+        try {
+          const sanitizedQuery = redactPii(naturalLanguageQuery);
+          // The NL prompt describes this value as America/New_York time, so
+          // format it in that zone (with its UTC offset) rather than UTC —
+          // otherwise relative dates ("tonight", "tomorrow") resolve to the
+          // wrong day near day boundaries.
+          nlParams = await parseNaturalLanguageQuery(
+            sanitizedQuery,
+            formatIsoWithTimezone(new Date(), 'America/New_York'),
+            getClientIp(req),
+          );
+        } catch (err) {
+          console.error('NL query parse failed, falling back to raw search:', err.message);
+        }
+      }
 
       let attributesObject;
       if (taxonomySpecificAttributes != null) {
@@ -64,6 +240,11 @@ export default {
       }
       if (gender != null) {
         eligibility[eligibilityParams.gender] = gender;
+      }
+      if (age != null) {
+        eligibility.age = age;
+      } else if (ageMin != null || ageMax != null) {
+        eligibility.ageRange = { ageMin, ageMax };
       }
 
       const documents = {};
@@ -93,22 +274,123 @@ export default {
         filterParameters.zipcodes = zipcodes;
       }
 
+      if (nlParams) {
+        if (!filterParameters.searchString && nlParams.searchString) {
+          filterParameters.searchString = nlParams.searchString;
+        }
+        if (!openAt && nlParams.openAt) {
+          const parsedOpenAt = new Date(nlParams.openAt);
+          if (!isNaN(parsedOpenAt.getTime())) {
+            filterParameters.openAt = parsedOpenAt;
+          }
+        }
+        if (!gender && nlParams.gender) {
+          filterParameters.eligibility[eligibilityParams.gender] = nlParams.gender;
+        }
+        if (membership == null && nlParams.membership != null) {
+          // The parser emits a boolean, but eligibility values are stored and
+          // matched as strings (explicit query params arrive as 'true'/'false'
+          // too) — the jsonb `?` containment check never matches a boolean.
+          filterParameters.eligibility[eligibilityParams.membership] =
+            String(nlParams.membership);
+        }
+        if (ageMin == null && ageMax == null && age == null) {
+          if (nlParams.ageMin != null || nlParams.ageMax != null) {
+            filterParameters.eligibility.ageRange = {
+              ageMin: nlParams.ageMin,
+              ageMax: nlParams.ageMax,
+            };
+          }
+        }
+        if (referralRequired == null && nlParams.referralRequired != null) {
+          filterParameters.documents[documentTypes.referralLetter] = nlParams.referralRequired;
+        }
+        if (photoIdRequired == null && nlParams.photoIdRequired != null) {
+          filterParameters.documents[documentTypes.photoId] = nlParams.photoIdRequired;
+        }
+        if (!zipcodes && nlParams.zipcodes) {
+          filterParameters.zipcodes = nlParams.zipcodes;
+        }
+        if (nlParams.streetAddress) {
+          // A street address in a natural-language query is a proximity
+          // intent ("food near 123 Main St"), not a requirement that results
+          // share that address string. There is no external geocoder in this
+          // stack, so the address is resolved against the directory's own
+          // stored addresses; a match anchors a radius filter around that
+          // point, composing with any explicit position/radius params the
+          // same way the extracted neighborhood/zipcode filters do. An
+          // address the directory doesn't know cannot be geocoded: fall back
+          // to using it as a keyword search (never as a hard address filter,
+          // which would exclude every nearby service) so results stay scoped
+          // rather than silently broadening to an unfiltered search.
+          const anchor =
+            await models.Location.findPositionByStreetAddress(nlParams.streetAddress);
+          if (anchor) {
+            filterParameters.proximity = {
+              position: anchor,
+              radiusMeters: NL_STREET_ADDRESS_RADIUS_METERS,
+            };
+          } else if (!filterParameters.searchString) {
+            filterParameters.searchString = nlParams.streetAddress;
+          }
+        }
+        if (nlParams.neighborhood) {
+          filterParameters.neighborhood = nlParams.neighborhood;
+        }
+        if (!taxonomyId && nlParams.taxonomyNames && nlParams.taxonomyNames.length > 0) {
+          const matchedTaxonomies = await models.Taxonomy.findAll({
+            where: { name: nlParams.taxonomyNames },
+          });
+          if (matchedTaxonomies.length > 0) {
+            const matchedIds = matchedTaxonomies.map(t => t.id);
+            filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(matchedIds);
+          } else if (!filterParameters.searchString) {
+            // None of the parser's taxonomy names matched a known taxonomy. Dropping
+            // the constraint entirely would broaden this to an effectively unfiltered
+            // search, so fall back to using the taxonomy names as a keyword search
+            // string to keep the results scoped to what the user asked for.
+            filterParameters.searchString = nlParams.taxonomyNames.join(' ');
+          }
+        }
+      } else if (naturalLanguageQuery && !filterParameters.searchString) {
+        filterParameters.searchString = naturalLanguageQuery.trim();
+      }
+
       if (taxonomyId) {
-        const taxonomyIds = taxonomyId.split(',');
+        const taxonomyIds = taxonomyId.split(',').filter(Boolean);
+        if (taxonomyIds.length > MAX_TAXONOMY_IDS) {
+          const message = `taxonomyId query param may include at most ${MAX_TAXONOMY_IDS} IDs`;
+          throw new ValidationError(message);
+        }
         filterParameters.taxonomyIds = await models.Taxonomy.getAllIdsWithinTaxonomies(taxonomyIds);
       }
-      const locations = (await models.Location.search({
+      const limit = pageSize || maxResults;
+
+      const offset = pageNumber !== undefined && pageSize !== undefined ?
+        pageNumber * pageSize : undefined;
+
+      const {
+        locations,
+        totalNumLocations,
+      } = await models.Location.search({
         position: (longitude && latitude) ? geometry.createPoint(longitude, latitude) : null,
         radius,
         minResults,
-        maxResults,
         filterParameters,
         locationFieldsOnly,
-      })).map(location => location.get({ plain: true }));
+        noServices: parseBoolean(noServices),
+        limit,
+        offset,
+        sortBy,
+      });
+      const plainLocations = await locations
+        .map(location => location.get({ plain: true }));
+      const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
-      const formattedLocations = locations.map((location) => {
-        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
-        const closed = isLocationClosed(occasion, EventRelatedInfos, Services);
+      const formattedLocations = plainLocations.map((location) => {
+        // eslint-disable-next-line no-unused-vars
+        const { EventRelatedInfos, Services: _Services, ...simplifiedLocation } = location;
+        const closed = isLocationClosed(EventRelatedInfos);
 
         if (locationFieldsOnly) {
           return {
@@ -122,6 +404,11 @@ export default {
           closed,
         };
       });
+
+      if (pageNumber !== undefined && pageSize !== undefined) {
+        res.setHeader('Pagination-Count', paginationCount);
+        res.setHeader('Total-Count', totalNumLocations);
+      }
       res.send(formattedLocations);
     } catch (err) {
       next(err);
@@ -132,83 +419,103 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfo, { allowUnknown: true });
 
-      const location = await models.Location.findById(
-        req.params.locationId,
-        {
-          include: [
-            {
+      const { locationId } = req.params;
+
+      const [location, locationWithServices] = await Promise.all([
+        models.Location.findByPk(
+          locationId,
+          {
+            include: locationAssociations.include,
+            attributes: getNeighborhoodAttributeSubquery.attributes,
+          },
+        ),
+        models.Location.findByPk(
+          locationId,
+          {
+            include: [{
               model: models.Service,
-              include: [
-                {
-                  model: models.Eligibility,
-                  include: [models.EligibilityParameter],
-                },
-                {
-                  model: models.ServiceTaxonomySpecificAttribute,
-                  include: [{ model: models.TaxonomySpecificAttribute, as: 'attribute' }],
-                },
-                models.Taxonomy,
-                models.RegularSchedule,
-                models.HolidaySchedule,
-                models.Language,
-                models.RequiredDocument,
-                models.DocumentsInfo,
-                models.Phone,
-                models.EventRelatedInfo,
-                models.ServiceArea,
-              ],
-            },
-            {
-              model: models.Organization,
-              include: [models.Phone],
-            },
-            models.Phone,
-            models.PhysicalAddress,
-            models.AccessibilityForDisabilities,
-            models.EventRelatedInfo,
-          ],
-        },
-      );
+              through: { attributes: [] },
+              include: serviceAssociations.include,
+            }],
+            attributes: ['id'],
+          },
+        ),
+      ]);
 
       if (!location) {
         throw new NotFoundError('Location not found');
       }
 
-      const {
-        PhysicalAddresses: addresses,
-        Services: services,
-        additional_info: additionalInfo,
-        ...unchangedProps
-      } = location.get({ plain: true });
+      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, false);
+      res.send(getInfoResponse);
+    } catch (err) {
+      next(err);
+    }
+  },
 
-      if (!addresses || addresses.length !== 1) {
-        throw new Error('Location does not have a valid address');
+  getInfoBySlug: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
+
+      const locations = await models.Location.findAll({
+        where: {
+          slug: req.params.slug,
+        },
+        include: locationAssociations.include,
+        attributes: getNeighborhoodAttributeSubquery.attributes,
+      });
+
+      if (!locations.length) {
+        res.status(404).send({ status: 404 });
+        return;
       }
 
-      const address = addresses[0];
+      const location = locations[0];
 
-      const locationMetadata = await getMetadataForLocation(location, address);
-      const servicesWithMetadata = await Promise.all(services.map(async service => ({
-        ...service,
-        metadata: await getMetadataForService(service),
-      })));
-
-      const responseData = {
-        ...unchangedProps,
-        Services: servicesWithMetadata,
-        additionalInfo,
-        address: {
-          street: address.address_1,
-          city: address.city,
-          region: address.region,
-          state: address.state_province,
-          postalCode: address.postal_code,
-          country: address.country,
+      const locationWithServices = await models.Location.findByPk(
+        location.id,
+        {
+          include: [{
+            model: models.Service,
+            through: { attributes: [] },
+            include: serviceAssociations.include,
+          }],
+          attributes: ['id'],
         },
-        metadata: locationMetadata,
-      };
+      );
 
-      res.send(responseData);
+      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, true);
+      res.send(getInfoResponse);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getRedirectBySlug: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
+
+      const locationSlugs = await models.LocationSlugRedirect.findAll({
+        where: {
+          slug: req.params.slug,
+        },
+        attributes: ['slug', 'location_id'],
+      });
+
+      if (locationSlugs.length) {
+        const location = await models.Location.findByPk(locationSlugs[0].location_id);
+        if (!location) {
+          res.status(404).send({ error: 'Location not found' });
+          return;
+        }
+
+        res.send({
+          id: location.id,
+          slug: location.slug,
+        });
+      } else {
+        res.status(404).send({ error: 'Location slug not found' });
+      }
     } catch (err) {
       next(err);
     }
@@ -230,7 +537,7 @@ export default {
       } = req.body;
       const position = geometry.createPoint(longitude, latitude);
 
-      const organization = await models.Organization.findById(organizationId);
+      const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
         throw new NotFoundError('Organization not found');
       }
@@ -260,9 +567,12 @@ export default {
   },
 
   update: async (req, res, next) => {
-    const updateLocation = (location, updateParams, metadata) => {
+    const updateLocation = (location, updateParams, metadata, transaction) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
+      if (updateParams.streetview_url != null) {
+        locationUpdate.streetview_url = updateParams.streetview_url;
+      }
       if (updateParams.description != null) {
         locationUpdate.description = updateParams.description;
       }
@@ -277,10 +587,10 @@ export default {
         locationUpdate.organization_id = updateParams.organizationId;
       }
 
-      return updateInstance(req.user, location, locationUpdate, { metadata });
+      return updateInstance(req.user, location, locationUpdate, { metadata, transaction });
     };
 
-    const updateAddress = (location, updateParams, metadata) => {
+    const updateAddress = (location, updateParams, metadata, transaction) => {
       if (!location.PhysicalAddresses || location.PhysicalAddresses.length !== 1) {
         throw new Error('Trying to update address for location with no valid existing address');
       }
@@ -295,13 +605,17 @@ export default {
       if (updateParams.postalCode != null) { addressUpdate.postal_code = updateParams.postalCode; }
       if (updateParams.country != null) { addressUpdate.country = updateParams.country; }
 
-      return updateInstance(req.user, currentAddress, addressUpdate, { metadata });
+      return updateInstance(req.user, currentAddress, addressUpdate, { metadata, transaction });
     };
 
-    const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata) => {
-      await models.EventRelatedInfo.destroy({
+    const updateEventRelatedInfo = async (location, eventRelatedInfo, metadata, transaction) => {
+      const existing = await models.EventRelatedInfo.findAll({
         where: { location_id: location.id, event: eventRelatedInfo.event },
+        transaction,
       });
+      for (const row of existing) {
+        await destroyInstance(req.user, row, { metadata, transaction });
+      }
 
       if (eventRelatedInfo.information) {
         const createFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
@@ -309,7 +623,56 @@ export default {
           location_id: location.id,
           event: eventRelatedInfo.event,
           information: eventRelatedInfo.information,
-        }, { metadata });
+        }, { metadata, transaction });
+      }
+    };
+
+    const handleStreetviewUpdate = async (locationId, streetviewData, metadata, transaction) => {
+      // Lock the parent location row for the rest of the transaction:
+      // without it, concurrent requests can both find no streetview and both
+      // insert, and the loser hits the location_id unique constraint instead
+      // of turning into an update.
+      await models.Location.findByPk(locationId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      const existing = await models.Streetview.findOne({
+        where: { location_id: locationId },
+        transaction,
+      });
+
+      if (streetviewData === null) {
+        if (existing) {
+          await destroyInstance(req.user, existing, { metadata, transaction });
+        }
+        return;
+      }
+
+      if (existing) {
+        const streetviewUpdate = {};
+        if ('pano_id' in streetviewData) streetviewUpdate.pano_id = streetviewData.pano_id;
+        if ('lat' in streetviewData) streetviewUpdate.lat = streetviewData.lat;
+        if ('lng' in streetviewData) streetviewUpdate.lng = streetviewData.lng;
+        if ('heading' in streetviewData) streetviewUpdate.heading = streetviewData.heading;
+        if ('pitch' in streetviewData) streetviewUpdate.pitch = streetviewData.pitch;
+        if ('fov' in streetviewData) streetviewUpdate.fov = streetviewData.fov;
+        await updateInstance(req.user, existing, streetviewUpdate, { metadata, transaction });
+      } else {
+        await createInstance(
+          req.user,
+          models.Streetview.create.bind(models.Streetview),
+          {
+            location_id: locationId,
+            pano_id: streetviewData.pano_id !== undefined ? streetviewData.pano_id : null,
+            lat: streetviewData.lat !== undefined ? streetviewData.lat : null,
+            lng: streetviewData.lng !== undefined ? streetviewData.lng : null,
+            heading: streetviewData.heading !== undefined ? streetviewData.heading : null,
+            pitch: streetviewData.pitch !== undefined ? streetviewData.pitch : null,
+            fov: streetviewData.fov !== undefined ? streetviewData.fov : null,
+          },
+          { metadata, transaction },
+        );
       }
     };
 
@@ -317,9 +680,9 @@ export default {
       await Joi.validate(req, locationSchemas.update, { allowUnknown: true });
 
       const { locationId } = req.params;
-      const { metadata } = req.body;
+      const { metadata, streetview } = req.body;
 
-      const location = await models.Location.findById(locationId, {
+      const location = await models.Location.findByPk(locationId, {
         include: models.PhysicalAddress,
       });
 
@@ -327,19 +690,22 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      const updatePromises = [];
+      // Await each update in turn: with concurrent updates sharing the
+      // transaction, one rejection rolls it back while siblings are still
+      // issuing queries against the finished transaction.
+      await models.sequelize.transaction(async (t) => {
+        if (req.body.address) {
+          await updateAddress(location, req.body.address, metadata, t);
+        }
+        if (req.body.eventRelatedInfo) {
+          await updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata, t);
+        }
+        if ('streetview' in req.body) {
+          await handleStreetviewUpdate(locationId, streetview, metadata, t);
+        }
 
-      if (req.body.address) {
-        updatePromises.push(updateAddress(location, req.body.address, metadata));
-      }
-
-      if (req.body.eventRelatedInfo) {
-        updatePromises.push(updateEventRelatedInfo(location, req.body.eventRelatedInfo, metadata));
-      }
-
-      updatePromises.push(updateLocation(location, req.body, metadata));
-
-      await Promise.all(updatePromises);
+        await updateLocation(location, req.body, metadata, t);
+      });
 
       res.sendStatus(204);
     } catch (err) {
@@ -353,7 +719,7 @@ export default {
 
       const { locationId } = req.params;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findByPk(locationId);
       if (!location) {
         throw new NotFoundError('Location not found');
       }
@@ -387,7 +753,7 @@ export default {
 
       const { phoneId } = req.params;
 
-      const phone = await models.Phone.findById(phoneId);
+      const phone = await models.Phone.findByPk(phoneId);
       if (!phone) {
         throw new NotFoundError('Phone not found');
       }
@@ -408,7 +774,7 @@ export default {
 
       const { phoneId } = req.params;
 
-      const phone = await models.Phone.findById(phoneId);
+      const phone = await models.Phone.findByPk(phoneId);
       if (!phone) {
         throw new NotFoundError('Phone not found');
       }

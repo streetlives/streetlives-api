@@ -1,4 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
+  // Intentionally do not map `neighborhood` here. Migration
+  // 20240530015650-update-everything-to-use-geoqueries removes
+  // physical_addresses.neighborhood and replaces it with geocoded metadata.
   const PhysicalAddress = sequelize.define('PhysicalAddress', {
     id: {
       type: DataTypes.UUID,
@@ -32,8 +35,8 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   PhysicalAddress.associate = (models) => {
-    PhysicalAddress.belongsTo(models.Location);
-    PhysicalAddress.belongsTo(models.LocationSuggestion);
+    PhysicalAddress.belongsTo(models.Location, { foreignKey: 'location_id' });
+    PhysicalAddress.belongsTo(models.LocationSuggestion, { foreignKey: 'location_suggestion_id' });
   };
 
   return PhysicalAddress;

@@ -1,0 +1,339 @@
+name: Codex auto-approve (guarded)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+concurrency:
+  group: codex-auto-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  codex_auto_approve:
+    # Guardrails: only run for non-fork PRs, and not for drafts
+    if: >
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    environment: CI_CD_PIPELINE
+
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1 (tag v5)
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          # Optional but often helps: ensures history exists locally
+          fetch-depth: 0
+
+      - name: Pre-fetch base and head refs
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Materialize protected prompt/schema from develop branch head
+        run: |
+          set -euo pipefail
+          rm -rf .codex-protected
+          mkdir .codex-protected
+
+          git fetch --no-tags origin develop:refs/remotes/origin/develop --depth=1
+
+          git show origin/develop:.github/codex/prompts/pr-approval.md \
+            > .codex-protected/pr-approval.md
+
+          git show origin/develop:.github/codex/schemas/pr-approval.schema.json \
+            > .codex-protected/pr-approval.schema.json
+
+          git show origin/develop:.github/codex/allowlists/auto-approve.json \
+            > .codex-protected/auto-approve.json
+
+      - name: Load allowlist from protected base commit
+        id: allow
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if jq -e --arg a "$PR_AUTHOR" 'index($a) != null' .codex-protected/auto-approve.json > /dev/null; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build protected run prompt and bounded PR context
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf .codex-run
+          mkdir .codex-run
+
+          if git merge-base "$BASE_SHA" "$HEAD_SHA" > /dev/null; then
+            DIFF_RANGE="$BASE_SHA...$HEAD_SHA"
+          else
+            DIFF_RANGE="$BASE_SHA..$HEAD_SHA"
+          fi
+
+          git --no-pager diff --name-status "$DIFF_RANGE" > .codex-run/changed-files.txt
+          git --no-pager diff --stat "$DIFF_RANGE" > .codex-run/diff-stat.txt
+          git --no-pager log --oneline "$DIFF_RANGE" > .codex-run/commits.txt
+
+          jq '{
+            number: .pull_request.number,
+            title: .pull_request.title,
+            body: .pull_request.body,
+            author: .pull_request.user.login,
+            base: { ref: .pull_request.base.ref, sha: .pull_request.base.sha },
+            head: { ref: .pull_request.head.ref, sha: .pull_request.head.sha }
+          }' "$GITHUB_EVENT_PATH" > .codex-run/pr.json
+
+          gh api "/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '[.[] | {user: .user.login, created_at, body}]' \
+            > .codex-run/pr-comments.json
+
+          gh api "/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
+            --jq '[.[] | {user: .user.login, state, submitted_at, body}]' \
+            > .codex-run/pr-reviews.json
+
+          gh api "/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/comments?per_page=100" \
+            --jq '[.[] | {user: .user.login, path, line, original_line, side, body}]' \
+            > .codex-run/pr-review-comments.json
+
+          node <<'NODE' > .codex-run/linked-issue-references.jsonl
+          const fs = require("fs");
+
+          function stripNonRenderedMarkdown(text) {
+            return text
+              .replace(/<!--[\s\S]*?-->/g, "")
+              .replace(/```[\s\S]*?```/g, "")
+              .replace(/~~~[\s\S]*?~~~/g, "")
+              .replace(/`[^`\n]*`/g, "")
+              .replace(/^(?: {4}|\t).+$/gm, "");
+          }
+
+          const event = JSON.parse(
+            fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")
+          );
+          const currentRepo = process.env.GITHUB_REPOSITORY;
+          const text = stripNonRenderedMarkdown(
+            [
+              event.pull_request.title || "",
+              event.pull_request.body || "",
+            ].join("\n")
+          );
+          const closingKeywordPattern =
+            /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+((?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#[0-9]+)/gi;
+          const issueReferencePattern =
+            /^(?:(?<repo>[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+))?#(?<number>[0-9]+)$/;
+          const seen = new Set();
+          let match;
+
+          while ((match = closingKeywordPattern.exec(text)) !== null) {
+            const ref = match[1];
+            const refMatch = ref.match(issueReferencePattern);
+            if (!refMatch) continue;
+
+            const repo = refMatch.groups.repo || currentRepo;
+            const number = Number(refMatch.groups.number);
+            const key = `${repo}#${number}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            console.log(JSON.stringify({ repo, number }));
+          }
+          NODE
+
+          jq -r '.number' .codex-run/linked-issue-references.jsonl \
+            | sort -un > .codex-run/linked-issue-numbers.txt || true
+
+          : > .codex-run/linked-issues.jsonl
+          : > .codex-run/linked-issue-comments.jsonl
+          : > .codex-run/valid-linked-issue-numbers.txt
+          while IFS= read -r issue_ref; do
+            test -n "$issue_ref" || continue
+
+            issue_repo="$(jq -r '.repo' <<< "$issue_ref")"
+            issue_number="$(jq -r '.number' <<< "$issue_ref")"
+
+            if gh api "/repos/$issue_repo/issues/$issue_number" > .codex-run/linked-issue-response.json; then
+              jq --arg repo "$issue_repo" \
+                '. + {repo: $repo}' \
+                .codex-run/linked-issue-response.json \
+                >> .codex-run/linked-issues.jsonl
+            else
+              jq -cn --arg repo "$issue_repo" --argjson number "$issue_number" \
+                '{repo: $repo, number: $number, error: "Linked issue could not be fetched."}' \
+                >> .codex-run/linked-issues.jsonl
+              continue
+            fi
+
+            if jq -e 'has("pull_request") | not' \
+              .codex-run/linked-issue-response.json > /dev/null; then
+              echo "$issue_repo#$issue_number" >> .codex-run/valid-linked-issue-numbers.txt
+            else
+              jq -cn --arg repo "$issue_repo" --argjson number "$issue_number" \
+                '{repo: $repo, number: $number, error: "Reference points to a pull request, not an issue."}' \
+                >> .codex-run/linked-issues.jsonl
+              continue
+            fi
+
+            gh api "/repos/$issue_repo/issues/$issue_number/comments?per_page=100" \
+              > .codex-run/linked-issue-comments-response.json || true
+
+            if test -s .codex-run/linked-issue-comments-response.json; then
+              jq --arg repo "$issue_repo" --argjson issue_number "$issue_number" \
+                '[.[] | {repo: $repo, issue_number: $issue_number, user: .user.login, created_at, body}]' \
+                .codex-run/linked-issue-comments-response.json \
+                >> .codex-run/linked-issue-comments.jsonl
+            fi
+          done < .codex-run/linked-issue-references.jsonl
+
+          rm -f \
+            .codex-run/linked-issue-response.json \
+            .codex-run/linked-issue-comments-response.json
+
+          cat > .codex-run/context.md <<EOF
+          Repo: $GITHUB_REPOSITORY
+          PR: #$PR_NUMBER
+          Base: $PR_BASE_REF @ $BASE_SHA
+          Head: $PR_HEAD_REF @ $HEAD_SHA
+          Diff range: $DIFF_RANGE
+
+          Generated files:
+          - .codex-run/pr.json
+          - .codex-run/changed-files.txt
+          - .codex-run/diff-stat.txt
+          - .codex-run/commits.txt
+          - .codex-run/pr-comments.json
+          - .codex-run/pr-reviews.json
+          - .codex-run/pr-review-comments.json
+          - .codex-run/linked-issue-references.jsonl
+          - .codex-run/linked-issue-numbers.txt
+          - .codex-run/valid-linked-issue-numbers.txt
+          - .codex-run/linked-issues.jsonl
+          - .codex-run/linked-issue-comments.jsonl
+
+          The full PR diff is intentionally not embedded in this prompt. Inspect it selectively with:
+          git --no-pager diff --unified=80 "$DIFF_RANGE" -- <path>
+          git --no-pager diff --name-only "$DIFF_RANGE"
+          EOF
+
+          {
+            cat .codex-protected/pr-approval.md
+            echo ""
+            echo "## Workflow-generated context"
+            cat .codex-run/context.md
+            echo ""
+            echo "Use the local repository and generated files to gather only the context needed for the review."
+          } > .codex-run/prompt.md
+
+      - name: Check linked issue requirement
+        id: linked_issue
+        run: |
+          if test -s .codex-run/valid-linked-issue-numbers.txt; then
+            echo "has_linked_issue=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_linked_issue=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Codex (structured decision using protected prompt)
+        id: run_codex
+        uses: openai/codex-action@086169432f1d2ab2f4057540b1754d550f6a1189 # v1.4 (tag v1)
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .codex-run/prompt.md
+          output-schema-file: .codex-protected/pr-approval.schema.json
+          output-file: codex-review.json
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+
+      - name: Parse decision
+        id: parse
+        run: |
+          echo "decision=$(jq -r .decision codex-review.json)" >> "$GITHUB_OUTPUT"
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          jq -r .summary codex-review.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "blocking_issues_json=$(jq -c '.blocking_issues' codex-review.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Approve PR if Codex says APPROVE and author is trusted
+        if: >
+          steps.parse.outputs.decision == 'APPROVE' &&
+          steps.allow.outputs.trusted == 'true' &&
+          steps.linked_issue.outputs.has_linked_issue == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "APPROVE",
+              body: process.env.SUMMARY || "Codex: approved.",
+              commit_id: context.payload.pull_request.head.sha,
+            });
+
+      - name: Request changes if no linked issue
+        if: >
+          steps.parse.outputs.decision == 'APPROVE' &&
+          steps.linked_issue.outputs.has_linked_issue == 'false'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "REQUEST_CHANGES",
+              body: [
+                "Codex found no blocking code issues, but this PR cannot be approved yet.",
+                "",
+                "### Blocking issues",
+                "- Link this PR to at least one existing GitHub Issue using a closing keyword, for example `Closes #123`, `Fixes #123`, or `Resolves #123`.",
+              ].join("\n"),
+              commit_id: context.payload.pull_request.head.sha,
+            });
+
+      - name: Request changes if Codex says REQUEST_CHANGES
+        if: steps.parse.outputs.decision == 'REQUEST_CHANGES'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        env:
+          SUMMARY: ${{ steps.parse.outputs.summary }}
+          BLOCKING_ISSUES_JSON: ${{ steps.parse.outputs.blocking_issues_json }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const blockingIssues = JSON.parse(process.env.BLOCKING_ISSUES_JSON || "[]");
+            const issueList = blockingIssues.length
+              ? blockingIssues.map((issue) => `- ${issue}`).join("\n")
+              : "- No blocking issues were returned.";
+
+            const body = [
+              process.env.SUMMARY || "Codex: changes requested.",
+              "",
+              "### Blocking issues",
+              issueList,
+            ].join("\n");
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: "REQUEST_CHANGES",
+              body,
+              commit_id: context.payload.pull_request.head.sha,
+            });

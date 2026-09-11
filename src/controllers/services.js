@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import serviceSchemas from './validation/services';
-import models from '../models';
+import models, {sequelize} from '../models';
 import { createService, updateService, deleteService } from '../services/services';
 import { NotFoundError } from '../utils/errors';
 
@@ -16,12 +16,12 @@ export default {
         ...otherProps
       } = req.body;
 
-      const location = await models.Location.findById(locationId);
+      const location = await models.Location.findByPk(locationId);
       if (!location) {
         throw new NotFoundError('Location not found');
       }
 
-      const taxonomy = await models.Taxonomy.findById(taxonomyId);
+      const taxonomy = await models.Taxonomy.findByPk(taxonomyId);
       if (!taxonomy) {
         throw new NotFoundError('Taxonomy not found');
       }
@@ -45,7 +45,7 @@ export default {
       const { serviceId } = req.params;
       const { metadata, taxonomyId, ...otherProps } = req.body;
 
-      const service = await models.Service.findById(serviceId, {
+      const service = await models.Service.findByPk(serviceId, {
         include: [models.DocumentsInfo],
       });
       if (!service) {
@@ -57,7 +57,7 @@ export default {
 
       let taxonomy = null;
       if (taxonomyId) {
-        taxonomy = await models.Taxonomy.findById(taxonomyId);
+        taxonomy = await models.Taxonomy.findByPk(taxonomyId);
         if (!taxonomy) {
           throw new NotFoundError('Taxonomy not found');
         }
@@ -78,6 +78,28 @@ export default {
       await deleteService(serviceId, req.user);
 
       res.sendStatus(204);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getCount: async (req, res, next) => {
+    try {
+      const [servicesCount] = await sequelize.query(
+        `
+          select count(*)
+          from locations
+                 join organizations o on o.id = locations.organization_id
+                 join service_at_locations sal on sal.location_id = locations.id
+                 join services on services.id = sal.service_id
+          where exists (
+            select hs.id
+            from holiday_schedules as hs
+                   join service_at_locations as sal on sal.service_id = hs.service_id
+            where sal.location_id = locations.id
+          )    `,
+      );
+      res.send(servicesCount[0]).status(200);
     } catch (err) {
       next(err);
     }

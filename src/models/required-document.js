@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   RequiredDocument.associate = (models) => {
-    RequiredDocument.belongsTo(models.Service);
+    RequiredDocument.belongsTo(models.Service, { foreignKey: 'service_id' });
   };
 
   return RequiredDocument;

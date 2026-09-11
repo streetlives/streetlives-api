@@ -1,3 +1,5 @@
+import { Op } from 'sequelize';
+
 import { getDayOfWeekInteger } from '../utils/times';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from './data-changes';
@@ -35,13 +37,16 @@ const updateHours = async (service, hours, { t, user, metadata }) => {
 
 const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
   const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
+
+  const whereClause = { service_id: service.id };
+  if (hours.length) whereClause.occasion = { [Op.in]: relevantOccasions };
+
   await models.HolidaySchedule.destroy({
-    where: {
-      service_id: service.id,
-      occasion: { [sequelize.Op.in]: relevantOccasions },
-    },
+    where: whereClause,
     transaction: t,
   });
+
+  if (hours.length === 0) return;
 
   const modelCreateFunction = models.HolidaySchedule.create.bind(models.HolidaySchedule);
   await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
@@ -82,11 +87,11 @@ const updateServiceAreas = async (service, area, { t, user, metadata }) => {
 const updateEligibilityParam = async (
   service, paramName, { eligible_values: eligibleValues, description }, { t, user, metadata },
 ) => {
-  const eligibilityParam = await models.EligibilityParameter.find({
+  const eligibilityParam = await models.EligibilityParameter.findOne({
     where: { name: paramName },
   });
 
-  const eligibilityParamValue = await models.Eligibility.find({
+  const eligibilityParamValue = await models.Eligibility.findOne({
     where: {
       service_id: service.id,
       parameter_id: eligibilityParam.id,
@@ -123,12 +128,12 @@ const updateEligibilityParam = async (
 const updateServiceTaxonomySpecificAttributes = async (
   service, attributeName, value, { t, user, metadata },
 ) => {
-  const specificAttribute = await models.TaxonomySpecificAttribute.find({
+  const specificAttribute = await models.TaxonomySpecificAttribute.findOne({
     where: { name: attributeName },
     transaction: t,
   });
 
-  const specificAttributeValue = await models.ServiceTaxonomySpecificAttribute.find({
+  const specificAttributeValue = await models.ServiceTaxonomySpecificAttribute.findOne({
     where: {
       service_id: service.id,
       attribute_id: specificAttribute.id,
@@ -261,6 +266,19 @@ export const updateService = (
   if (area) {
     updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
   }
+ 
+  if(whoDoesItServe) {
+
+    updatePromises.push(updateEligibilityParam(
+      service,
+      'age',
+      {
+        eligible_values: whoDoesItServe,
+        description: ''
+      },
+      { t, user, metadata },
+    ));
+  }
 
   serviceTaxonomySpecificAttributeNames.forEach((attr) => {
     if (attr in otherUpdateProps) {
@@ -349,7 +367,7 @@ export const createService = async (
 });
 
 export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
-  const service = await models.Service.findById(serviceId, { include: [models.Location] });
+  const service = await models.Service.findByPk(serviceId, { include: [models.Location] });
   if (!service) return;
 
   const destroyAssociation = model =>

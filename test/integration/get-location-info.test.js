@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import app from '../../src/app';
 import models from '../../src/models';
@@ -5,57 +9,69 @@ import models from '../../src/models';
 describe('get location info', () => {
   let location;
 
-  const setupData = () => models.Organization.create({
-    name: 'The Test Org',
-    description: 'An organization meant for testing purposes.',
-    url: 'www.streetlives.com',
-  })
-    .then(organization => models.Location.create({
-      organization_id: organization.id,
-      name: 'Some kind of center',
-      description: 'This is how one would describe this shelter.',
-      additional_info: 'And some other, perhaps less standardized, information.',
-      hidden_from_search: true,
-      PhysicalAddresses: [{
-        address_1: '123 West 30th Street',
-        city: 'New York',
-        state_province: 'NY',
-        postal_code: '10001',
-        country: 'United States',
-      }],
-      Phones: [{
-        number: '212.121.0123',
-      }],
+  const setupData = () => models.Organization.create(
+    {
+      name: 'The Test Org',
+      description: 'An organization meant for testing purposes.',
+      url: 'www.streetlives.com',
       Services: [{
-        organization_id: organization.id,
         name: 'A specific offering',
         additional_info: 'A service might have some other info as well.',
         Taxonomies: [{
           name: 'Shelter',
         }],
       }],
-      Comments: [{
-        content: 'Test comment',
-        posted_by: 'Test poster',
-      }],
-    }, {
-      include: [
-        { model: models.PhysicalAddress },
-        { model: models.Phone },
-        { model: models.Comment },
-        { model: models.Service, include: [{ model: models.Taxonomy }] },
+      Locations: [
+        {
+          name: 'Some kind of center',
+          description: 'This is how one would describe this shelter.',
+          additional_info: 'And some other, perhaps less standardized, information.',
+          hidden_from_search: true,
+          PhysicalAddresses: [{
+            address_1: '123 West 30th Street',
+            city: 'New York',
+            state_province: 'NY',
+            postal_code: '10001',
+            country: 'United States',
+          }],
+          Phones: [{
+            number: '212.121.0123',
+          }],
+          Comments: [{
+            content: 'Test comment',
+            posted_by: 'Test poster',
+          }],
+        },
       ],
-    }))
-    .then((newLocation) => {
-      location = newLocation;
-    });
+    },
+    {
+      include: [
+        { model: models.Service, include: [{ model: models.Taxonomy }] },
+        {
+          model: models.Location,
+          include: [
+            { model: models.PhysicalAddress },
+            { model: models.Phone },
+            { model: models.Comment },
+          ],
+        },
+      ],
+    },
+  ).then((organization) => {
+    [location] = organization.Locations;
+    return location.setServices(organization.Services);
+  });
 
   beforeAll(setupData);
 
   const stripTimestampsAndIds = obj => Object.keys(obj).reduce((currStrippedObj, key) => {
     const value = obj[key];
 
-    if (key === 'id' || key.includes('_id') || key.includes('_at')) {
+    if (key === 'id' ||
+       key.endsWith('Id') ||
+       key.endsWith('_id') ||
+       key.endsWith('At') ||
+       key.endsWith('_at')) {
       return currStrippedObj;
     }
 
@@ -80,5 +96,43 @@ describe('get location info', () => {
     return request(app)
       .get(`/locations/${nonExistentLocationId}`)
       .expect(404);
+  });
+
+  describe('closed flag', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: { location_id: location.id } }));
+
+    it('should return closed: false when location has no events', () =>
+      request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200)
+        .then(res => expect(res.body.closed).toBe(false)));
+
+    it('should return closed: true when location has a CLOSURE event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: location.id,
+      });
+
+      const res = await request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200);
+
+      expect(res.body.closed).toBe(true);
+    });
+
+    it('should return closed: false when location only has a COVID19 event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'COVID19',
+        information: 'COVID-19 related information',
+        location_id: location.id,
+      });
+
+      const res = await request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200);
+
+      expect(res.body.closed).toBe(false);
+    });
   });
 });

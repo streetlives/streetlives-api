@@ -44,6 +44,7 @@ jspm_packages/
 
 # dotenv environment variables file
 .env
+.env.*
 
 # next.js build output
 .next
@@ -53,3 +54,5 @@ jspm_packages/
 # AWS Serverless
 lambda-invoke-response.json
 packaged-sam.yaml
+
+.idea

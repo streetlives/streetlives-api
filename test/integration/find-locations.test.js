@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import qs from 'qs';
 import app from '../../src/app';
@@ -13,10 +17,19 @@ describe('find locations', () => {
   const pointSlightlyFurtherFromOrigin = geometry.createPoint(-73.991304, 40.751907);
   const pointFarFromOrigin = geometry.createPoint(-73.951042, 40.718576);
 
+  let organization;
   let primaryLocation;
   let otherServiceLocation;
   let hiddenLocation;
   let farLocation;
+
+  let aSpecificOffering1;
+  let aSpecificOffering2;
+  let aDifferentKindOfService;
+  let aSpecificOffering3;
+
+  let lastValidatedAtStartTime;
+  let lastValidatedAtEndTime;
 
   const clearData = async () => {
     await Promise.all([
@@ -34,84 +47,128 @@ describe('find locations', () => {
 
   const setupData = async () => {
     await clearData();
-    const organization = await models.Organization.create({
-      name: 'The Test Org',
-      description: 'An organization meant for testing purposes.',
-    });
 
-    const baseLocationData = {
-      organization_id: organization.id,
-      Services: [{
-        organization_id: organization.id,
-        name: 'A specific offering',
-        description: 'Only this service is described this way',
-        Taxonomies: [{
-          name: 'Shelter',
-        }],
-      }],
-    };
-    const associationParams = {
-      include: [
-        {
-          model: models.Service,
-          include: [{ model: models.Taxonomy }],
-        },
-        models.PhysicalAddress,
-      ],
-    };
-
-    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = await Promise.all([
-      models.Location.create(
-        {
-          ...baseLocationData,
-          name: 'Nearby center',
-          position: pointNearOrigin,
-          PhysicalAddresses: [{
-            address_1: '123 W 50th St.',
-            city: 'New York',
-            state_province: 'NY',
-            postal_code: '10001',
-            country: 'US',
-          }],
-        },
-        associationParams,
-      ),
-      models.Location.create(
-        {
-          ...baseLocationData,
-          name: 'Nearby center (volunteers)',
-          position: pointNearOrigin,
-          hidden_from_search: true,
-          PhysicalAddresses: [{
-            address_1: '222 E 75th St.',
-            city: 'New York',
-            state_province: 'NY',
-            postal_code: '10002',
-            country: 'US',
-          }],
-        },
-        associationParams,
-      ),
-      models.Location.create(
-        {
-          ...baseLocationData,
-          name: 'Other nearby center',
-          position: pointSlightlyFurtherFromOrigin,
-          Services: [{
-            organization_id: organization.id,
+    lastValidatedAtStartTime = new Date();
+    organization = await models.Organization.create(
+      {
+        name: 'The Test Org',
+        description: 'An organization meant for testing purposes.',
+        Services: [
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+          {
             name: 'A different kind of service',
             Taxonomies: [{
               name: 'Food',
             }],
-          }],
+          },
+          {
+            name: 'A specific offering',
+            description: 'Only this service is described this way',
+            Taxonomies: [{
+              name: 'Shelter',
+            }],
+          },
+        ],
+        Locations: [
+          {
+            name: 'Nearby center',
+            position: pointNearOrigin,
+            PhysicalAddresses: [{
+              address_1: '123 W 50th St.',
+              city: 'New York',
+              state_province: 'NY',
+              postal_code: '10001',
+              country: 'US',
+            }],
+          },
+          {
+            name: 'Nearby center (volunteers)',
+            position: pointNearOrigin,
+            hidden_from_search: true,
+            PhysicalAddresses: [{
+              address_1: '222 E 75th St.',
+              city: 'New York',
+              state_province: 'NY',
+              postal_code: '10002',
+              country: 'US',
+            }],
+          },
+          {
+            name: 'Other nearby center',
+            position: pointSlightlyFurtherFromOrigin,
+          },
+          { name: 'Far-off center', position: pointFarFromOrigin },
+        ],
+      },
+      {
+        include: [
+          {
+            model: models.Service,
+            include: [{ model: models.Taxonomy }],
+          },
+          {
+            model: models.Location,
+            include: [
+              models.PhysicalAddress,
+            ],
+          },
+        ],
+      },
+    );
+    lastValidatedAtEndTime = new Date();
+
+    const locations = organization.Locations;
+    [primaryLocation, hiddenLocation, otherServiceLocation, farLocation] = locations;
+
+    [
+      aSpecificOffering1,
+      aSpecificOffering2,
+      aDifferentKindOfService,
+      aSpecificOffering3,
+    ] = organization.Services;
+
+    // link locations to services
+    await primaryLocation.setServices([aSpecificOffering1]);
+    await hiddenLocation.setServices([aSpecificOffering2]);
+    await otherServiceLocation.setServices([aDifferentKindOfService]);
+    await farLocation.setServices([aSpecificOffering3]);
+
+    // this seems to be the best way to eager load thse guys
+    [
+      primaryLocation,
+      hiddenLocation,
+      otherServiceLocation,
+      farLocation,
+    ] = await Promise.all(locations.map(location => (
+      models.Location.findByPk(location.id, {
+        include: {
+          model: models.Service,
+          include: models.Taxonomy,
         },
-        associationParams,
-      ),
-      models.Location.create(
-        { ...baseLocationData, name: 'Far-off center', position: pointFarFromOrigin },
-        associationParams,
-      ),
-    ]);
+      })
+    )));
+  };
+
+  const checkLastValidatedAt = (returnedLocations) => {
+    returnedLocations.forEach((location) => {
+      const lastValidatedAt = new Date(location.last_validated_at).getTime();
+      // add a little buffer (100ms), because this property gets added in an AFTER trigger
+      expect(lastValidatedAt).toBeGreaterThan(lastValidatedAtStartTime.getTime() - 200);
+      expect(lastValidatedAt).toBeLessThan(lastValidatedAtEndTime.getTime() + 200);
+    });
   };
 
   const expectMatchNearbyLocations = (res) => {
@@ -121,6 +178,7 @@ describe('find locations', () => {
       expect.objectContaining({ name: primaryLocation.name }),
       expect.objectContaining({ name: otherServiceLocation.name }),
     ]));
+    checkLastValidatedAt(returnedLocations);
   };
 
   const expectMatchPrimaryLocation = (res) => {
@@ -129,6 +187,7 @@ describe('find locations', () => {
     expect(returnedLocations).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: primaryLocation.name }),
     ]));
+    checkLastValidatedAt(returnedLocations);
   };
 
   const expectNoMatchingLocations = (res) => {
@@ -262,6 +321,21 @@ describe('find locations', () => {
       makeRequestWithSearchString('center')
         .expect(200)
         .then(expectMatchNearbyLocations));
+
+    it('should not error on search strings containing regex or LIKE metacharacters', async () => {
+      const metacharacterQueries = [
+        '(', ')', '(unclosed', 'a[b', 'a*b+c', '\\', 'a|b', '%', '_', 'foo\\', 'test org (main)',
+      ];
+      await Promise.all(metacharacterQueries.map(input =>
+        makeRequestWithSearchString(input).expect(200)));
+    });
+
+    it('should treat regex metacharacters literally rather than as a pattern', () =>
+      // "cent.r" would match "center" if the "." were an unescaped regex
+      // wildcard; escaped, it is literal and matches nothing.
+      makeRequestWithSearchString('cent.r')
+        .expect(200)
+        .then(expectNoMatchingLocations));
   });
 
   describe('when an organization name is specified', () => {
@@ -370,10 +444,11 @@ describe('find locations', () => {
     it('should return no fewer locations even when some match on multiple services', async () => {
       const matchingId = primaryLocation.Services[0].Taxonomies[0].id;
 
-      const otherMatchingService = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
+      const otherMatchingService = await organization.createService({
         name: 'Other matching service',
       });
+      primaryLocation.setServices(primaryLocation.Services.concat(otherMatchingService));
+
       await models.ServiceTaxonomy.create({
         service_id: otherMatchingService.id,
         taxonomy_id: matchingId,
@@ -432,13 +507,18 @@ describe('find locations', () => {
       generalParam = await models.EligibilityParameter.create({ name: 'general' });
 
       [service1] = primaryLocation.Services;
-      service2 = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
-        name: 'Second service',
-      });
-      await service2.createTaxonomy({
-        name: 'Other category',
-      });
+      service2 = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([service1, service2]);
     });
 
     afterAll(() => Promise.all([
@@ -530,13 +610,18 @@ describe('find locations', () => {
         await models.TaxonomySpecificAttribute.create({ name: 'clothesDemographic' });
 
       [service1] = primaryLocation.Services;
-      service2 = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
-        name: 'Second service',
-      });
-      await service2.createTaxonomy({
-        name: 'Other category',
-      });
+      service2 = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([service1, service2]);
     });
 
     afterAll(() => Promise.all([
@@ -640,9 +725,8 @@ describe('find locations', () => {
     afterAll(() => models.RequiredDocument.destroy({ where: {} }));
 
     it('should filter out services requiring documents not supposed to be required', async () => {
-      await models.RequiredDocument.create({
+      await aSpecificOffering1.createRequiredDocument({
         document: documentTypes.referralLetter,
-        service_id: primaryLocation.Services[0].id,
       });
 
       return request(app)
@@ -670,9 +754,8 @@ describe('find locations', () => {
         .then(expectNoMatchingLocations));
 
     it('should include services with the right required and not required documents', async () => {
-      await models.RequiredDocument.create({
+      await aSpecificOffering1.createRequiredDocument({
         document: documentTypes.photoId,
-        service_id: primaryLocation.Services[0].id,
       });
 
       return request(app)
@@ -702,20 +785,22 @@ describe('find locations', () => {
     beforeEach(() => models.RegularSchedule.destroy({ where: {} }));
     afterAll(() => models.RegularSchedule.destroy({ where: {} }));
 
-    const setupBaseSchedule = () => Promise.all([
-      models.RegularSchedule.create({
-        weekday: 7,
-        opens_at: '10:00',
-        closes_at: '11:00',
-        service_id: primaryLocation.Services[0].id,
-      }),
-      models.RegularSchedule.create({
-        weekday: 6,
-        opens_at: '8:00',
-        closes_at: '11:00',
-        service_id: primaryLocation.Services[0].id,
-      }),
-    ]);
+    const setupBaseSchedule = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        aSpecificOffering1.createRegularSchedule({
+          weekday: 7,
+          opens_at: '10:00',
+          closes_at: '11:00',
+        }),
+        aSpecificOffering1.createRegularSchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '11:00',
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
     it('should filter out services closed at the given time', () =>
       setupBaseSchedule()
@@ -796,13 +881,20 @@ describe('find locations', () => {
     });
 
     it('should exclude locations with different services matching taxonomy and time', async () => {
-      const otherService = await primaryLocation.createService({
-        organization_id: primaryLocation.organization_id,
-        name: 'Second service',
-      });
-      const otherTaxonomy = await otherService.createTaxonomy({
-        name: 'Other category',
-      });
+      const otherService = await organization.createService(
+        {
+          name: 'Second service',
+          Taxonomies: [{
+            name: 'Other category',
+          }],
+        },
+        {
+          include: [{ model: models.Taxonomy }],
+        },
+      );
+      primaryLocation.setServices([aSpecificOffering1, otherService]);
+
+      const otherTaxonomy = otherService.Taxonomies[0];
 
       await setupBaseSchedule();
 
@@ -822,23 +914,25 @@ describe('find locations', () => {
       beforeEach(() => models.HolidaySchedule.destroy({ where: {} }));
       afterAll(() => models.HolidaySchedule.destroy({ where: {} }));
 
-      const setupHolidaySchedule = () => Promise.all([
-        setupBaseSchedule(),
-        models.HolidaySchedule.create({
-          weekday: 7,
-          service_id: primaryLocation.Services[0].id,
-          occasion: 'COVID-19',
-          closed: true,
-        }),
-        models.HolidaySchedule.create({
-          weekday: 6,
-          opens_at: '8:00',
-          closes_at: '10:00',
-          service_id: primaryLocation.Services[0].id,
-          occasion: 'COVID-19',
-          closed: false,
-        }),
-      ]);
+      const setupHolidaySchedule = async () => {
+        lastValidatedAtStartTime = new Date();
+        await Promise.all([
+          setupBaseSchedule(),
+          aSpecificOffering1.createHolidaySchedule({
+            weekday: 7,
+            occasion: 'COVID-19',
+            closed: true,
+          }),
+          aSpecificOffering1.createHolidaySchedule({
+            weekday: 6,
+            opens_at: '8:00',
+            closes_at: '10:00',
+            occasion: 'COVID-19',
+            closed: false,
+          }),
+        ]);
+        lastValidatedAtEndTime = new Date();
+      };
 
       it('should filter out locations that only have a regular schedule for that time', () =>
         setupBaseSchedule()
@@ -901,23 +995,29 @@ describe('find locations', () => {
     beforeEach(() => models.ServiceArea.destroy({ where: {} }));
     afterAll(() => models.ServiceArea.destroy({ where: {} }));
 
-    const setupBaseServiceArea = () => Promise.all([
-      models.ServiceArea.create({
-        postal_codes: servedArea1,
-        service_id: primaryLocation.Services[0].id,
-      }),
-      models.ServiceArea.create({
-        postal_codes: servedArea2,
-        service_id: primaryLocation.Services[0].id,
-      }),
-    ]);
+    const setupBaseServiceArea = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        aSpecificOffering1.createServiceArea({
+          postal_codes: servedArea1,
+        }),
+        aSpecificOffering1.createServiceArea({
+          postal_codes: servedArea2,
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
-    const setupAllServiceArea = () => Promise.all([
-      models.ServiceArea.create({
-        postal_codes: [],
-        service_id: primaryLocation.Services[0].id,
-      }),
-    ]);
+    const setupAllServiceArea = async () => {
+      lastValidatedAtStartTime = new Date();
+      await Promise.all([
+        models.ServiceArea.create({
+          postal_codes: [],
+          service_id: primaryLocation.Services[0].id,
+        }),
+      ]);
+      lastValidatedAtEndTime = new Date();
+    };
 
     it('should filter out locations that don\'t serve the given zipcode', () =>
       setupBaseServiceArea()
@@ -1007,5 +1107,246 @@ describe('find locations', () => {
         .get('/locations')
         .query(qs.stringify({ zipcodes: [] }))
         .then(res => expect(res.body.length).toBeGreaterThan(0)));
+  });
+
+  describe('closed flag in list response', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    it('should return closed: false for locations without a CLOSURE event', () =>
+      request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200)
+        .then((res) => {
+          const primary = res.body.find(l => l.name === primaryLocation.name);
+          expect(primary).toBeDefined();
+          expect(primary.closed).toBe(false);
+        }));
+
+    it('should return closed: true for a location with a CLOSURE event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+
+      const other = res.body.find(l => l.name === otherServiceLocation.name);
+      expect(other).toBeDefined();
+      expect(other.closed).toBe(false);
+    });
+
+    it('should return closed: false when location only has a COVID19 event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'COVID19',
+        information: 'COVID-19 related information',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(false);
+    });
+
+    it('should include closed flag in paginated responses', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
+  });
+
+  describe('closed locations in search results', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    const markClosed = async (location, { closedAgoMs = 0 } = {}) => {
+      const closure = await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: location.id,
+      });
+
+      if (closedAgoMs) {
+        await models.sequelize.query(
+          'UPDATE event_related_info SET created_at = :createdAt WHERE id = :id',
+          { replacements: { createdAt: new Date(Date.now() - closedAgoMs), id: closure.id } },
+        );
+      }
+
+      return closure;
+    };
+
+    const FOUR_MONTHS_MS = 4 * 30 * 24 * 60 * 60 * 1000;
+    const FIVE_MONTHS_MS = 5 * 30 * 24 * 60 * 60 * 1000;
+
+    const expectClosedLastForTextSearch = (res, closedLocation) => {
+      const closed = res.body.find(l => l.name === closedLocation.name);
+      expect(closed).toBeDefined();
+      expect(closed.closed).toBe(true);
+
+      // The closed location must come after every open (non-closed) location.
+      const lastOpenIndex = res.body.reduce(
+        (acc, location, index) => (location.closed ? acc : index),
+        -1,
+      );
+      const closedIndex = res.body.findIndex(l => l.name === closedLocation.name);
+      expect(closedIndex).toBeGreaterThan(lastOpenIndex);
+    };
+
+    it('should exclude long-closed locations from a text search', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should keep a location whose latest closure is recent despite an older one', async () => {
+      // An old closure plus a newer one: the location was re-closed recently, so it must be
+      // treated as recently closed (kept, sorted last) rather than long-closed (excluded).
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should exclude a location when every closure is older than 3 months', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should sort recently closed locations to the bottom for a text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should sort closed locations to the bottom for a paginated text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should move recently closed locations to a later page than open matches', async () => {
+      // 'center' matches three locations (primary, other, far). Closing one leaves two open,
+      // so with a page size of 2 the closed location can only appear on the first page if it
+      // is partitioned *after* pagination. It should instead be pushed to the second page.
+      await markClosed(primaryLocation);
+
+      const firstPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 2 })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(2);
+      expect(firstPage.body.some(l => l.closed)).toBe(false);
+      expect(firstPage.body.map(l => l.name)).not.toContain(primaryLocation.name);
+
+      const secondPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 1, pageSize: 2 })
+        .expect(200);
+
+      const closedOnSecondPage = secondPage.body.find(l => l.name === primaryLocation.name);
+      expect(closedOnSecondPage).toBeDefined();
+      expect(closedOnSecondPage.closed).toBe(true);
+    });
+
+    it('should keep closed locations last for a nearby-sorted text search', async () => {
+      // primaryLocation is the closest to the origin, so a nearby sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({
+          searchString: 'center',
+          sortBy: 'nearby',
+          latitude: originLatitude,
+          longitude: originLongitude,
+        })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should keep closed locations last for a most-services-sorted text search', async () => {
+      // Give primaryLocation the most services so a mostServices sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await primaryLocation.addServices([aSpecificOffering2, aDifferentKindOfService]);
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', sortBy: 'mostServices' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should NOT exclude or reorder closed locations when not text searching', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      // Browsing (no searchString) is unaffected: the long-closed location is still returned.
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
   });
 });

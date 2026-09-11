@@ -3,7 +3,9 @@ import services from './controllers/services';
 import organizations from './controllers/organizations';
 import taxonomy from './controllers/taxonomy';
 import languages from './controllers/languages';
+import geocode from './controllers/geocode';
 import comments from './controllers/comments';
+import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
@@ -23,6 +25,8 @@ export default (app) => {
   app.get('/locations', locations.find);
 
   app.post('/locations/suggestions', locations.suggestNew);
+  app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
+  app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
   app.post('/locations', getUser, dataEntryAuth, locations.create);
@@ -33,17 +37,33 @@ export default (app) => {
   app.delete('/phones/:phoneId', getUser, locations.deletePhone);
 
   app.post('/services', getUser, dataEntryAuth, services.create);
+  app.get('/services/get-count', services.getCount);
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
   app.delete('/services/:serviceId', getUser, services.delete);
+
+  app.get('/geocode/analytics/all', geocode.findAnalytics);
 
   app.get('/taxonomy', taxonomy.getAll);
   app.get('/languages', languages.getAll);
 
   app.get('/comments', comments.get);
   app.post('/comments', comments.create);
+  app.put('/comments/email/:commentId', comments.setEmail);
+  app.put('/comments/report/:commentId', comments.report);
+  app.put('/comments/unreport/:commentId', comments.unReport);
+  app.put('/comments/like/:commentId', comments.like);
+  app.delete('/comments/like/:commentId', comments.like);
+
   app.post('/comments/:commentId/reply', getUser, comments.reply);
   app.delete('/comments/:commentId', getUser, comments.delete);
   app.put('/comments/:commentId/hidden', getUser, comments.setHidden);
+  app.put('/comments/:commentId/exclude', getUser, comments.excludeFromHighlights);
+  app.put('/comments/replies/:replyId', getUser, comments.editReply);
+
+  app.get('/comment-highlights', commentHighlights.getHighlights);
+  app.post('/generate-highlights', commentHighlights.generateHighlights);
+  app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
+
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);
@@ -79,7 +99,7 @@ export default (app) => {
     }
 
     // eslint-disable-next-line no-console
-    console.error('Server error:', err.message);
+    console.error('Server error:', err.message, err.stack);
     return res.status(500).send({ error: err.stack });
   });
 };

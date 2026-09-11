@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import request from 'supertest';
 import uuid from 'uuid/v4';
 import app from '../../src/app';
@@ -16,7 +20,7 @@ describe('get taxonomy', () => {
     return Object.keys(obj).reduce((currStrippedObj, key) => {
       const value = obj[key];
 
-      if (key.includes('_at')) {
+      if (key.endsWith('At')) {
         return currStrippedObj;
       }
 
@@ -29,6 +33,7 @@ describe('get taxonomy', () => {
     name: `taxonomy ${number}`,
     parent_id: parent ? parent.id : null,
     parent_name: parent ? parent.name : null,
+    name_vector: null,
   });
 
   const taxonomy1 = generateTestTaxonomy({ number: 1 });

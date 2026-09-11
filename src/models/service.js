@@ -15,6 +15,8 @@ module.exports = (sequelize, DataTypes) => {
     interpretation_services: DataTypes.TEXT,
     fees: DataTypes.TEXT,
     additional_info: DataTypes.TEXT,
+    name_vector: DataTypes.TSVECTOR,
+    description_vector: DataTypes.TSVECTOR,
   }, {
     underscored: true,
     underscoredAll: true,
@@ -23,21 +25,36 @@ module.exports = (sequelize, DataTypes) => {
   Service.associate = (models) => {
     Service.belongsTo(models.Organization, {
       onDelete: 'CASCADE',
-      foreignKey: { allowNull: false },
+      foreignKey: {
+        name: 'organization_id',
+        allowNull: false,
+      },
     });
-    Service.belongsToMany(models.Location, { through: models.ServiceAtLocation });
-    Service.belongsToMany(models.Taxonomy, { through: models.ServiceTaxonomy });
-    Service.belongsToMany(models.Language, { through: models.ServiceLanguages });
-    Service.hasMany(models.Phone);
-    Service.hasMany(models.PaymentAccepted);
-    Service.hasMany(models.RegularSchedule);
-    Service.hasMany(models.HolidaySchedule);
-    Service.hasMany(models.ServiceArea);
-    Service.hasMany(models.Eligibility);
-    Service.hasMany(models.ServiceTaxonomySpecificAttribute);
-    Service.hasMany(models.EventRelatedInfo);
-    Service.hasMany(models.RequiredDocument);
-    Service.hasOne(models.DocumentsInfo);
+    Service.belongsToMany(models.Location, {
+      through: models.ServiceAtLocation,
+      foreignKey: 'service_id',
+      otherKey: 'location_id',
+    });
+    Service.belongsToMany(models.Taxonomy, {
+      through: models.ServiceTaxonomy,
+      foreignKey: 'service_id',
+      otherKey: 'taxonomy_id',
+    });
+    Service.belongsToMany(models.Language, {
+      through: models.ServiceLanguages,
+      foreignKey: 'service_id',
+      otherKey: 'language_id',
+    });
+    Service.hasMany(models.Phone, { foreignKey: 'service_id' });
+    Service.hasMany(models.PaymentAccepted, { foreignKey: 'service_id' });
+    Service.hasMany(models.RegularSchedule, { foreignKey: 'service_id' });
+    Service.hasMany(models.HolidaySchedule, { foreignKey: 'service_id' });
+    Service.hasMany(models.ServiceArea, { foreignKey: 'service_id' });
+    Service.hasMany(models.Eligibility, { foreignKey: 'service_id' });
+    Service.hasMany(models.ServiceTaxonomySpecificAttribute, { foreignKey: 'service_id' });
+    Service.hasMany(models.EventRelatedInfo, { foreignKey: 'service_id' });
+    Service.hasMany(models.RequiredDocument, { foreignKey: 'service_id' });
+    Service.hasOne(models.DocumentsInfo, { foreignKey: 'service_id' });
   };
 
   return Service;

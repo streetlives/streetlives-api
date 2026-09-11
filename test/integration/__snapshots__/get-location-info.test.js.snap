@@ -9,6 +9,8 @@ Object {
     "description": "An organization meant for testing purposes.",
     "email": null,
     "name": "The Test Org",
+    "name_vector": null,
+    "partners": null,
     "url": "www.streetlives.com",
   },
   "Phones": Object {
@@ -31,19 +33,17 @@ Object {
       "RegularSchedules": Object {},
       "RequiredDocuments": Object {},
       "ServiceAreas": Object {},
-      "ServiceAtLocation": Object {
-        "description": null,
-      },
       "ServiceTaxonomySpecificAttributes": Object {},
       "Taxonomies": Object {
         "0": Object {
-          "ServiceTaxonomy": Object {},
           "name": "Shelter",
+          "name_vector": null,
           "parent_name": null,
         },
       },
       "additional_info": "A service might have some other info as well.",
       "description": null,
+      "description_vector": null,
       "email": null,
       "fees": null,
       "interpretation_services": null,
@@ -53,9 +53,11 @@ Object {
         "sources": Object {},
       },
       "name": "A specific offering",
+      "name_vector": null,
       "url": null,
     },
   },
+  "Streetview": null,
   "additionalInfo": "And some other, perhaps less standardized, information.",
   "address": Object {
     "city": "New York",
@@ -65,6 +67,7 @@ Object {
     "state": "NY",
     "street": "123 West 30th Street",
   },
+  "closed": false,
   "description": "This is how one would describe this shelter.",
   "metadata": Object {
     "address": Object {},
@@ -73,7 +76,11 @@ Object {
     "sources": Object {},
   },
   "name": "Some kind of center",
+  "name_vector": null,
+  "neighborhood": null,
   "position": null,
+  "slug": "the-test-org-chelsea",
+  "streetview_url": null,
   "transportation": null,
 }
 `;
