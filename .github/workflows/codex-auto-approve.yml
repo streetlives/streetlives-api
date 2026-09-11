@@ -230,6 +230,7 @@ jobs:
           output-schema-file: .codex-run/linked-issue-extraction.schema.json
           output-file: .codex-run/linked-issue-extraction.json
           permission-profile: ":read-only"
+          safety-strategy: read-only
 
       - name: Fetch linked issue context
         env:
