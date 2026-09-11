@@ -37,6 +37,15 @@ redeploying an unchanged commit.
 **Hotfixes** branch from `master` and merge back to `master`, then must be **back-merged into
 `develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
 
+**Dependency updates merge themselves.** `.github/workflows/dependency-auto-merge.yml` approves and
+squash-merges Dependabot and Snyk PRs into `develop` once the `test` job is green — which then
+deploys Stage. Only the update types allowed by its `ALLOWED_UPDATES` map qualify (patch-only for
+runtime dependencies, never a major); everything else waits for a human. The classification lives in
+`.github/scripts/dependency-update-policy.js` and is covered by
+`test/unit/dependency-update-policy.test.js`. Requesting changes on such a PR, or labelling it
+`do-not-merge`, stops the merge. Production is unaffected: it still needs the reviewed
+`develop` → `master` PR.
+
 **Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
 Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new
 schema for the length of the deploy. Split a rename or a column drop across two releases: add and
