@@ -1,0 +1,164 @@
+name: Deploy production
+
+# master is the production branch: a release is a reviewed develop -> master PR.
+# workflow_dispatch stays available as the break-glass path for rollbacks and
+# for redeploying an unchanged commit.
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag or branch to deploy.
+        required: false
+        default: master
+      run_migrations:
+        description: Apply pending database migrations before deploying.
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  # The rollback path for a bad migration. Must finish before any schema change.
+  snapshot:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+    outputs:
+      snapshot-id: ${{ steps.snapshot.outputs.snapshot-id }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Snapshot production database
+        id: snapshot
+        run: |
+          set -euo pipefail
+          snapshot_id="streetlives-prod-predeploy-${{ github.run_id }}"
+          aws rds create-db-snapshot \
+            --db-instance-identifier '${{ secrets.PROD_RDS_INSTANCE_ID }}' \
+            --db-snapshot-identifier "$snapshot_id" \
+            --query 'DBSnapshot.DBSnapshotIdentifier' --output text
+          echo "Waiting for $snapshot_id to become available..."
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot_id"
+          echo "snapshot-id=$snapshot_id" >> "$GITHUB_OUTPUT"
+          echo "Snapshot $snapshot_id is available."
+
+  migrate:
+    needs: snapshot
+    # The inputs context is empty on the push trigger, and GitHub coerces both
+    # '' and false to 0 when comparing across types - so any comparison against
+    # `false` would wrongly skip migrations on a release. Branch on the event
+    # instead: a master merge always migrates, dispatch honours the checkbox.
+    if: github.event_name == 'push' || inputs.run_migrations
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Migrate production database
+        uses: ./.github/actions/db-migrate
+        with:
+          security-group-id: ${{ secrets.PROD_RDS_SECURITY_GROUP_ID }}
+          database-host: ${{ secrets.PROD_DATABASE_HOST }}
+          database-port: ${{ vars.PROD_DATABASE_PORT || '5432' }}
+          database-name: ${{ secrets.PROD_DATABASE_NAME }}
+          database-user: ${{ secrets.PROD_DATABASE_USER }}
+          database-password: ${{ secrets.PROD_DATABASE_PASSWORD }}
+
+  deploy:
+    needs: [snapshot, migrate]
+    # Proceeds when migrate was *skipped* (run_migrations: false) but blocks on
+    # an actual migration failure. Requiring snapshot == 'success' matters:
+    # a failing test job leaves snapshot *skipped*, and skipped is not failure,
+    # so a bare `!failure()` would let a red build deploy to production.
+    if: always() && needs.snapshot.result == 'success' && needs.migrate.result != 'failure' && !cancelled()
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Package and deploy to production
+        run: npm run package-deploy:prod
+
+      - name: Smoke check
+        if: vars.PROD_API_URL != ''
+        env:
+          PROD_API_URL: ${{ vars.PROD_API_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$PROD_API_URL/languages" > /dev/null; then
+              echo "Production API responded on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Production API did not respond after the deploy." >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production deploy"
+            echo ""
+            echo "- Commit: \`${{ inputs.ref || github.sha }}\`"
+            echo "- Snapshot: \`${{ needs.snapshot.outputs.snapshot-id }}\`"
+            echo "- Migrations: ${{ needs.migrate.result }}"
+            echo "- Result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

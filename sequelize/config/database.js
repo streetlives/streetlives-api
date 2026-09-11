@@ -12,5 +12,16 @@ module.exports = {
     port: process.env.DATABASE_PORT || 5432,
     dialect: 'postgres',
     operatorsAliases: false,
+    dialectOptions: {
+      // Local/CI test databases run without SSL; RDS in dev/prod requires it.
+      // Mirrors the dialectOptions in src/config.js so the CLI's own connection
+      // (SequelizeMeta, queryInterface) can reach RDS the same way the app does.
+      ...(env === 'test' ? {} : {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false, // For RDS, accept AWS certificates
+        },
+      }),
+    },
   },
 };

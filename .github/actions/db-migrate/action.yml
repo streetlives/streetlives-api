@@ -1,0 +1,115 @@
+name: Run database migrations
+description: >-
+  Opens the RDS security group to this runner's IP, applies pending Sequelize
+  migrations, and always closes the hole again.
+
+inputs:
+  security-group-id:
+    description: Security group fronting the target RDS instance.
+    required: true
+  database-host:
+    description: RDS endpoint hostname.
+    required: true
+  database-port:
+    description: RDS port.
+    required: false
+    default: '5432'
+  database-name:
+    description: Database name.
+    required: true
+  database-user:
+    description: Database user.
+    required: true
+  database-password:
+    description: Database password.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Composite-action inputs are not secrets, so mask the password explicitly
+    # before it can reach any log line.
+    - name: Mask credentials
+      shell: bash
+      run: echo "::add-mask::${{ inputs.database-password }}"
+
+    - name: Resolve runner egress IP
+      id: runner-ip
+      shell: bash
+      run: |
+        set -euo pipefail
+        ip="$(curl -fsS --retry 3 --retry-delay 2 https://checkip.amazonaws.com | tr -d '[:space:]')"
+        if [[ ! "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+          echo "Could not determine runner IP (got: '$ip')" >&2
+          exit 1
+        fi
+        echo "ip=$ip" >> "$GITHUB_OUTPUT"
+        echo "Runner egress IP resolved."
+
+    - name: Open RDS security group to this runner
+      id: open-sg
+      shell: bash
+      run: |
+        set -euo pipefail
+        rule_id="$(aws ec2 authorize-security-group-ingress \
+          --group-id '${{ inputs.security-group-id }}' \
+          --ip-permissions "IpProtocol=tcp,FromPort=${{ inputs.database-port }},ToPort=${{ inputs.database-port }},IpRanges=[{CidrIp=${{ steps.runner-ip.outputs.ip }}/32,Description='gha run ${{ github.run_id }}'}]" \
+          --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
+          --output text)"
+        if [[ -z "$rule_id" || "$rule_id" == "None" ]]; then
+          echo "Failed to create a security group rule." >&2
+          exit 1
+        fi
+        # Recorded so the revoke step targets this exact rule and can never
+        # clobber an unrelated one that happens to share the CIDR.
+        echo "rule-id=$rule_id" >> "$GITHUB_OUTPUT"
+        echo "Opened port ${{ inputs.database-port }} via rule $rule_id"
+
+    - name: Pending migrations (before)
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+      run: npx sequelize-cli db:migrate:status
+
+    - name: Apply migrations
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+      run: npm run sequelize:db:migrate
+
+    - name: Migration status (after)
+      if: always() && steps.open-sg.outcome == 'success'
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+      run: npx sequelize-cli db:migrate:status
+
+    # Must be always(): a failed migration must not leave the database exposed.
+    - name: Close RDS security group
+      if: always() && steps.open-sg.outputs.rule-id != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        aws ec2 revoke-security-group-ingress \
+          --group-id '${{ inputs.security-group-id }}' \
+          --security-group-rule-ids '${{ steps.open-sg.outputs.rule-id }}' \
+          --query 'Return' --output text
+        echo "Revoked rule ${{ steps.open-sg.outputs.rule-id }}"

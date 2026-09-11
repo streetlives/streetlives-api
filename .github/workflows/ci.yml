@@ -4,6 +4,9 @@ on:
   push:
     branches: [develop, master, main]
   pull_request:
+  # Lets the deploy workflows gate on the real test job instead of duplicating
+  # the postgis service container. See deploy-test-on-develop-merge.yml.
+  workflow_call:
 
 jobs:
   test:

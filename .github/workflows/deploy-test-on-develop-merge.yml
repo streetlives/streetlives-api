@@ -5,17 +5,59 @@ on:
     branches:
       - develop
 
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: false
+
 jobs:
-  deploy-test:
-    if: github.event_name == 'push'
+  # Reuses the real CI job (postgis service + extensions + npm test) so a red
+  # build can no longer reach Stage.
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  migrate:
+    needs: test
     runs-on: ubuntu-latest
     environment: CI_CD_PIPELINE
 
     steps:
-      - name: Checkout develop branch
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          ref: develop
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Migrate Stage database
+        uses: ./.github/actions/db-migrate
+        with:
+          security-group-id: ${{ secrets.STAGE_RDS_SECURITY_GROUP_ID }}
+          database-host: ${{ secrets.STAGE_DATABASE_HOST }}
+          database-port: ${{ vars.STAGE_DATABASE_PORT || '5432' }}
+          database-name: ${{ secrets.STAGE_DATABASE_NAME }}
+          database-user: ${{ secrets.STAGE_DATABASE_USER }}
+          database-password: ${{ secrets.STAGE_DATABASE_PASSWORD }}
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: CI_CD_PIPELINE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,3 +77,30 @@ jobs:
 
       - name: Package and deploy to test environment
         run: npm run package-deploy:dev
+
+      - name: Smoke check
+        env:
+          STAGE_API_URL: ${{ vars.STAGE_API_URL || 'https://w6pkliozjh.execute-api.us-east-1.amazonaws.com/Stage' }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$STAGE_API_URL/languages" > /dev/null; then
+              echo "Stage API responded on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Stage API did not respond after the deploy." >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Stage deploy"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Lambda: test function"
+            echo "- Result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -21,10 +21,41 @@ To run a single test file: `NODE_ENV=test npx jest --runInBand test/integration/
 
 ### Deployment
 
+Deploys are automated. `develop` is the integration branch; **`master` is the production branch**.
+
+| Branch | Pipeline | What runs |
+|---|---|---|
+| `develop` | `.github/workflows/deploy-test-on-develop-merge.yml` | tests → migrate Stage DB → deploy test Lambda → smoke check |
+| `master` | `.github/workflows/deploy-prod.yml` | tests → RDS snapshot → migrate prod DB → deploy prod Lambda → smoke check |
+
+**Releasing to production** = opening a `develop` → `master` PR. The prod jobs run in the
+`PRODUCTION` GitHub Environment, which requires reviewer approval, so merging *requests* a release
+rather than silently shipping one. `deploy-prod.yml` also accepts a `workflow_dispatch` with a
+`ref` and a `run_migrations` toggle — that is the break-glass path for rollbacks and for
+redeploying an unchanged commit.
+
+**Hotfixes** branch from `master` and merge back to `master`, then must be **back-merged into
+`develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
+
+**Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
+Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new
+schema for the length of the deploy. Split a rename or a column drop across two releases: add and
+backfill in one, stop reading the old column in the same release, remove the column in a later one.
+Note also that `custom-analytics` queries this schema with raw SQL, so it is part of the blast
+radius of any migration.
+
+Break-glass manual deploys (no migration, no snapshot, no test gate):
+
 ```bash
 npm run package-deploy:dev   # Build, zip, upload to S3, deploy to dev Lambda
 npm run package-deploy:prod  # Same for production Lambda
 ```
+
+Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
+instance's security group to the runner's IP for the duration of the migration and revokes the
+rule in an `always()` step. Required secrets live in the `CI_CD_PIPELINE` (Stage) and `PRODUCTION`
+environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
+`{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`.
 
 ## Architecture
 
