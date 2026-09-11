@@ -64,10 +64,15 @@ The per-run key matters because Stage and prod deploys can overlap, and a shared
 overwrite or delete the other's artifact between the upload and `update-function-code`.
 
 Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
-instance's security group to the runner's IP for the duration of the migration and revokes the
-rule in an `always()` step. Required secrets live in the `CI_CD_PIPELINE` (Stage) and `PRODUCTION`
-environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
-`{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`.
+instance's security group to the runner's IP for the duration of the migration and revokes the rule
+in an unconditional `always()` step. That step does not trust the recorded rule id alone: it also
+sweeps the group for rules whose description carries this run's id, because a rule AWS created but
+never acknowledged would otherwise be left open forever. Revoking is always by rule id, never by
+CIDR, so it cannot clobber an unrelated rule. Required secrets live in the `CI_CD_PIPELINE` (Stage)
+and `PRODUCTION` environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
+`{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`. The `PRODUCTION` environment also
+needs a `PROD_API_URL` **variable** — the prod deploy fails rather than reporting green on a deploy
+nobody exercised.
 
 `deploy-prod.yml` deploys the tree at the resolved SHA but takes both composite actions, plus
 `sequelize/config`, `src/utils` and `src/certs`, from the workflow's own revision into
@@ -105,9 +110,12 @@ closed**: if the deployed tree has no `src/utils/ssl.js` and any of its migratio
 right anyway, since `db:migrate` only applies migrations the database has not seen and an older
 tree has none.
 
-The gates themselves are tested: `test/unit/deploy-pipeline.test.js` evaluates the workflows'
-`if:` conditions against simulated job results (red tests, failed migration, skipped migration,
-cancellation) using the small expression evaluator in `test/support/github-expression.js`.
+The pipeline is tested rather than just read: `test/unit/deploy-pipeline.test.js` evaluates the
+workflows' `if:` conditions against simulated job results (red tests, failed migration, skipped
+migration, cancellation) with the expression evaluator in `test/support/github-expression.js`, and
+runs the shell steps that matter — the security-group open/revoke cycle, the verified-TLS guard,
+the smoke check — under `test/support/shell-step.js`, which puts stub `aws` and `curl` binaries on
+the PATH and records what the script actually called.
 
 ## Architecture
 

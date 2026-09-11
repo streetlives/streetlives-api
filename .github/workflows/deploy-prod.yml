@@ -258,12 +258,19 @@ jobs:
           s3-bucket: ${{ steps.target.outputs.bucket }}
           s3-key: ${{ env.DEPLOY_S3_KEY }}
 
+      # No `if:` guard on the URL. A Lambda update can settle successfully while
+      # the handler or the API Gateway integration still returns errors, so a
+      # deploy that cannot be exercised must not report green.
       - name: Smoke check
-        if: vars.PROD_API_URL != ''
         env:
           PROD_API_URL: ${{ vars.PROD_API_URL }}
         run: |
           set -euo pipefail
+          if [ -z "$PROD_API_URL" ]; then
+            echo "::error::PROD_API_URL is not set on the PRODUCTION environment, so this deploy \
+          cannot be verified. Set it to the production API base URL."
+            exit 1
+          fi
           for attempt in 1 2 3 4 5; do
             if curl -fsS --max-time 30 "$PROD_API_URL/languages" > /dev/null; then
               echo "Production API responded on attempt $attempt."

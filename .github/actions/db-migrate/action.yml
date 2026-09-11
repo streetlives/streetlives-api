@@ -152,17 +152,47 @@ runs:
         CONFIG_PATH: ${{ inputs.config-path }}
       run: npx sequelize-cli db:migrate:status --config "$CONFIG_PATH"
 
-    # Must be always(): a failed migration must not leave the database exposed.
+    # always(), and deliberately not conditioned on the recorded rule id: if the
+    # authorize call created the rule but its response never came back - a
+    # dropped connection, a killed runner - there is nothing recorded to revoke
+    # and the database would stay open to that address. So the id is treated as
+    # a hint, and the group is swept as well. The description carries this run's
+    # id, so the sweep can only ever match rules this run created.
     - name: Close RDS security group
-      if: always() && steps.open-sg.outputs.rule-id != ''
+      if: always()
       shell: bash
       env:
         SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
         RULE_ID: ${{ steps.open-sg.outputs.rule-id }}
+        RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
+        if ! discovered="$(aws ec2 describe-security-group-rules \
+          --filters "Name=group-id,Values=$SECURITY_GROUP_ID" \
+          --query "SecurityGroupRules[?Description=='gha run $RUN_ID'].SecurityGroupRuleId" \
+          --output text 2>&1)"; then
+          # Do not let this cost us the revoke we already know how to do.
+          echo "::warning::Could not list security group rules: $discovered"
+          discovered=""
+        fi
+
+        # Both sources, deduplicated, and nothing that is not a rule id - the
+        # CLI prints "None" for an empty result.
+        rule_ids="$(printf '%s\n%s\n' "${RULE_ID:-}" "$discovered" \
+          | tr '\t' '\n' \
+          | grep -E '^sgr-[0-9a-f]+$' \
+          | sort -u || true)"
+
+        if [ -z "$rule_ids" ]; then
+          echo "No ingress rule left to revoke."
+          exit 0
+        fi
+
+        # Revoking by rule id can never clobber an unrelated rule that happens
+        # to share the CIDR, which matching on --ip-permissions could.
+        # shellcheck disable=SC2086
         aws ec2 revoke-security-group-ingress \
           --group-id "$SECURITY_GROUP_ID" \
-          --security-group-rule-ids "$RULE_ID" \
+          --security-group-rule-ids $rule_ids \
           --query 'Return' --output text
-        echo "Revoked rule $RULE_ID"
+        echo "Revoked $(echo $rule_ids | wc -w | tr -d ' ') rule(s): $(echo $rule_ids | tr '\n' ' ')"

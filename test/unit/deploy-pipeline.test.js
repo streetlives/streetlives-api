@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const yaml = require('js-yaml');
 const { evaluate } = require('../support/github-expression');
+const { runnerFor } = require('../support/shell-step');
 
 const load = file => yaml.safeLoad(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'));
 
@@ -184,19 +185,112 @@ describe('the database migration action', () => {
     expect(stepRuns(closeStep, context)).toBe(true);
   });
 
-  it('has nothing to close when the group was never opened', () => {
-    const context = {
-      jobFailed: true,
-      steps: { 'open-sg': { outcome: 'failure', outputs: { 'rule-id': '' } } },
-    };
+  describe('the security group lifecycle, run for real against a stubbed AWS', () => {
+    const openRule = runnerFor(openStep);
+    const closeRule = runnerFor(closeStep);
+    const GROUP = 'sg-0123456789abcdef0';
+    const RUN = '424242';
+    const CREATED = 'sgr-0000000000000000a';
+    const LEFTOVER = 'sgr-0000000000000000b';
 
-    expect(stepRuns(closeStep, context)).toBe(false);
-  });
+    const opening = extra => Object.assign({
+      SECURITY_GROUP_ID: GROUP,
+      DATABASE_PORT: '5432',
+      RUNNER_IP: '203.0.113.7',
+      RUN_ID: RUN,
+    }, extra);
 
-  it('revokes by rule id, so it can never clobber an unrelated rule', () => {
-    expect(openStep.run).toContain('SecurityGroupRules[0].SecurityGroupRuleId');
-    expect(closeStep.run).toContain('--security-group-rule-ids "$RULE_ID"');
-    expect(closeStep.run).not.toContain('--ip-permissions');
+    const closing = extra => Object.assign({
+      SECURITY_GROUP_ID: GROUP,
+      RULE_ID: CREATED,
+      RUN_ID: RUN,
+    }, extra);
+
+    const revokedIn = result => result.calls
+      .filter(call => call.includes('revoke-security-group-ingress'))
+      .join(' ');
+
+    it('records the rule it created, so the revoke has something to aim at', () => {
+      const result = openRule(opening());
+
+      expect(result.status).toBe(0);
+      expect(result.outputs.trim()).toBe(`rule-id=${CREATED}`);
+      expect(result.calls[0]).toContain(`--group-id ${GROUP}`);
+      // Tagged with the run id, which is what makes the sweep below safe.
+      expect(result.calls[0]).toContain(`gha run ${RUN}`);
+    });
+
+    it('fails loudly when AWS reports no rule, rather than migrating anyway', () => {
+      const result = openRule(opening({ AUTHORIZE_OUTPUT: 'None' }));
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Failed to create a security group rule');
+    });
+
+    it('revokes the rule it recorded', () => {
+      const result = closeRule(closing({ DESCRIBE_OUTPUT: CREATED }));
+
+      expect(result.status).toBe(0);
+      // Recorded and discovered are the same rule: revoked once, not twice.
+      expect(revokedIn(result)).toContain(`--security-group-rule-ids ${CREATED}`);
+      expect(result.calls.filter(call => call.includes('revoke')).length).toBe(1);
+    });
+
+    it('recovers a rule whose creation response was lost', () => {
+      // AWS created it, the response never came back, so nothing was recorded -
+      // without the sweep the database would stay open to the runner's address.
+      const result = closeRule(closing({ RULE_ID: '', DESCRIBE_OUTPUT: LEFTOVER }));
+
+      expect(result.status).toBe(0);
+      expect(revokedIn(result)).toContain(LEFTOVER);
+    });
+
+    it('revokes a leftover from an earlier attempt along with its own', () => {
+      const result = closeRule(closing({ DESCRIBE_OUTPUT: `${LEFTOVER}\t${CREATED}` }));
+
+      expect(revokedIn(result)).toContain(CREATED);
+      expect(revokedIn(result)).toContain(LEFTOVER);
+    });
+
+    it('only ever sweeps rules this run created', () => {
+      const result = closeRule(closing({ RULE_ID: '' }));
+      const describeCall = result.calls
+        .find(call => call.includes('describe-security-group-rules'));
+
+      expect(describeCall).toContain(`Name=group-id,Values=${GROUP}`);
+      expect(describeCall).toContain(`Description=='gha run ${RUN}'`);
+    });
+
+    it('revokes nothing when there is nothing left open', () => {
+      // "None" is what the CLI prints for an empty result.
+      const result = closeRule(closing({ RULE_ID: '', DESCRIBE_OUTPUT: 'None' }));
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('No ingress rule left to revoke');
+      expect(revokedIn(result)).toBe('');
+    });
+
+    it('still revokes what it recorded when the sweep itself fails', () => {
+      const result = closeRule(closing({ DESCRIBE_FAILS: '1' }));
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('::warning::');
+      expect(revokedIn(result)).toContain(CREATED);
+    });
+
+    it('closes the group after a failed migration', () => {
+      // The step is unconditional precisely so this cannot be skipped.
+      expect(closeStep.if).toBe('always()');
+      expect(stepRuns(closeStep, { jobFailed: true })).toBe(true);
+      expect(revokedIn(closeRule(closing({ DESCRIBE_OUTPUT: CREATED })))).toContain(CREATED);
+    });
+
+    it('never revokes by CIDR, which could clobber an unrelated rule', () => {
+      const result = closeRule(closing({ DESCRIBE_OUTPUT: CREATED }));
+
+      expect(openStep.run).toContain('SecurityGroupRules[0].SecurityGroupRuleId');
+      expect(revokedIn(result)).not.toContain('--ip-permissions');
+    });
   });
 
   it('masks the password and never interpolates an input into a script', () => {
@@ -290,6 +384,38 @@ describe('the database migration action', () => {
 
       connecting.forEach(step => expect(steps.indexOf(guard)).toBeLessThan(steps.indexOf(step)));
     });
+  });
+});
+
+describe('the production smoke check', () => {
+  const smoke = stepNamed(prod.jobs.deploy.steps, 'Smoke check');
+  const runSmoke = runnerFor(smoke);
+  const URL = 'https://api.example.test';
+
+  it('cannot be skipped: a deploy nobody exercised is not a green deploy', () => {
+    // A Lambda update can settle successfully while the handler or the API
+    // Gateway integration still returns errors.
+    expect(smoke.if).toBeUndefined();
+
+    const result = runSmoke({ PROD_API_URL: '' });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('::error::');
+    expect(result.stdout).toContain('PROD_API_URL');
+  });
+
+  it('calls the deployed API when the URL is configured', () => {
+    const result = runSmoke({ PROD_API_URL: URL });
+
+    expect(result.status).toBe(0);
+    expect(result.calls.join(' ')).toContain(`${URL}/languages`);
+  });
+
+  it('retries a cold start before failing the deploy', () => {
+    const result = runSmoke({ PROD_API_URL: URL, CURL_STATUS: '22' });
+
+    expect(result.status).toBe(1);
+    expect(result.calls.filter(call => call.startsWith('curl')).length).toBe(5);
   });
 });
 
