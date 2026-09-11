@@ -98,6 +98,16 @@ and `PRODUCTION` environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`
 needs a `PROD_API_URL` **variable** — the prod deploy fails rather than reporting green on a deploy
 nobody exercised.
 
+The smoke check calls `$API_URL/taxonomy`, and the path matters. Traffic is served by
+`StreetlivesPublicApi` (`rdxk79h7wa`, stages `Stage` and `prod`; the older `w6pkliozjh` API is denied
+outright by a resource policy). Only the paths declared explicitly on that API are
+`authorizationType: NONE` — `/taxonomy`, `/locations`, `/locations/{id}`, `/locations-by-slug/{slug}`,
+`/location-slug-redirects/{slug}`, `/comments`, `/comment-highlights`, `/errorreports`,
+`/geocode/analytics/all`. Everything else falls through to `/{proxy+}`, which is behind the Cognito
+authorizer and answers an unauthenticated request with 401 before it reaches the Lambda. Set
+`PROD_API_URL` to the execute-api URL for the `prod` stage, not `api.yourpeer.nyc`: the custom domain
+sits behind a bot filter that answers a runner's curl with 403.
+
 `deploy-prod.yml` deploys the tree at the resolved SHA but takes both composite actions, plus
 `sequelize/config`, `src/utils` and `src/certs`, from the workflow's own revision into
 `.deploy-helpers/` — the break-glass rollback path targets refs that predate this pipeline and have

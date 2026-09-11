@@ -69,9 +69,16 @@ const GIT_STUB = [
 // So a retry loop's backoff does not cost the test suite real seconds.
 const SLEEP_STUB = ['#!/bin/bash', 'exit 0', ''].join('\n');
 
+// A smoke check asks for `-w %{http_code}` and reads the code off stdout, so
+// the stub has to answer with one - exiting 0 while printing nothing would look
+// like an unreachable API. CURL_HTTP_CODE is what it reports; every other
+// caller (the checkip lookup in db-migrate) gets the old silent behaviour.
 const CURL_STUB = [
   '#!/bin/bash',
   'printf \'%s\\n\' "curl $*" >> "$CALLS_LOG"',
+  'case "$*" in',
+  '  *http_code*) printf \'%s\' "${CURL_HTTP_CODE:-200}" ;;',
+  'esac',
   'exit ${CURL_STATUS:-0}',
   '',
 ].join('\n');
