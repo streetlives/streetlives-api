@@ -37,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
+      superseded: ${{ steps.resolve.outputs.superseded }}
 
     steps:
       - name: Checkout requested ref
@@ -46,14 +47,38 @@ jobs:
 
       - name: Resolve to an immutable SHA
         id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "Deploying $sha"
 
+          # The concurrency group serializes runs but does not order them: two
+          # pushes landing close together can acquire it in either order, and
+          # re-running an old run would deploy an old commit. Either way the
+          # older revision reaches production last and silently rolls it back.
+          # Only a push is gated - deploying an older ref deliberately is what
+          # the dispatch path is for.
+          superseded=false
+          if [ "$EVENT_NAME" = "push" ]; then
+            git fetch --no-tags --depth=1 origin "$BRANCH"
+            tip="$(git rev-parse FETCH_HEAD)"
+            if [ "$tip" != "$sha" ]; then
+              superseded=true
+              echo "::warning::$BRANCH has moved to $tip since this run started ($sha). The run \
+          for that commit deploys it; this one stops here rather than rolling production back."
+            fi
+          fi
+          echo "superseded=$superseded" >> "$GITHUB_OUTPUT"
+          echo "Deploying $sha (superseded: $superseded)"
+
+  # Gating the first job is enough: snapshot, migrate and deploy are all
+  # downstream of it, and a skipped dependency skips them too.
   test:
     needs: resolve
+    if: needs.resolve.outputs.superseded != 'true'
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ needs.resolve.outputs.sha }}

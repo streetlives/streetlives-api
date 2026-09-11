@@ -65,10 +65,28 @@ overwrite or delete the other's artifact between the upload and `update-function
 
 Migrations reach RDS from a GitHub runner via `.github/actions/db-migrate`, which opens the
 instance's security group to the runner's IP for the duration of the migration and revokes the rule
-in an unconditional `always()` step. That step does not trust the recorded rule id alone: it also
-sweeps the group for rules whose description carries this run's id, because a rule AWS created but
-never acknowledged would otherwise be left open forever. Revoking is always by rule id, never by
-CIDR, so it cannot clobber an unrelated rule. Required secrets live in the `CI_CD_PIPELINE` (Stage)
+in an unconditional `always()` step. That step never exits green on a guess:
+
+- the recorded rule id is a hint, not the only source — it also sweeps the group for rules whose
+  description carries this run's id, since a rule AWS created but never acknowledged would
+  otherwise stay open forever;
+- an empty sweep is retried when the authorize step left no id, because
+  `describe-security-group-rules` is eventually consistent and "not created" looks exactly like
+  "not visible yet";
+- a lookup that never completes **fails the step** rather than being read as "nothing there";
+- the revoke is confirmed by looking again, and a confirmation that cannot be obtained is not a
+  confirmation.
+
+Revoking is always by rule id, never by CIDR, so it cannot clobber an unrelated rule. A failed
+cleanup fails the migrate job and blocks the deploy — the right trade against leaving the database
+reachable from a runner address.
+
+`deploy-prod.yml` also refuses a **superseded** revision: the concurrency group serializes runs but
+does not order them, so an older push (or a re-run of an old run) could otherwise acquire the group
+last and roll production back. The `resolve` job compares the commit against the branch tip and
+skips the pipeline if it has moved. Only `push` is gated — deploying an older ref on purpose is
+what `workflow_dispatch` is for. The Stage workflow has no equivalent gate; a brief out-of-order
+Stage deploy is self-correcting in a way a production rollback is not. Required secrets live in the `CI_CD_PIPELINE` (Stage)
 and `PRODUCTION` environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
 `{STAGE,PROD}_RDS_SECURITY_GROUP_ID`, and `PROD_RDS_INSTANCE_ID`. The `PRODUCTION` environment also
 needs a `PROD_API_URL` **variable** — the prod deploy fails rather than reporting green on a deploy

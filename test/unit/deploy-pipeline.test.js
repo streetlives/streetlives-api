@@ -289,6 +289,53 @@ describe('the database migration action', () => {
       expect(result.status).toBe(1);
     });
 
+    it('waits for a rule EC2 has not made visible yet', () => {
+      // describe-security-group-rules is eventually consistent, so right after a
+      // lost authorize response "not created" and "not visible yet" look the
+      // same. Accepting the first empty answer would leave the rule open.
+      const result = closeRule(closing({
+        RULE_ID: '',
+        OPEN_OUTCOME: 'failure',
+        DESCRIBE_OUTPUT: LEFTOVER,
+        DESCRIBE_VISIBLE_AFTER: '2',
+      }));
+
+      expect(result.status).toBe(0);
+      expect(revokedIn(result)).toContain(LEFTOVER);
+    });
+
+    it('says so when nothing ever becomes visible after an uncertain authorize', () => {
+      const result = closeRule(closing({ RULE_ID: '', OPEN_OUTCOME: 'failure' }));
+      const lookups = result.calls.filter(call => call.includes('describe')).length;
+
+      expect(lookups).toBe(4);
+      expect(result.stdout).toContain('::warning::');
+      expect(result.stdout).toContain(`gha run ${RUN}`);
+      expect(result.status).toBe(0);
+    });
+
+    it('does not pay the backoff when nothing was ever opened', () => {
+      // open-sg skipped: there is no uncertainty to resolve, so one look is
+      // enough and the step does not sit there retrying.
+      const result = closeRule(closing({ RULE_ID: '', OPEN_OUTCOME: 'skipped' }));
+
+      expect(result.calls.filter(call => call.includes('describe')).length).toBe(1);
+      expect(result.status).toBe(0);
+    });
+
+    it('fails when the revoke cannot be confirmed', () => {
+      // The first lookup works, the revoke goes through, and then the group
+      // becomes unreadable - so nothing here proves the ingress is closed.
+      const result = closeRule(closing({
+        DESCRIBE_OUTPUT: CREATED,
+        DESCRIBE_FAILS_AFTER: '1',
+      }));
+
+      expect(revokedIn(result)).toContain(CREATED);
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('could not confirm');
+    });
+
     it('retries a lookup that fails transiently rather than giving up', () => {
       const result = closeRule(closing({
         RULE_ID: '',
@@ -414,6 +461,53 @@ describe('the database migration action', () => {
 
       connecting.forEach(step => expect(steps.indexOf(guard)).toBeLessThan(steps.indexOf(step)));
     });
+  });
+});
+
+describe('the stale-revision gate', () => {
+  const resolveStep = stepNamed(prod.jobs.resolve.steps, 'Resolve to an immutable SHA');
+  const runResolve = runnerFor(resolveStep);
+  const OURS = '1111111111111111111111111111111111111111';
+  const NEWER = '2222222222222222222222222222222222222222';
+
+  const resolving = extra => Object.assign({
+    EVENT_NAME: 'push',
+    BRANCH: 'master',
+    HEAD_SHA: OURS,
+    TIP_SHA: OURS,
+  }, extra);
+
+  it('deploys a push that is still the tip of the branch', () => {
+    const result = runResolve(resolving());
+
+    expect(result.outputs).toContain(`sha=${OURS}`);
+    expect(result.outputs).toContain('superseded=false');
+  });
+
+  it('stops a push that a newer release has overtaken', () => {
+    // The concurrency group serializes runs without ordering them, so an older
+    // run can acquire it second and roll production back.
+    const result = runResolve(resolving({ TIP_SHA: NEWER }));
+
+    expect(result.outputs).toContain('superseded=true');
+    expect(result.stdout).toContain('::warning::');
+    expect(result.stdout).toContain(NEWER);
+  });
+
+  it('never stands in the way of a deliberate rollback', () => {
+    const result = runResolve(resolving({ EVENT_NAME: 'workflow_dispatch', TIP_SHA: NEWER }));
+
+    expect(result.outputs).toContain('superseded=false');
+    // It does not even ask where the branch is: dispatch means "this ref".
+    expect(result.calls.some(call => call.startsWith('git fetch'))).toBe(false);
+  });
+
+  it('gates the pipeline on the answer', () => {
+    expect(prod.jobs.resolve.outputs.superseded).toBe('${{ steps.resolve.outputs.superseded }}');
+    expect(prod.jobs.test.if).toBe("needs.resolve.outputs.superseded != 'true'");
+    // Everything else is downstream of the test job, so it cascades.
+    expect(jobRuns(prod.jobs.snapshot, needsResults({ resolve: 'success', test: 'skipped' })))
+      .toBe(false);
   });
 });
 

@@ -159,16 +159,17 @@ runs:
     # a hint and the group is swept as well. The description carries this run's
     # id, so the sweep can only ever match rules this run created.
     #
-    # This step does not get to exit green on a guess: if the sweep cannot be
-    # completed, or anything from this run is still on the group afterwards, it
-    # fails loudly so a human closes it. A failed cleanup blocks the deploy,
-    # which is the right trade against leaving the database reachable.
+    # This step does not get to exit green on a guess. Every lookup is retried,
+    # an unfinished lookup fails the step, and the revoke is confirmed by
+    # looking again. A failed cleanup blocks the deploy, which is the right
+    # trade against leaving the database reachable.
     - name: Close RDS security group
       if: always()
       shell: bash
       env:
         SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
         RULE_ID: ${{ steps.open-sg.outputs.rule-id }}
+        OPEN_OUTCOME: ${{ steps.open-sg.outcome }}
         RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
@@ -180,29 +181,53 @@ runs:
             --output text
         }
 
-        # --output text returns a tab-separated list, and prints "None" when
-        # empty; keep only things that are actually rule ids.
+        # --output text returns a tab-separated list and prints "None" when
+        # empty; keep only the things that are actually rule ids.
         rule_ids_in() {
           printf '%s\n' "$@" | tr '\t' '\n' | grep -E '^sgr-[0-9a-f]+$' | sort -u || true
         }
 
-        discovered=""
-        swept=false
-        for attempt in 1 2 3; do
-          if discovered="$(lookup 2>&1)"; then
-            swept=true
-            break
-          fi
-          echo "Rule lookup attempt $attempt failed: $discovered"
-          discovered=""
-          if [ "$attempt" -lt 3 ]; then
-            sleep 5
-          fi
-        done
+        # Sets FOUND_IDS; returns non-zero if no attempt ever completed.
+        # retry_empty keeps going when the call succeeds but finds nothing:
+        # describe-security-group-rules is eventually consistent, so a rule that
+        # was just created can be briefly invisible - and "briefly invisible" and
+        # "never created" look identical from here.
+        lookup_rules() {
+          retry_empty="$1"
+          completed=false
+          FOUND_IDS=""
+          for attempt in 1 2 3 4; do
+            if out="$(lookup 2>&1)"; then
+              completed=true
+              FOUND_IDS="$(rule_ids_in "$out")"
+              if [ -n "$FOUND_IDS" ] || [ "$retry_empty" != true ]; then
+                return 0
+              fi
+              echo "Lookup $attempt found nothing yet; EC2 may not have caught up."
+            else
+              completed=false
+              echo "Lookup attempt $attempt failed: $out"
+            fi
+            if [ "$attempt" -lt 4 ]; then
+              sleep 5
+            fi
+          done
+          [ "$completed" = true ]
+        }
 
-        # Revoke whatever we know about first, even if the sweep never worked -
-        # a failed lookup must not cost us the revoke we can already do.
-        rule_ids="$(rule_ids_in "${RULE_ID:-}" "$discovered")"
+        # Authorization is uncertain when the step ran but left no id behind:
+        # AWS may have created the rule and lost the response on the way back.
+        uncertain=false
+        if [ -z "${RULE_ID:-}" ] && [ "${OPEN_OUTCOME:-skipped}" != "skipped" ]; then
+          uncertain=true
+        fi
+
+        swept=true
+        lookup_rules "$uncertain" || swept=false
+
+        # Revoke whatever is known first, so a failing lookup never costs the
+        # revoke we can already do.
+        rule_ids="$(rule_ids_in "${RULE_ID:-}" "$FOUND_IDS")"
         if [ -n "$rule_ids" ]; then
           # By rule id, never by CIDR: matching on --ip-permissions could revoke
           # an unrelated rule that happens to share the address.
@@ -215,17 +240,32 @@ runs:
         fi
 
         if [ "$swept" != true ]; then
-          echo "::error::Could not list the rules on $SECURITY_GROUP_ID after 3 attempts, so this \
-        run cannot show it left no ingress open. If the rule was created but its id never came \
-        back, it is still there: look for one described 'gha run $RUN_ID' and remove it."
+          echo "::error::Could not list the rules on $SECURITY_GROUP_ID, so this run cannot show \
+        it left no ingress open. If a rule was created but its id never came back, it is still \
+        there: look for one described 'gha run $RUN_ID' and remove it."
           exit 1
         fi
 
-        remaining="$(rule_ids_in "$(lookup 2>/dev/null || true)")"
-        if [ -n "$remaining" ]; then
-          echo "::error::Ingress described 'gha run $RUN_ID' is still on $SECURITY_GROUP_ID after \
-        the revoke: $(echo $remaining | tr '\n' ' '). Remove it manually."
-          exit 1
+        # Confirm the revoke instead of trusting the API's answer - and a
+        # confirmation that cannot be obtained is not a confirmation.
+        if [ -n "$rule_ids" ]; then
+          if ! lookup_rules false; then
+            echo "::error::Revoked $(echo $rule_ids | tr '\n' ' ')on $SECURITY_GROUP_ID but could \
+        not confirm it: the rule lookup never completed. Check the group for rules described \
+        'gha run $RUN_ID'."
+            exit 1
+          fi
+          if [ -n "$FOUND_IDS" ]; then
+            echo "::error::Ingress described 'gha run $RUN_ID' is still on $SECURITY_GROUP_ID \
+        after the revoke: $(echo $FOUND_IDS | tr '\n' ' '). Remove it manually."
+            exit 1
+          fi
+        fi
+
+        if [ "$uncertain" = true ] && [ -z "$rule_ids" ]; then
+          echo "::warning::The authorize step left no rule id and none became visible after four \
+        lookups, so most likely none was created - but confirm there is no rule described \
+        'gha run $RUN_ID' on $SECURITY_GROUP_ID."
         fi
 
         echo "No ingress from this run remains on $SECURITY_GROUP_ID."

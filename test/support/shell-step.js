@@ -17,8 +17,10 @@ const path = require('path');
 
 // Stateful enough to be worth trusting: revoked rules stop coming back from
 // describe, so a step that re-checks its own cleanup sees a real answer.
-// DESCRIBE_FAILS makes every lookup fail; DESCRIBE_FAILS_FIRST makes the first
-// N fail. REVOKE_NOOP makes revoke report success without removing anything.
+// DESCRIBE_FAILS makes every lookup fail; DESCRIBE_FAILS_FIRST fails the first
+// N; DESCRIBE_FAILS_AFTER fails everything past the Nth; DESCRIBE_VISIBLE_AFTER
+// hides the rules from the first N lookups, the way EC2's eventual consistency
+// does. REVOKE_NOOP makes revoke report success without removing anything.
 const AWS_STUB = [
   '#!/bin/bash',
   'printf \'%s\\n\' "aws $*" >> "$CALLS_LOG"',
@@ -29,9 +31,11 @@ const AWS_STUB = [
   '    printf \'%s\\n\' "${AUTHORIZE_OUTPUT-sgr-0000000000000000a}" ;;',
   '  "ec2 describe-security-group-rules")',
   '    n=$(( $(cat "$attempts" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$attempts"',
-  '    if [ -n "${DESCRIBE_FAILS:-}" ] || [ "$n" -le "${DESCRIBE_FAILS_FIRST:-0}" ]; then',
+  '    if [ -n "${DESCRIBE_FAILS:-}" ] || [ "$n" -le "${DESCRIBE_FAILS_FIRST:-0}" ] \\',
+  '       || { [ -n "${DESCRIBE_FAILS_AFTER:-}" ] && [ "$n" -gt "$DESCRIBE_FAILS_AFTER" ]; }; then',
   '      echo "AccessDeniedException" >&2; exit 255',
   '    fi',
+  '    if [ "$n" -le "${DESCRIBE_VISIBLE_AFTER:-0}" ]; then printf \'None\\n\'; exit 0; fi',
   '    out=""',
   '    for id in ${DESCRIBE_OUTPUT-None}; do',
   '      grep -qx "$id" "$revoked" 2>/dev/null && continue',
@@ -44,6 +48,20 @@ const AWS_STUB = [
   '    fi',
   '    printf \'True\\n\' ;;',
   '  *) echo "unexpected aws call: $*" >&2; exit 9 ;;',
+  'esac',
+  '',
+].join('\n');
+
+const ZERO_SHA = '0000000000000000000000000000000000000000';
+
+const GIT_STUB = [
+  '#!/bin/bash',
+  'printf \'%s\\n\' "git $*" >> "$CALLS_LOG"',
+  'case "$1 $2" in',
+  `  "rev-parse HEAD") printf '%s\\n' "\${HEAD_SHA-${ZERO_SHA}}" ;;`,
+  `  "rev-parse FETCH_HEAD") printf '%s\\n' "\${TIP_SHA-${ZERO_SHA}}" ;;`,
+  '  fetch*) exit 0 ;;',
+  '  *) echo "unexpected git call: $*" >&2; exit 9 ;;',
   'esac',
   '',
 ].join('\n');
@@ -77,6 +95,7 @@ const runnerFor = (step) => {
   fs.writeFileSync(path.join(bin, 'aws'), AWS_STUB, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'curl'), CURL_STUB, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'sleep'), SLEEP_STUB, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'git'), GIT_STUB, { mode: 0o755 });
 
   const script = path.join(dir, 'step.sh');
   fs.writeFileSync(script, step.run);
