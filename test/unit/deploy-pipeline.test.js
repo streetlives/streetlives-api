@@ -1,7 +1,9 @@
 // GitHub expressions look like JS template strings but are not - they are the
 // literal text of the workflow files.
 /* eslint-disable no-template-curly-in-string */
+const { spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const yaml = require('js-yaml');
 const { evaluate } = require('../support/github-expression');
@@ -218,16 +220,76 @@ describe('the database migration action', () => {
     });
   });
 
-  it('flags a deployed tree whose own connections skip verification', () => {
-    // The CLI's connection is pinned; the second one a migration opens by
-    // importing src/models comes from the deployed tree and cannot be.
-    const warnStep = stepNamed(steps, 'Warn if the deployed tree connects without verified TLS');
+  describe('the guard on connections a migration opens for itself', () => {
+    // Run the step's actual script against throwaway trees: this is the
+    // rollback path, and it is the one place the pipeline refuses to proceed.
+    const guard = stepNamed(steps, 'Require verified TLS on every connection a migration opens');
+    let scriptPath;
 
-    expect(warnStep.run).toContain('src/utils/ssl.js');
-    expect(warnStep.run).toContain('sequelize/migrations');
-    expect(warnStep.run).toContain('::warning::');
-    const applyStep = stepNamed(steps, 'Apply migrations');
-    expect(steps.indexOf(warnStep)).toBeLessThan(steps.indexOf(applyStep));
+    const treeWith = ({ verifiesTls, migration }) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deployed-tree-'));
+      fs.mkdirSync(path.join(root, 'sequelize/migrations'), { recursive: true });
+      if (verifiesTls) {
+        fs.mkdirSync(path.join(root, 'src/utils'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'src/utils/ssl.js'), '');
+      }
+      if (migration) {
+        fs.writeFileSync(path.join(root, 'sequelize/migrations/20240101000000-x.js'), migration);
+      }
+      return root;
+    };
+
+    const run = cwd => spawnSync('bash', [scriptPath], { cwd, encoding: 'utf8' });
+
+    beforeAll(() => {
+      scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'guard-')), 'guard.sh');
+      fs.writeFileSync(scriptPath, guard.run);
+    });
+
+    it('refuses to migrate a revision whose migrations connect unverified', () => {
+      const tree = treeWith({
+        verifiesTls: false,
+        migration: "import models from '../../src/models';",
+      });
+
+      const result = run(tree);
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('::error::');
+      // The operator needs to be told the way out, not just stopped.
+      expect(result.stdout).toContain('run_migrations: false');
+      expect(result.stdout).toContain('20240101000000-x.js');
+    });
+
+    it('allows a revision that verifies TLS itself', () => {
+      const tree = treeWith({
+        verifiesTls: true,
+        migration: "import models from '../../src/models';",
+      });
+
+      expect(run(tree).status).toBe(0);
+    });
+
+    it('allows an old revision whose migrations open no connection of their own', () => {
+      const tree = treeWith({
+        verifiesTls: false,
+        migration: 'module.exports = { up: queryInterface => queryInterface.addColumn() };',
+      });
+
+      expect(run(tree).status).toBe(0);
+    });
+
+    it('allows a tree with no migrations directory at all', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'empty-tree-'));
+
+      expect(run(root).status).toBe(0);
+    });
+
+    it('runs before anything connects', () => {
+      const connecting = steps.filter(step => (step.run || '').includes('sequelize-cli'));
+
+      connecting.forEach(step => expect(steps.indexOf(guard)).toBeLessThan(steps.indexOf(step)));
+    });
   });
 });
 

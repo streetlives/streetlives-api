@@ -48,22 +48,32 @@ runs:
       run: printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
 
     # The CLI's own connection is configured from `config-path`, which callers
-    # can pin to a current revision. A migration that imports src/models opens a
+    # pin to a current revision. A migration that imports src/models opens a
     # second connection from the *deployed* tree's src/config.js, and that one
-    # cannot be pinned - so say so rather than let it pass unnoticed.
-    - name: Warn if the deployed tree connects without verified TLS
+    # cannot be pinned from outside - so refuse to run it rather than put the
+    # production credentials on an unverified connection. Rolling back that far
+    # almost never has pending migrations anyway: db:migrate only applies ones
+    # the database has not seen, and an older tree has none.
+    - name: Require verified TLS on every connection a migration opens
       shell: bash
       run: |
         set -euo pipefail
         if [ -f src/utils/ssl.js ]; then
-          echo "Deployed tree verifies the RDS server certificate."
+          echo "Deployed tree verifies the RDS server certificate on every connection."
           exit 0
         fi
-        if grep -rlq 'src/models' sequelize/migrations 2>/dev/null; then
-          echo "::warning::This revision predates verified TLS in src/config.js. A migration \
-        that imports src/models would open its connection without verifying the RDS certificate. \
-        Prefer run_migrations: false when rolling back this far."
+
+        model_backed="$(grep -rl 'src/models' sequelize/migrations 2>/dev/null || true)"
+        if [ -z "$model_backed" ]; then
+          echo "Revision predates verified TLS, but no migration opens a connection of its own."
+          exit 0
         fi
+
+        echo "::error::This revision predates verified TLS in src/config.js, and these migrations \
+        open their own connection through it: $(echo "$model_backed" | tr '\n' ' ')Running them \
+        would send the production database credentials over an unverified connection. Re-run this \
+        deploy with run_migrations: false - a revision this old has no pending migrations to apply."
+        exit 1
 
     - name: Resolve runner egress IP
       id: runner-ip

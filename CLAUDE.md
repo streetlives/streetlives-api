@@ -74,27 +74,36 @@ environments: `{STAGE,PROD}_DATABASE_{HOST,NAME,USER,PASSWORD}`,
 `.deploy-helpers/` — the break-glass rollback path targets refs that predate this pipeline and have
 none of them. The migrations applied are still the deployed ref's own.
 
-**Every database connection verifies the RDS server certificate.** `src/utils/ssl.js` is the single
-implementation, used by both `src/config.js` (the app, and therefore any migration that imports
-`src/models`) and `sequelize/config/database.js` (the CLI's own connection for `SequelizeMeta` and
-`queryInterface`). It sets `rejectUnauthorized: true` against `src/certs/rds-us-east-1-bundle.pem`,
-which is committed because AWS signs RDS endpoints with private CAs that are not in Node's trust
-store. `npm run build` copies it to `dist/certs` (babel's `-D`), so it ships in the Lambda zip;
-`__dirname` resolves the same relative path in `src/` and in `dist/`.
+**Every deployed database connection verifies the RDS server certificate.** `src/utils/ssl.js` is
+the single implementation, used by both `src/config.js` (the app, and therefore any migration that
+imports `src/models`) and `sequelize/config/database.js` (the CLI's own connection for
+`SequelizeMeta` and `queryInterface`).
 
-There is no skip-verification fallback — a missing bundle throws with fetch instructions. Refresh
-it, or move region, with:
+The trust store is **Node's public roots plus** `src/certs/rds-us-east-1-bundle.pem`. Both halves
+are load-bearing: instance endpoints are signed by Amazon's private RDS CAs, which no public store
+carries, while **RDS Proxy presents an ACM certificate** under a public Amazon root — and Node's
+`ca` option *replaces* the default store rather than adding to it, so a bundle-only trust store
+would fail against the proxy. The bundle is committed; `npm run build` copies it to `dist/certs`
+(babel's `-D`), so it ships in the Lambda zip, and `__dirname` resolves the same relative path in
+`src/` and in `dist/`. Refresh it, or move region, with:
 
 ```bash
 curl -fsS -o src/certs/rds-us-east-1-bundle.pem \
   https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem
 ```
 
-`DATABASE_SSL_CA_PATH` / `DATABASE_SSL_CA` override it. One residual gap: rolling back to a revision
-that predates this change and migrating at the same time runs *that* revision's `src/config.js` for
-any model-backed migration, which cannot be pinned from outside — the migrate action emits a
-warning for exactly that case, and `run_migrations: false` is the right answer when rolling back
-that far.
+When TLS is required: **always** for any `*.rds.amazonaws.com` host (not negotiable — that is where
+the real credentials go) and always in `production`; **never** in `test`; and in `development` it
+follows the host — off for `localhost` / `127.0.0.1` / `::1`, which have no TLS to offer, on for
+anything else. `DATABASE_SSL=false` opts a non-RDS development host out; `DATABASE_SSL_CA_PATH` /
+`DATABASE_SSL_CA` replace the RDS bundle. There is no way to keep TLS while skipping verification.
+
+A revision that predates all of this cannot be pinned from outside, because a model-backed
+migration builds its connection from *its own* `src/config.js`. The migrate action therefore **fails
+closed**: if the deployed tree has no `src/utils/ssl.js` and any of its migrations import
+`src/models`, it stops and tells you to re-run with `run_migrations: false` — which is almost always
+right anyway, since `db:migrate` only applies migrations the database has not seen and an older
+tree has none.
 
 The gates themselves are tested: `test/unit/deploy-pipeline.test.js` evaluates the workflows'
 `if:` conditions against simulated job results (red tests, failed migration, skipped migration,
@@ -131,7 +140,8 @@ cancellation) using the small expression evaluator in `test/support/github-expre
 | `DATABASE_PASSWORD` | — | |
 | `DATABASE_KEEP_DEFAULT_TIMEZONE` | `true` | Set to avoid RDS Proxy pinning |
 | `DATABASE_CLIENT_MIN_MESSAGES` | `ignore` | Set to avoid RDS Proxy pinning |
-| `DATABASE_SSL_CA_PATH` | `src/certs/rds-us-east-1-bundle.pem` | RDS trust store; overrides the bundle shipped with the code |
+| `DATABASE_SSL` | host-dependent | `false` disables TLS for a non-RDS development host; ignored for RDS and in production |
+| `DATABASE_SSL_CA_PATH` | `src/certs/rds-us-east-1-bundle.pem` | RDS roots added to Node's public ones |
 | `DATABASE_SSL_CA` | — | The same bundle inline, if a path is inconvenient |
 | `OPENAI_API_KEY` | — | Required for comment highlights |
 | `SLACK_WEBHOOK_URL` | — | Optional Slack notifications |
