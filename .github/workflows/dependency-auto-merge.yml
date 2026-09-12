@@ -116,8 +116,15 @@ jobs:
       # A push made with GITHUB_TOKEN does not trigger workflows, so the merge
       # above would leave develop ahead of Stage. Dispatch the Stage pipeline
       # explicitly; it runs the full test job again before it migrates or deploys.
+      #
+      # require_tip=true because this dispatch stands in for the suppressed push,
+      # not for someone deliberately deploying an older ref: without it two merges
+      # landing close together could deploy out of order and roll Stage back
+      # against newer migrations.
       - name: Deploy the merge to Stage
         if: steps.merge.outputs.merged != '0' && steps.merge.outputs.merged != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run deploy-test-on-develop-merge.yml --repo "$GITHUB_REPOSITORY" --ref develop
+        run: |
+          gh workflow run deploy-test-on-develop-merge.yml \
+            --repo "$GITHUB_REPOSITORY" --ref develop -f require_tip=true

@@ -51,9 +51,13 @@ its commits, and attribution alone is spoofable by anyone with push access, whic
 `develop` → `master` PR.
 
 Because a push made with `GITHUB_TOKEN` triggers no workflows, that merge does **not** fire
-`deploy-test-on-develop-merge.yml` on its own — the auto-merge job dispatches it explicitly, which is
-why that workflow now also accepts a `workflow_dispatch`. Any future automation that pushes to
-`develop` with `GITHUB_TOKEN` has the same problem and needs the same dispatch.
+`deploy-test-on-develop-merge.yml` on its own — the auto-merge job dispatches it explicitly with
+`require_tip=true`, which is why that workflow now accepts a `workflow_dispatch`. `require_tip`
+matters: `check-revision` normally exempts dispatches from its freshness check, on the grounds that a
+dispatch means "deploy this ref deliberately". An automated dispatch means the opposite — it stands
+in for the push that was suppressed — so without the flag two merges landing close together could
+deploy out of order and roll Stage back against newer migrations. Any future automation that pushes
+to `develop` with `GITHUB_TOKEN` has the same problem and needs the same dispatch.
 
 **Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
 Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new

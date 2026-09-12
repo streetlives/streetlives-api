@@ -527,6 +527,37 @@ describe('the stale-revision check', () => {
     expect(result.calls.some(call => call.startsWith('git fetch'))).toBe(false);
   });
 
+  describe('an automated dispatch, which stands in for a suppressed push', () => {
+    // dependency-auto-merge.yml merges with GITHUB_TOKEN, which triggers no push
+    // event, so it asks for the Stage pipeline by hand. That dispatch is not
+    // someone choosing an older ref, and must not inherit the rollback exemption.
+    const automated = extra => checking(Object.assign({
+      EVENT_NAME: 'workflow_dispatch',
+      BRANCH: 'develop',
+      REQUIRE_TIP: 'true',
+    }, extra));
+
+    it('passes when it is still the tip of develop', () => {
+      const result = runCheck(automated());
+
+      expect(result.outputs).toContain('superseded=false');
+      expect(result.status).toBe(0);
+    });
+
+    it('is refused once develop has moved past it', () => {
+      const result = runCheck(automated({ TIP_SHA: NEWER, ON_STALE: 'fail' }));
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('silent rollback');
+    });
+
+    it('asks where the branch is, unlike a deliberate dispatch', () => {
+      const result = runCheck(automated());
+
+      expect(result.calls.some(call => call.startsWith('git fetch'))).toBe(true);
+    });
+  });
+
   describe('is wired in before every mutation', () => {
     const refusalIn = (job, helperPath) => {
       const step = stepNamed(job.steps, 'Refuse a superseded revision');
