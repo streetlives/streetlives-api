@@ -38,10 +38,16 @@ redeploying an unchanged commit.
 `develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
 
 **Dependency updates merge themselves.** `.github/workflows/dependency-auto-merge.yml` approves and
-squash-merges Dependabot PRs into `develop` once the `test` job is green. It qualifies a PR on three
+squash-merges Dependabot PRs into `develop` once the `test` job is green. It qualifies a PR on four
 things: the update types in its `ALLOWED_UPDATES` map (patch-only for runtime dependencies, never a
-major), a diff that touches nothing but `package.json`/`package-lock.json`, and a verified signature
-on every commit. Anything else waits for a human. **Snyk PRs never auto-merge**: Snyk does not sign
+major, and below 1.0.0 a minor counts as a major because `^0.34.4` will not take 0.35); a diff that
+touches nothing but `package.json`/`package-lock.json`; every commit authored by the bot, committed by
+GitHub's `web-flow` and signed; and the **contents** of those files — only dependency maps differ in
+`package.json`, every version is a plain range rather than an `npm:` alias or a git/tarball source,
+and every package the lockfile names resolves from the npm registry (over either scheme — this
+lockfile still carries two legacy `http://` entries). That last gate is what makes the others more
+than a statement of intent: a signature proves GitHub made the commit, not that Dependabot asked for
+it. Anything else waits for a human. **Snyk PRs never auto-merge**: Snyk does not sign
 its commits, and attribution alone is spoofable by anyone with push access, which matters because
 `package.json` carries the scripts CI executes. The classification lives in
 `.github/scripts/dependency-update-policy.js` and the privileged orchestration in

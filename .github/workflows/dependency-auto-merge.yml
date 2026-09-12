@@ -14,12 +14,19 @@
 # allowed-file list and carries the scripts CI runs, so an unsigned commit could
 # replace the very checks vetting it.
 #
-# Residual risk, stated plainly: a collaborator with write access can still ask
-# GitHub to create a signed commit attributed to Dependabot through the contents
-# API. Closing that needs a ruleset restricting pushes to `dependabot/**` (and
-# `snyk-*`) to those apps alone, which would also be what makes Snyk safe to
-# enable here. Until then this path trusts collaborators, who on develop can
-# already merge with a single review.
+# A signature still only proves GitHub made the commit, not that Dependabot asked
+# for it: a collaborator with write access can have GitHub sign a commit
+# attributed to Dependabot through the contents API. So the gate reads the change
+# instead of trusting its description -- every key that differs in package.json
+# must be a dependency map, every version must be a plain range rather than an
+# alias or a git or tarball source, and every package the lockfile names must come
+# from the npm registry. A forged commit cannot reach `scripts`, add a postinstall
+# hook, or redirect a package at someone else's tarball.
+#
+# What remains is a real registry version that happens to be malicious, which is
+# the supply-chain risk any dependency update carries. An authoritative fix for the
+# forgery itself is a ruleset restricting pushes to `dependabot/**` (and `snyk-*`)
+# to those apps alone, which is also what would make Snyk safe to enable here.
 #
 # Merges land on develop. Because a GITHUB_TOKEN push triggers no workflows, the
 # Stage pipeline is dispatched explicitly after a merge rather than firing on the

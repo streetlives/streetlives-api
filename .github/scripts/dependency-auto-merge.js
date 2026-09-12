@@ -20,6 +20,8 @@ const { appendFileSync } = require('fs');
 
 const {
   classifyDependabot,
+  classifyLockfile,
+  classifyManifestChange,
   classifySnyk,
   evaluateChecks,
 } = require('./dependency-update-policy');
@@ -35,13 +37,19 @@ const PAGE_SIZE = 100;
 // The compare endpoint caps its file list at 300 and says nothing about it. A
 // dependency update changes two files, so anywhere near the cap is not one.
 const MAX_FILES = 300;
+// The raw media type reads a file's bytes at a given ref, and unlike the JSON
+// contents response it is not capped at 1MB -- package-lock.json is bigger.
+const RAW = 'application/vnd.github.raw';
+const MANIFEST = /(^|\/)package\.json$/;
+const LOCKFILE = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json)$/;
 
 function createApi(token) {
   return async function api(path, options = {}) {
+    const accept = options.accept || 'application/vnd.github+json';
     const response = await fetch(`https://api.github.com${path}`, {
       ...options,
       headers: {
-        accept: 'application/vnd.github+json',
+        accept,
         authorization: `Bearer ${token}`,
         'x-github-api-version': '2022-11-28',
         ...(options.body ? { 'content-type': 'application/json' } : {}),
@@ -49,10 +57,13 @@ function createApi(token) {
       },
     });
     const text = await response.text();
+    if (response.ok && accept === RAW) return text;
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
       const message = (body && body.message) || text;
-      throw new Error(`${options.method || 'GET'} ${path} -> ${response.status}: ${message}`);
+      const error = new Error(`${options.method || 'GET'} ${path} -> ${response.status}: ${message}`);
+      error.status = response.status;
+      throw error;
     }
     return body;
   };
@@ -105,6 +116,38 @@ function verifyProvenance(commits, author) {
       + 'cannot be trusted over spoofable commit metadata';
   }
   return null;
+}
+
+async function readJson(path, ref, { api, repo }) {
+  try {
+    return JSON.parse(await api(`/repos/${repo}/contents/${path}?ref=${ref}`, { accept: RAW }));
+  } catch (error) {
+    // A manifest that does not exist on the base side is a new file; an empty
+    // object compares correctly against it.
+    if (error.status === 404) return {};
+    throw error;
+  }
+}
+
+/**
+ * Reads both sides of every manifest the PR touches, and the lockfiles it leaves
+ * behind, all bound to the SHAs already being judged.
+ */
+async function classifyFileContents(changedFiles, pr, { api, repo }) {
+  for (const path of changedFiles.filter(file => MANIFEST.test(file))) {
+    const before = await readJson(path, pr.base.sha, { api, repo });
+    const after = await readJson(path, pr.head.sha, { api, repo });
+    const verdict = classifyManifestChange(before, after);
+    if (!verdict.safe) return { safe: false, reason: `${path} ${verdict.reason}` };
+  }
+
+  for (const path of changedFiles.filter(file => LOCKFILE.test(file))) {
+    const lockfile = await readJson(path, pr.head.sha, { api, repo });
+    const verdict = classifyLockfile(lockfile);
+    if (!verdict.safe) return { safe: false, reason: `${path} ${verdict.reason}` };
+  }
+
+  return { safe: true };
 }
 
 /**
@@ -185,6 +228,14 @@ async function evaluatePullRequest(number, { api, repo, config }) {
     : classifySnyk({ title: pr.title, branch: pr.head.ref, changedFiles });
   if (!classification.safe) {
     return skip(`not a safe update -- ${classification.reason}`);
+  }
+
+  // The filename allowlist says the PR only touched manifests and lockfiles. This
+  // says what it did inside them -- which is the difference between trusting the
+  // commit's own account of itself and reading the change.
+  const contents = await classifyFileContents(changedFiles, pr, { api, repo });
+  if (!contents.safe) {
+    return skip(`not a safe update -- ${contents.reason}`);
   }
 
   const { check_runs: checkRuns, total_count: checkCount } = await api(

@@ -303,8 +303,93 @@ function evaluateChecks(checkRuns, totalCount, combinedStatus, requiredChecks) {
   return { ok: true };
 }
 
+
+// Keys a dependency update may differ in. `scripts` is pointedly not among them:
+// CI runs those, so a manifest edit that reached them could replace the very
+// checks that are supposed to vet it.
+const DEPENDENCY_KEYS = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+  'overrides',
+  'resolutions',
+];
+
+// Where a package may come from. An alias (`npm:`), a git or file or http source
+// -- anything carrying a scheme -- is a different package, not a new version of
+// this one, so a version has to read like a version.
+const VERSION_RANGE = /^[^:]*\d[^:]*$/;
+
+// The host is what matters: a different host is someone else's tarball. Legacy
+// lockfile entries still carry `http://`, which npm upgrades on rewrite, so the
+// scheme is not what this is guarding.
+const REGISTRY_ORIGIN = /^https?:\/\/registry\.npmjs\.org\//;
+
+/**
+ * Compares the manifest either side of the change. The filename allowlist says a
+ * PR only touched `package.json`; this says what it did inside it.
+ *
+ * @param before parsed `package.json` at the base commit.
+ * @param after parsed `package.json` at the head commit.
+ */
+function classifyManifestChange(before, after) {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const changedOutside = [...keys].filter(
+    key => DEPENDENCY_KEYS.indexOf(key) === -1
+      && JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+  );
+  if (changedOutside.length) {
+    return {
+      safe: false,
+      reason: `changes \`${changedOutside.join('`, `')}\` in package.json, `
+        + 'which is not a dependency map',
+    };
+  }
+
+  for (const key of DEPENDENCY_KEYS) {
+    const from = before[key] || {};
+    const to = after[key] || {};
+    for (const [name, range] of Object.entries(to)) {
+      if (from[name] === range) continue;
+      if (typeof range !== 'string' || !VERSION_RANGE.test(range)) {
+        return {
+          safe: false,
+          reason: `points \`${name}\` at \`${range}\`, which is not a plain version range`,
+        };
+      }
+    }
+  }
+  return { safe: true };
+}
+
+/**
+ * Every package the lockfile names must come from the registry. A forged lockfile
+ * that kept its version numbers honest could still redirect a package at an
+ * arbitrary tarball, and nothing downstream would notice.
+ *
+ * @param lockfile parsed `package-lock.json` at the head commit.
+ */
+function classifyLockfile(lockfile) {
+  const entries = Object.entries(lockfile.packages || lockfile.dependencies || {});
+  const offRegistry = entries.filter(
+    ([, entry]) => entry && entry.resolved && !REGISTRY_ORIGIN.test(entry.resolved),
+  );
+  if (offRegistry.length) {
+    const [name, entry] = offRegistry[0];
+    return {
+      safe: false,
+      reason: `resolves \`${name || 'the root package'}\` from \`${entry.resolved}\`, `
+        + 'not the npm registry',
+    };
+  }
+  return { safe: true };
+}
+
 module.exports = {
   classifyChangedFiles,
+  classifyLockfile,
+  classifyManifestChange,
   parseRemovals,
   classifyDependabot,
   classifySnyk,

