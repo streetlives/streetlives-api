@@ -29,6 +29,9 @@ const SNYK = 'snyk-bot';
 const BOT_AUTHORS = [DEPENDABOT, SNYK];
 const BLOCKING_LABELS = ['do-not-merge', 'no-auto-merge'];
 const PAGE_SIZE = 100;
+// The compare endpoint caps its file list at 300 and says nothing about it. A
+// dependency update changes two files, so anywhere near the cap is not one.
+const MAX_FILES = 300;
 
 function createApi(token) {
   return async function api(path, options = {}) {
@@ -126,17 +129,27 @@ async function evaluatePullRequest(number, { api, repo, config }) {
     .filter(name => BLOCKING_LABELS.indexOf(name) !== -1);
   if (blocking.length) return skip(`carries the \`${blocking[0]}\` label`);
 
-  const commits = whole(
-    await api(`/repos/${repo}/pulls/${number}/commits?per_page=${PAGE_SIZE}`),
-    'commits',
+  // Read the commits and the diff from an immutable base...head comparison, not
+  // from the PR's mutable ref. Asking the PR for its commits would let a writer
+  // swap the branch to a clean head for the duration of the inspection and then
+  // restore the original one, and the merge below -- pinned to the head SHA read
+  // above -- would happily take the restored commit.
+  const comparison = await api(
+    `/repos/${repo}/compare/${pr.base.sha}...${pr.head.sha}?per_page=${PAGE_SIZE}`,
   );
+  const commits = comparison.commits;
+  if (comparison.total_commits > commits.length) {
+    throw new Error(`only ${commits.length} of ${comparison.total_commits} commits were `
+      + 'listed; refusing to judge a partial list');
+  }
+  if (comparison.files.length >= MAX_FILES) {
+    throw new Error(`${comparison.files.length} changed files; refusing to judge a partial list`);
+  }
+
   const impostor = verifyProvenance(commits, author);
   if (impostor) return skip(impostor);
 
-  const changedFiles = whole(
-    await api(`/repos/${repo}/pulls/${number}/files?per_page=${PAGE_SIZE}`),
-    'changed files',
-  ).map(file => file.filename);
+  const changedFiles = comparison.files.map(file => file.filename);
 
   const classification = author === DEPENDABOT
     ? classifyDependabot(
@@ -169,6 +182,15 @@ async function evaluatePullRequest(number, { api, repo, config }) {
   if (!checks.ok) return skip(checks.reason);
 
   if (pr.mergeable === false) return skip('has merge conflicts');
+
+  // Everything above was judged against pr.head.sha. The `sha` parameter on the
+  // merge call is what makes that binding authoritative, but checking here turns a
+  // branch that moved during inspection into a legible skip instead of a 409.
+  const current = await api(`/repos/${repo}/pulls/${number}`);
+  if (current.head.sha !== pr.head.sha) {
+    return skip(`head moved from \`${pr.head.sha.slice(0, 8)}\` to `
+      + `\`${current.head.sha.slice(0, 8)}\` during inspection`);
+  }
 
   if (latestByReviewer.get('github-actions[bot]') !== 'APPROVED') {
     await api(`/repos/${repo}/pulls/${number}/reviews`, {

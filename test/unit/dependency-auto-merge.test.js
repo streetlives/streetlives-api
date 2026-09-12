@@ -57,7 +57,7 @@ function basePr() {
     draft: false,
     mergeable: true,
     user: { login: 'dependabot[bot]' },
-    base: { ref: 'develop' },
+    base: { ref: 'develop', sha: '1111111122222222333333334444444455555555' },
     head: {
       ref: 'dependabot/npm_and_yarn/express-4.16.4',
       sha: HEAD_SHA,
@@ -70,7 +70,11 @@ function basePr() {
 function fixture(overrides = {}) {
   return {
     pr: basePr(),
+    // Returned on the second /pulls/{n} read, to stand in for a branch that moved
+    // mid-inspection.
+    prAfter: undefined,
     commits: [botCommit()],
+    totalCommits: undefined,
     files: [{ filename: 'package.json' }, { filename: 'package-lock.json' }],
     reviews: [],
     checkRuns: [passingCheck('test')],
@@ -82,15 +86,29 @@ function fixture(overrides = {}) {
 
 function makeApi(state) {
   const calls = [];
+  let prReads = 0;
   const api = async (path, options = {}) => {
     const method = options.method || 'GET';
     calls.push({ method, path, body: options.body ? JSON.parse(options.body) : undefined });
 
     if (method === 'PUT' && path.endsWith('/merge')) return { merged: true };
     if (method === 'POST' && path.endsWith('/reviews')) return { id: 1 };
-    if (path.endsWith(`/pulls/${state.pr.number}`)) return state.pr;
-    if (path.indexOf('/commits?') !== -1) return state.commits;
-    if (path.indexOf('/files?') !== -1) return state.files;
+    if (path.endsWith(`/pulls/${state.pr.number}`)) {
+      prReads += 1;
+      return prReads > 1 && state.prAfter ? state.prAfter : state.pr;
+    }
+    // Commits and the diff must come from an immutable base...head comparison, so
+    // nothing here answers a request against the PR's mutable ref.
+    if (path.indexOf('/compare/') !== -1) {
+      expect(path).toContain(`${state.pr.base.sha}...${state.pr.head.sha}`);
+      return {
+        commits: state.commits,
+        total_commits: state.totalCommits === undefined
+          ? state.commits.length
+          : state.totalCommits,
+        files: state.files,
+      };
+    }
     if (path.indexOf('/reviews?') !== -1) return state.reviews;
     if (path.indexOf('/check-runs') !== -1) {
       return {
@@ -269,12 +287,28 @@ describe('evaluatePullRequest', () => {
     });
   });
 
-  it('throws rather than judging a full page of commits', async () => {
-    const many = [];
-    for (let index = 0; index < 100; index += 1) many.push(botCommit());
-    const { api } = makeApi(fixture({ commits: many }));
+  it('throws rather than judging a truncated commit list', async () => {
+    const { api } = makeApi(fixture({ totalCommits: 300 }));
     await expect(evaluatePullRequest(225, { api, repo: REPO, config: CONFIG }))
       .rejects.toThrow(/partial list/);
+  });
+
+  it('throws rather than judging a truncated file list', async () => {
+    const many = [];
+    for (let index = 0; index < 300; index += 1) {
+      many.push({ filename: `packages/p${index}/package.json` });
+    }
+    const { api } = makeApi(fixture({ files: many }));
+    await expect(evaluatePullRequest(225, { api, repo: REPO, config: CONFIG }))
+      .rejects.toThrow(/partial list/);
+  });
+
+  it('refuses a head that moved between inspection and merge', async () => {
+    // The swap Codex reproduced: let a clean head be inspected, then restore the
+    // original one before the merge lands.
+    const moved = basePr();
+    moved.head = { ...moved.head, sha: '9999999999999999999999999999999999999999' };
+    await expectRefusal({ prAfter: moved }, /head moved/);
   });
 });
 
