@@ -38,12 +38,15 @@ redeploying an unchanged commit.
 `develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
 
 **Dependency updates merge themselves.** `.github/workflows/dependency-auto-merge.yml` approves and
-squash-merges Dependabot and Snyk PRs into `develop` once the `test` job is green. It qualifies a PR
-on three things: the update types in its `ALLOWED_UPDATES` map (patch-only for runtime dependencies,
-never a major), a diff that touches nothing but `package.json`/`package-lock.json`, and a valid
-Dependabot signature on every commit. Anything else waits for a human. The classification lives in
-`.github/scripts/dependency-update-policy.js` and is covered by
-`test/unit/dependency-update-policy.test.js`. Requesting changes on such a PR, or labelling it
+squash-merges Dependabot PRs into `develop` once the `test` job is green. It qualifies a PR on three
+things: the update types in its `ALLOWED_UPDATES` map (patch-only for runtime dependencies, never a
+major), a diff that touches nothing but `package.json`/`package-lock.json`, and a verified signature
+on every commit. Anything else waits for a human. **Snyk PRs never auto-merge**: Snyk does not sign
+its commits, and attribution alone is spoofable by anyone with push access, which matters because
+`package.json` carries the scripts CI executes. The classification lives in
+`.github/scripts/dependency-update-policy.js` and the privileged orchestration in
+`.github/scripts/dependency-auto-merge.js`; both are covered by `test/unit/`, which injects a fake
+`api` rather than calling GitHub. Requesting changes on such a PR, or labelling it
 `do-not-merge`, stops the merge. Production is unaffected: it still needs the reviewed
 `develop` → `master` PR.
 
