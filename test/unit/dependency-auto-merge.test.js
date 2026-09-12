@@ -350,3 +350,48 @@ describe('run', () => {
     expect(results.map(result => result.outcome)).toEqual(['errored', 'merged']);
   });
 });
+
+describe('state that changes during inspection', () => {
+  const changedMidFlight = async (overrides, expected) => {
+    const after = { ...basePr(), ...overrides };
+    const { result, mutations } = await decide({ prAfter: after });
+    expect(result.outcome).toBe('skipped');
+    expect(result.reason).toMatch(expected);
+    expect(result.reason).toMatch(/changed during inspection/);
+    expect(mutations).toEqual([]);
+  };
+
+  it('refuses a PR retargeted away from the allowed base', async () => {
+    // The merge call's `sha` parameter binds the commit, not the branch it lands on.
+    await changedMidFlight({ base: { ref: 'master', sha: basePr().base.sha } }, /targets `master`/);
+  });
+
+  it('refuses a do-not-merge label added after the checks were read', async () => {
+    await changedMidFlight({ labels: [{ name: 'do-not-merge' }] }, /do-not-merge/);
+  });
+
+  it('refuses a PR closed after the checks were read', async () => {
+    await changedMidFlight({ state: 'closed' }, /not open/);
+  });
+
+  it('refuses a PR converted to a draft after the checks were read', async () => {
+    await changedMidFlight({ draft: true }, /draft/);
+  });
+
+  it('reads reviews last, so a late objection still stops the merge', async () => {
+    // The review list is fetched after the final PR re-read, which is what makes a
+    // maintainer's "request changes" the most recent thing seen before mutating.
+    const { result, calls, mutations } = await decide({
+      reviews: [{ user: { login: 'jbeard4' }, state: 'CHANGES_REQUESTED' }],
+    });
+
+    expect(result.outcome).toBe('skipped');
+    expect(result.reason).toMatch(/requested changes/);
+    expect(mutations).toEqual([]);
+
+    const paths = calls.map(call => call.path);
+    const reviewRead = paths.indexOf(`/repos/${REPO}/pulls/225/reviews?per_page=100`);
+    const checkRead = paths.findIndex(path => path.indexOf('/check-runs') !== -1);
+    expect(reviewRead).toBeGreaterThan(checkRead);
+  });
+});

@@ -108,6 +108,33 @@ function verifyProvenance(commits, author) {
 }
 
 /**
+ * Everything about a PR that can change while it is being inspected: its target,
+ * its labels, its state, its head. Applied to the snapshot the decision is based
+ * on and again to a fresh one just before mutating, because the merge call's `sha`
+ * parameter binds the commit and nothing else -- retargeting the PR or labelling it
+ * `do-not-merge` mid-flight would otherwise sail straight through.
+ *
+ * @returns a reason to stop, or null.
+ */
+function pullRequestStateProblem(pr, { repo, baseBranches }) {
+  if (pr.state !== 'open') return 'not open';
+  if (pr.draft) return 'draft';
+  if (!pr.head.repo || pr.head.repo.full_name !== repo) return 'head is a fork';
+  if (baseBranches.indexOf(pr.base.ref) === -1) {
+    return `targets \`${pr.base.ref}\`, not ${baseBranches.join(' or ')}`;
+  }
+  // Unlike commit metadata, the PR author is whoever authenticated to open it.
+  if (BOT_AUTHORS.indexOf(pr.user.login) === -1) {
+    return `author \`${pr.user.login}\` is not a dependency bot`;
+  }
+  const blocking = pr.labels
+    .map(label => label.name)
+    .filter(name => BLOCKING_LABELS.indexOf(name) !== -1);
+  if (blocking.length) return `carries the \`${blocking[0]}\` label`;
+  return null;
+}
+
+/**
  * Decides one PR and, if it qualifies, approves and merges it.
  *
  * @returns `{ outcome: 'merged' | 'skipped', reason }`.
@@ -123,24 +150,9 @@ async function evaluatePullRequest(number, { api, repo, config }) {
   const skip = reason => ({ outcome: 'skipped', reason });
 
   const pr = await api(`/repos/${repo}/pulls/${number}`);
-
-  if (pr.state !== 'open') return skip('not open');
-  if (pr.draft) return skip('draft');
-  if (!pr.head.repo || pr.head.repo.full_name !== repo) return skip('head is a fork');
-  if (baseBranches.indexOf(pr.base.ref) === -1) {
-    return skip(`targets \`${pr.base.ref}\`, not ${baseBranches.join(' or ')}`);
-  }
-
-  // Unlike commit metadata, the PR author is whoever authenticated to open it.
+  const problem = pullRequestStateProblem(pr, { repo, baseBranches });
+  if (problem) return skip(problem);
   const author = pr.user.login;
-  if (BOT_AUTHORS.indexOf(author) === -1) {
-    return skip(`author \`${author}\` is not a dependency bot`);
-  }
-
-  const blocking = pr.labels
-    .map(label => label.name)
-    .filter(name => BLOCKING_LABELS.indexOf(name) !== -1);
-  if (blocking.length) return skip(`carries the \`${blocking[0]}\` label`);
 
   // Read the commits and the diff from an immutable base...head comparison, not
   // from the PR's mutable ref. Asking the PR for its commits would let a writer
@@ -175,6 +187,28 @@ async function evaluatePullRequest(number, { api, repo, config }) {
     return skip(`not a safe update -- ${classification.reason}`);
   }
 
+  const { check_runs: checkRuns, total_count: checkCount } = await api(
+    `/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=${PAGE_SIZE}`,
+  );
+  const combinedStatus = await api(`/repos/${repo}/commits/${pr.head.sha}/status`);
+  const checks = evaluateChecks(checkRuns, checkCount, combinedStatus, requiredChecks);
+  if (!checks.ok) return skip(checks.reason);
+
+  if (pr.mergeable === false) return skip('has merge conflicts');
+
+  // Re-read the PR and apply the same gates to the fresh copy: the decision so far
+  // rests on a snapshot, and a retarget or a `do-not-merge` label added since would
+  // otherwise be invisible here.
+  const current = await api(`/repos/${repo}/pulls/${number}`);
+  const changed = pullRequestStateProblem(current, { repo, baseBranches });
+  if (changed) return skip(`${changed} (changed during inspection)`);
+  if (current.head.sha !== pr.head.sha) {
+    return skip(`head moved from \`${pr.head.sha.slice(0, 8)}\` to `
+      + `\`${current.head.sha.slice(0, 8)}\` during inspection`);
+  }
+
+  // Read last, so a maintainer's objection is the most recent thing seen before
+  // anything is mutated.
   const reviews = whole(
     await api(`/repos/${repo}/pulls/${number}/reviews?per_page=${PAGE_SIZE}`),
     'reviews',
@@ -186,24 +220,6 @@ async function evaluatePullRequest(number, { api, repo, config }) {
   });
   const objector = [...latestByReviewer].find(([, state]) => state === 'CHANGES_REQUESTED');
   if (objector) return skip(`\`${objector[0]}\` requested changes`);
-
-  const { check_runs: checkRuns, total_count: checkCount } = await api(
-    `/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=${PAGE_SIZE}`,
-  );
-  const combinedStatus = await api(`/repos/${repo}/commits/${pr.head.sha}/status`);
-  const checks = evaluateChecks(checkRuns, checkCount, combinedStatus, requiredChecks);
-  if (!checks.ok) return skip(checks.reason);
-
-  if (pr.mergeable === false) return skip('has merge conflicts');
-
-  // Everything above was judged against pr.head.sha. The `sha` parameter on the
-  // merge call is what makes that binding authoritative, but checking here turns a
-  // branch that moved during inspection into a legible skip instead of a 409.
-  const current = await api(`/repos/${repo}/pulls/${number}`);
-  if (current.head.sha !== pr.head.sha) {
-    return skip(`head moved from \`${pr.head.sha.slice(0, 8)}\` to `
-      + `\`${current.head.sha.slice(0, 8)}\` during inspection`);
-  }
 
   if (latestByReviewer.get('github-actions[bot]') !== 'APPROVED') {
     await api(`/repos/${repo}/pulls/${number}/reviews`, {
@@ -296,6 +312,7 @@ async function main() {
 
 module.exports = {
   createApi,
+  pullRequestStateProblem,
   evaluatePullRequest,
   run,
   verifyProvenance,
