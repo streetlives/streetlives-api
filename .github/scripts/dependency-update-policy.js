@@ -4,6 +4,34 @@
 // (test/unit/dependency-update-policy.test.js) and required by the workflow
 // script with no install step.
 
+// Files a dependency update is allowed to touch. Anything else -- source, config,
+// and in particular `.github/workflows`, which Dependabot's github-actions
+// ecosystem rewrites -- means the PR waits for a human.
+const DEPENDENCY_FILE = /(^|\/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock)$/;
+
+const MANIFEST_FILE = /(^|\/)package\.json$/;
+
+// Conclusions that are fine on a bot PR: the Codex reviewer skips bot authors
+// entirely, which surfaces as a skipped run rather than a success.
+const PASSING_CONCLUSIONS = ['success', 'skipped', 'neutral'];
+
+/**
+ * The load-bearing guard: whatever the commit metadata claims, a PR that edits
+ * anything but a manifest or a lockfile is not a dependency update.
+ */
+function classifyChangedFiles(paths) {
+  if (paths.length === 0) {
+    return { safe: false, reason: 'changes no files' };
+  }
+  const outside = paths.filter(path => !DEPENDENCY_FILE.test(path));
+  if (outside.length) {
+    const shown = outside.slice(0, 3).map(path => `\`${path}\``).join(', ');
+    const rest = outside.length > 3 ? ` (+${outside.length - 3} more)` : '';
+    return { safe: false, reason: `touches ${shown}${rest} outside the dependency manifests` };
+  }
+  return { safe: true, manifestsTouched: paths.some(path => MANIFEST_FILE.test(path)) };
+}
+
 // Dependabot records what it changed in a trailer on its own commit:
 //
 //   updated-dependencies:
@@ -79,10 +107,14 @@ function semverBump(from, to) {
 /**
  * @param messages commit messages on the PR. Order only decides which duplicate
  *   wins, and duplicates describe the same bump.
+ * @param changedFiles every path the PR touches.
  * @param allowedUpdates map of Dependabot `dependency-type` to the semver bumps
  *   that may merge without a human, e.g. `{ 'direct:production': ['patch'] }`.
  */
-function classifyDependabot(messages, allowedUpdates) {
+function classifyDependabot(messages, changedFiles, allowedUpdates) {
+  const files = classifyChangedFiles(changedFiles);
+  if (!files.safe) return files;
+
   const entries = [];
   const ranges = new Map();
   messages.forEach((message) => {
@@ -126,17 +158,25 @@ function classifyDependabot(messages, allowedUpdates) {
 }
 
 /**
- * Snyk carries no machine-readable metadata, so the branch name and title are all
- * there is to go on.
+ * Snyk carries no machine-readable metadata, so the branch name, the title and
+ * the changed files are all there is to go on.
  */
-function classifySnyk({ title, branch }) {
+function classifySnyk({ title, branch, changedFiles }) {
   if (!/^snyk-(fix|upgrade)-/.test(branch)) {
     return { safe: false, reason: `unrecognised Snyk branch \`${branch}\`` };
   }
-  // "[Snyk] Fix for 3 vulnerabilities" only rewrites the lockfile within the
-  // ranges the manifest already allows.
+
+  const files = classifyChangedFiles(changedFiles);
+  if (!files.safe) return files;
+
+  // "[Snyk] Fix for 3 vulnerabilities" claims to rewrite only the lockfile,
+  // within the ranges the manifest already allows. Take the claim from the diff
+  // rather than the title: a manifest edit under this title could carry any bump
+  // at all, and the title would never say so.
   if (/fix for \d+ vulnerabilit/i.test(title)) {
-    return { safe: true, reason: 'lockfile-only vulnerability fix' };
+    return files.manifestsTouched
+      ? { safe: false, reason: 'titled as a lockfile fix but edits `package.json`' }
+      : { safe: true, reason: 'lockfile-only vulnerability fix' };
   }
 
   const upgrade = title.match(/upgrade\s+(\S+)\s+from\s+(\S+)\s+to\s+(\S+)/i);
@@ -154,9 +194,61 @@ function classifySnyk({ title, branch }) {
   return { safe: true, reason: `\`${name}\` security ${bump} (${from} -> ${to})` };
 }
 
+/**
+ * @param checkRuns the `check_runs` array for the head commit.
+ * @param totalCount the API's `total_count`, to catch a truncated page.
+ * @param combinedStatus the commit-status rollup (`{ state, total_count }`).
+ * @param requiredChecks names that must be present and successful.
+ */
+function evaluateChecks(checkRuns, totalCount, combinedStatus, requiredChecks) {
+  if (totalCount > checkRuns.length) {
+    return {
+      ok: false,
+      reason: `only ${checkRuns.length} of ${totalCount} check runs were listed`,
+    };
+  }
+
+  const byName = new Map(checkRuns.map(run => [run.name, run]));
+  for (const name of requiredChecks) {
+    const run = byName.get(name);
+    if (!run) return { ok: false, reason: `required check \`${name}\` has not reported` };
+    if (run.status !== 'completed') {
+      return { ok: false, reason: `\`${name}\` is still ${run.status}` };
+    }
+    if (run.conclusion !== 'success') {
+      return { ok: false, reason: `\`${name}\` concluded \`${run.conclusion}\`` };
+    }
+  }
+
+  const failed = checkRuns.filter(
+    run => run.status === 'completed' && PASSING_CONCLUSIONS.indexOf(run.conclusion) === -1,
+  );
+  if (failed.length) {
+    return {
+      ok: false,
+      reason: `failing checks: ${failed.map(run => `\`${run.name}\``).join(', ')}`,
+    };
+  }
+
+  const pending = checkRuns.filter(run => run.status !== 'completed');
+  if (pending.length) {
+    return {
+      ok: false,
+      reason: `still running: ${pending.map(run => `\`${run.name}\``).join(', ')}`,
+    };
+  }
+
+  if (combinedStatus.total_count > 0 && combinedStatus.state !== 'success') {
+    return { ok: false, reason: `commit status is \`${combinedStatus.state}\`` };
+  }
+  return { ok: true };
+}
+
 module.exports = {
+  classifyChangedFiles,
   classifyDependabot,
   classifySnyk,
+  evaluateChecks,
   parseDependabotMetadata,
   parseVersionRanges,
   semverBump,

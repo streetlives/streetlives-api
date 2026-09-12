@@ -38,13 +38,19 @@ redeploying an unchanged commit.
 `develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
 
 **Dependency updates merge themselves.** `.github/workflows/dependency-auto-merge.yml` approves and
-squash-merges Dependabot and Snyk PRs into `develop` once the `test` job is green — which then
-deploys Stage. Only the update types allowed by its `ALLOWED_UPDATES` map qualify (patch-only for
-runtime dependencies, never a major); everything else waits for a human. The classification lives in
+squash-merges Dependabot and Snyk PRs into `develop` once the `test` job is green. It qualifies a PR
+on three things: the update types in its `ALLOWED_UPDATES` map (patch-only for runtime dependencies,
+never a major), a diff that touches nothing but `package.json`/`package-lock.json`, and a valid
+Dependabot signature on every commit. Anything else waits for a human. The classification lives in
 `.github/scripts/dependency-update-policy.js` and is covered by
 `test/unit/dependency-update-policy.test.js`. Requesting changes on such a PR, or labelling it
 `do-not-merge`, stops the merge. Production is unaffected: it still needs the reviewed
 `develop` → `master` PR.
+
+Because a push made with `GITHUB_TOKEN` triggers no workflows, that merge does **not** fire
+`deploy-test-on-develop-merge.yml` on its own — the auto-merge job dispatches it explicitly, which is
+why that workflow now also accepts a `workflow_dispatch`. Any future automation that pushes to
+`develop` with `GITHUB_TOKEN` has the same problem and needs the same dispatch.
 
 **Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
 Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new

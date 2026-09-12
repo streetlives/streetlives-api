@@ -1,10 +1,14 @@
 const {
+  classifyChangedFiles,
   classifyDependabot,
   classifySnyk,
+  evaluateChecks,
   parseDependabotMetadata,
   parseVersionRanges,
   semverBump,
 } = require('../../.github/scripts/dependency-update-policy');
+
+const DEPENDENCY_FILES = ['package.json', 'package-lock.json'];
 
 const ALLOWED = {
   'direct:production': ['patch'],
@@ -126,17 +130,17 @@ describe('parseVersionRanges', () => {
 
 describe('classifyDependabot', () => {
   it('allows a patch bump of a dev dependency', () => {
-    expect(classifyDependabot([VERSION_UPDATE], ALLOWED).safe).toBe(true);
+    expect(classifyDependabot([VERSION_UPDATE], DEPENDENCY_FILES, ALLOWED).safe).toBe(true);
   });
 
   it('allows a security update that omits update-type', () => {
-    const result = classifyDependabot([SECURITY_UPDATE], ALLOWED);
+    const result = classifyDependabot([SECURITY_UPDATE], DEPENDENCY_FILES, ALLOWED);
     expect(result.safe).toBe(true);
     expect(result.reason).toContain('4.16.2 -> 4.16.4');
   });
 
   it('refuses a major bump', () => {
-    const result = classifyDependabot([MAJOR_UPDATE], ALLOWED);
+    const result = classifyDependabot([MAJOR_UPDATE], DEPENDENCY_FILES, ALLOWED);
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('major');
   });
@@ -145,23 +149,24 @@ describe('classifyDependabot', () => {
     const minorProduction = VERSION_UPDATE
       .replace('direct:development', 'direct:production')
       .replace('semver-patch', 'semver-minor');
-    expect(classifyDependabot([minorProduction], ALLOWED).safe).toBe(false);
+    expect(classifyDependabot([minorProduction], DEPENDENCY_FILES, ALLOWED).safe).toBe(false);
   });
 
   it('allows a group only when every member is within policy', () => {
-    expect(classifyDependabot([GROUPED_UPDATE], ALLOWED).safe).toBe(true);
-    expect(classifyDependabot([GROUPED_UPDATE, MAJOR_UPDATE], ALLOWED).safe).toBe(false);
+    expect(classifyDependabot([GROUPED_UPDATE], DEPENDENCY_FILES, ALLOWED).safe).toBe(true);
+    const both = [GROUPED_UPDATE, MAJOR_UPDATE];
+    expect(classifyDependabot(both, DEPENDENCY_FILES, ALLOWED).safe).toBe(false);
   });
 
   it('refuses a commit with no Dependabot metadata', () => {
-    const result = classifyDependabot(['Drop the auth check'], ALLOWED);
+    const result = classifyDependabot(['Drop the auth check'], DEPENDENCY_FILES, ALLOWED);
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('no `updated-dependencies` metadata');
   });
 
   it('refuses an unconfigured dependency type', () => {
     const odd = VERSION_UPDATE.replace('direct:development', 'direct:mystery');
-    expect(classifyDependabot([odd], ALLOWED).safe).toBe(false);
+    expect(classifyDependabot([odd], DEPENDENCY_FILES, ALLOWED).safe).toBe(false);
   });
 });
 
@@ -170,6 +175,7 @@ describe('classifySnyk', () => {
     expect(classifySnyk({
       title: '[Snyk] Fix for 3 vulnerabilities',
       branch: 'snyk-fix-abc123',
+      changedFiles: ['package-lock.json'],
     }).safe).toBe(true);
   });
 
@@ -177,6 +183,7 @@ describe('classifySnyk', () => {
     expect(classifySnyk({
       title: '[Snyk] Security upgrade axios from 1.6.0 to 1.7.4',
       branch: 'snyk-upgrade-abc123',
+      changedFiles: DEPENDENCY_FILES,
     }).safe).toBe(true);
   });
 
@@ -185,6 +192,7 @@ describe('classifySnyk', () => {
     const result = classifySnyk({
       title: '[Snyk] Security upgrade aws-amplify from 4.3.21 to 5.0.24',
       branch: 'snyk-upgrade-abc123',
+      changedFiles: DEPENDENCY_FILES,
     });
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('major');
@@ -194,6 +202,126 @@ describe('classifySnyk', () => {
     expect(classifySnyk({
       title: '[Snyk] Fix for 1 vulnerabilities',
       branch: 'feature/sneaky',
+      changedFiles: ['package-lock.json'],
     }).safe).toBe(false);
+  });
+});
+
+describe('classifyChangedFiles', () => {
+  it('allows manifests and lockfiles, at the root or nested', () => {
+    const result = classifyChangedFiles(['package.json', 'package-lock.json']);
+    expect(result.safe).toBe(true);
+    expect(result.manifestsTouched).toBe(true);
+  });
+
+  it('reports when only the lockfile moved', () => {
+    expect(classifyChangedFiles(['package-lock.json']).manifestsTouched).toBe(false);
+  });
+
+  it("refuses a workflow edit, which is what Dependabot's github-actions updates are", () => {
+    const result = classifyChangedFiles(['.github/workflows/ci.yml']);
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('outside the dependency manifests');
+  });
+
+  it('refuses a source file smuggled in beside a real bump', () => {
+    expect(classifyChangedFiles([
+      'package.json',
+      'package-lock.json',
+      'src/middleware/auth.js',
+    ]).safe).toBe(false);
+  });
+
+  it('refuses a migration, which a dependency bump never needs', () => {
+    expect(classifyChangedFiles([
+      'package-lock.json',
+      'sequelize/migrations/20260101000000-drop-a-column.js',
+    ]).safe).toBe(false);
+  });
+
+  it('refuses an empty diff', () => {
+    expect(classifyChangedFiles([]).safe).toBe(false);
+  });
+});
+
+describe('classifyDependabot file guard', () => {
+  it('refuses a patch bump that also rewrites a workflow', () => {
+    const result = classifyDependabot(
+      [VERSION_UPDATE],
+      ['package.json', '.github/workflows/ci.yml'],
+      ALLOWED,
+    );
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('outside the dependency manifests');
+  });
+});
+
+describe('classifySnyk file guard', () => {
+  it("refuses a 'lockfile fix' that edits the manifest", () => {
+    const result = classifySnyk({
+      title: '[Snyk] Fix for 2 vulnerabilities',
+      branch: 'snyk-fix-abc123',
+      changedFiles: ['package.json', 'package-lock.json'],
+    });
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('edits `package.json`');
+  });
+
+  it('refuses a Snyk PR that touches source', () => {
+    expect(classifySnyk({
+      title: '[Snyk] Security upgrade axios from 1.6.0 to 1.7.4',
+      branch: 'snyk-upgrade-abc123',
+      changedFiles: ['package.json', 'src/index.js'],
+    }).safe).toBe(false);
+  });
+});
+
+describe('evaluateChecks', () => {
+  const passing = name => ({ name, status: 'completed', conclusion: 'success' });
+  const noStatuses = { state: 'pending', total_count: 0 };
+
+  it('passes when every required check succeeded', () => {
+    const runs = [passing('test')];
+    expect(evaluateChecks(runs, runs.length, noStatuses, ['test']).ok).toBe(true);
+  });
+
+  it('treats a skipped run as acceptable, which is how bot PRs leave codex', () => {
+    const runs = [
+      passing('test'),
+      { name: 'codex_auto_approve', status: 'completed', conclusion: 'skipped' },
+    ];
+    expect(evaluateChecks(runs, runs.length, noStatuses, ['test']).ok).toBe(true);
+  });
+
+  it('refuses when a required check never reported', () => {
+    const runs = [passing('codex_auto_approve')];
+    const result = evaluateChecks(runs, runs.length, noStatuses, ['test']);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('test');
+  });
+
+  it('refuses while a check is still running', () => {
+    const runs = [{ name: 'test', status: 'in_progress', conclusion: null }];
+    expect(evaluateChecks(runs, runs.length, noStatuses, ['test']).ok).toBe(false);
+  });
+
+  it('refuses when an unrequired check failed', () => {
+    const runs = [passing('test'), { name: 'audit', status: 'completed', conclusion: 'failure' }];
+    expect(evaluateChecks(runs, runs.length, noStatuses, ['test']).ok).toBe(false);
+  });
+
+  it('refuses on a failing commit status, which is how Snyk reports', () => {
+    const runs = [passing('test')];
+    const statuses = { state: 'failure', total_count: 2 };
+    const result = evaluateChecks(runs, runs.length, statuses, ['test']);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('commit status');
+  });
+
+  it('refuses a truncated page rather than judging part of the evidence', () => {
+    const runs = [passing('test')];
+    const result = evaluateChecks(runs, 120, noStatuses, ['test']);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('120');
   });
 });

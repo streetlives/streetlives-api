@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - develop
+  # A GITHUB_TOKEN push triggers no workflows, so dependency-auto-merge.yml has to
+  # ask for this pipeline by hand after it merges. Doubles as a break-glass
+  # redeploy of Stage, which deploy-prod.yml has always had for production.
+  workflow_dispatch:
 
 concurrency:
   group: deploy-stage

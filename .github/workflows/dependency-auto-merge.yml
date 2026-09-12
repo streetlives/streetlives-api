@@ -8,9 +8,9 @@
 # Because workflow_run executes with write permissions, this workflow never
 # checks out or runs PR code -- only .github/scripts from the default branch.
 #
-# Merges land on develop, which deploys to Stage via
-# deploy-test-on-develop-merge.yml. Production still goes through the reviewed
-# develop -> master pull request.
+# Merges land on develop. Because a GITHUB_TOKEN push triggers no workflows, the
+# Stage pipeline is dispatched explicitly after a merge rather than firing on the
+# push. Production still goes through the reviewed develop -> master pull request.
 name: Dependency auto-merge
 
 on:
@@ -29,6 +29,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # An explicit block sets every unlisted scope to none: the merge gate reads
+  # check runs and commit statuses, and the Stage deploy has to be dispatched.
+  checks: read
+  statuses: read
+  actions: write
 
 concurrency:
   group: dependency-auto-merge-${{ github.event.workflow_run.head_sha || inputs.pr_number }}
@@ -74,11 +79,13 @@ jobs:
           echo "Candidate pull requests: ${numbers:-none}"
 
       - name: Approve and merge safe updates
+        id: merge
         if: steps.candidates.outputs.numbers != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBERS: ${{ steps.candidates.outputs.numbers }}
           MERGE_METHOD: squash
+          BASE_BRANCHES: '["develop"]'
           # The job in ci.yml, which runs unit and integration tests against a
           # postgis service container.
           REQUIRED_CHECKS: '["test"]'
@@ -92,3 +99,12 @@ jobs:
               "indirect": ["patch", "minor"]
             }
         run: node .github/scripts/dependency-auto-merge.js
+
+      # A push made with GITHUB_TOKEN does not trigger workflows, so the merge
+      # above would leave develop ahead of Stage. Dispatch the Stage pipeline
+      # explicitly; it runs the full test job again before it migrates or deploys.
+      - name: Deploy the merge to Stage
+        if: steps.merge.outputs.merged != '0' && steps.merge.outputs.merged != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-test-on-develop-merge.yml --repo "$GITHUB_REPOSITORY" --ref develop
