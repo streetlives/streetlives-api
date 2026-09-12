@@ -53,7 +53,9 @@ function parseDependabotMetadata(message) {
 
     const started = line.match(/^-\s*dependency-name:\s*(\S+)/);
     if (started) {
-      current = { name: started[1] };
+      // Scoped names arrive quoted -- `"@vitest/mocker"` -- because `@` is a
+      // reserved YAML indicator.
+      current = { name: started[1].replace(/^["']|["']$/g, '') };
       entries.push(current);
       continue;
     }
@@ -91,6 +93,30 @@ function parseVersionRanges(message) {
   return ranges;
 }
 
+// A security update that bumps an ancestor can drop a transitive dependency as a
+// side effect, which Dependabot announces as "Removes `@vitest/mocker`" and leaves
+// with an empty `dependency-version`. Nothing is being added, so a removal has no
+// bump to size -- but it is only read as one when the prose says so, never merely
+// because a version is missing.
+function parseRemovals(message) {
+  const removals = new Set();
+  const pattern = /^Removes `([^`]+)`/gm;
+  let match = pattern.exec(message);
+  while (match !== null) {
+    removals.add(match[1]);
+    match = pattern.exec(message);
+  }
+  return removals;
+}
+
+const SEVERITY = { patch: 0, minor: 1, major: 2 };
+
+/**
+ * Sized the way a caret range is, not the way the version string reads. Below
+ * 1.0.0 the leading zeros are not a version, they are a disclaimer: `^0.34.4`
+ * does not accept 0.35.0, and `^0.0.3` accepts nothing at all. So a move in the
+ * first significant component is a major, whatever its position.
+ */
 function semverBump(from, to) {
   const parse = (version) => {
     const match = String(version).match(/(\d+)\.(\d+)\.(\d+)/);
@@ -99,9 +125,21 @@ function semverBump(from, to) {
   const before = parse(from);
   const after = parse(to);
   if (!before || !after) return null;
+
   if (after[0] !== before[0]) return 'major';
+  if (before[0] === 0) {
+    if (after[1] !== before[1]) return 'major';
+    if (before[1] === 0) return after[2] === before[2] ? 'patch' : 'major';
+  }
   if (after[1] !== before[1]) return 'minor';
   return 'patch';
+}
+
+/** The more severe of two sizings, so neither source can soften the other. */
+function worse(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  return SEVERITY[left] >= SEVERITY[right] ? left : right;
 }
 
 /**
@@ -117,11 +155,13 @@ function classifyDependabot(messages, changedFiles, allowedUpdates) {
 
   const entries = [];
   const ranges = new Map();
+  const removals = new Set();
   messages.forEach((message) => {
     entries.push(...parseDependabotMetadata(message));
     parseVersionRanges(message).forEach((range, name) => {
       if (!ranges.has(name)) ranges.set(name, range);
     });
+    parseRemovals(message).forEach(name => removals.add(name));
   });
   if (entries.length === 0) {
     return { safe: false, reason: 'no `updated-dependencies` metadata on the commits' };
@@ -129,15 +169,34 @@ function classifyDependabot(messages, changedFiles, allowedUpdates) {
 
   const described = [];
   for (const entry of entries) {
+    const dependencyType = entry.dependencyType || 'unknown';
+
+    if (removals.has(entry.name)) {
+      // Only transitive removals. Dropping something the manifest asks for
+      // directly is a change of intent, not a dependency update.
+      if (dependencyType !== 'indirect') {
+        return {
+          safe: false,
+          reason: `\`${entry.name}\` is being removed `
+            + `(${dependencyType}; only indirect removals qualify)`,
+        };
+      }
+      described.push(`${entry.name} removed`);
+      continue;
+    }
+
     const range = ranges.get(entry.name);
-    const bump = entry.updateType
+    // Dependabot's own label and the actual version range are both taken, and the
+    // harsher wins: it labels 0.34.4 -> 0.35.4 a minor, which a caret range treats
+    // as breaking.
+    const declared = entry.updateType
       ? entry.updateType.replace('version-update:semver-', '')
-      : range && semverBump(range.from, range.to);
+      : null;
+    const bump = worse(declared, range && semverBump(range.from, range.to));
     if (!bump) {
       return { safe: false, reason: `could not determine the size of the \`${entry.name}\` bump` };
     }
 
-    const dependencyType = entry.dependencyType || 'unknown';
     const allowed = allowedUpdates[dependencyType];
     if (!allowed) {
       return {
@@ -148,8 +207,8 @@ function classifyDependabot(messages, changedFiles, allowedUpdates) {
     if (allowed.indexOf(bump) === -1) {
       return {
         safe: false,
-        reason: `\`${entry.name}\` is a ${bump} bump of a ${dependencyType} dependency `
-          + `(allowed: ${allowed.join(', ')})`,
+        reason: `\`${entry.name}\` is a ${bump} bump `
+          + `(${dependencyType}; allowed: ${allowed.join(', ')})`,
       };
     }
     described.push(`${entry.name} ${bump}${range ? ` (${range.from} -> ${range.to})` : ''}`);
@@ -246,6 +305,7 @@ function evaluateChecks(checkRuns, totalCount, combinedStatus, requiredChecks) {
 
 module.exports = {
   classifyChangedFiles,
+  parseRemovals,
   classifyDependabot,
   classifySnyk,
   evaluateChecks,

@@ -325,3 +325,88 @@ describe('evaluateChecks', () => {
     expect(result.reason).toContain('120');
   });
 });
+
+describe('semverBump below 1.0.0', () => {
+  it('treats a 0.x minor as breaking, because ^0.34.4 does not accept 0.35.0', () => {
+    expect(semverBump('0.34.4', '0.35.4')).toBe('major');
+  });
+
+  it('still reads a 0.x patch as a patch', () => {
+    expect(semverBump('0.34.4', '0.34.9')).toBe('patch');
+  });
+
+  it('treats any 0.0.x move as breaking, because ^0.0.3 accepts nothing', () => {
+    expect(semverBump('0.0.3', '0.0.4')).toBe('major');
+    expect(semverBump('0.0.3', '0.0.3')).toBe('patch');
+  });
+});
+
+describe('scoped and removed dependencies', () => {
+  // Shaped after streetlives/yourpeer.nyc#716: a security bump that drops a
+  // transitive package on the way. Scoped names arrive YAML-quoted.
+  const REMOVAL = `build(deps): bump @babel/runtime and sequelize
+
+Removes \`@babel/runtime\`
+
+Updates \`sequelize\` from 4.32.2 to 4.32.5
+
+---
+updated-dependencies:
+- dependency-name: "@babel/runtime"
+  dependency-version:
+  dependency-type: indirect
+- dependency-name: sequelize
+  dependency-version: 4.32.5
+  dependency-type: direct:production
+...
+
+Signed-off-by: dependabot[bot] <support@github.com>`;
+
+  it('unquotes a scoped dependency name', () => {
+    expect(parseDependabotMetadata(REMOVAL)[0].name).toBe('@babel/runtime');
+  });
+
+  it('allows an indirect dependency being dropped alongside an in-policy bump', () => {
+    const result = classifyDependabot([REMOVAL], DEPENDENCY_FILES, ALLOWED);
+    expect(result.safe).toBe(true);
+    expect(result.reason).toContain('@babel/runtime removed');
+  });
+
+  it('refuses a direct dependency being dropped, which is a change of intent', () => {
+    const direct = REMOVAL.replace(
+      '  dependency-version:\n  dependency-type: indirect',
+      '  dependency-version:\n  dependency-type: direct:production',
+    );
+    const result = classifyDependabot([direct], DEPENDENCY_FILES, ALLOWED);
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('being removed');
+  });
+
+  it('refuses a missing version that is not announced as a removal', () => {
+    const silent = REMOVAL.replace('Removes `@babel/runtime`\n\n', '');
+    const result = classifyDependabot([silent], DEPENDENCY_FILES, ALLOWED);
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('could not determine the size');
+  });
+});
+
+describe("reconciling Dependabot's label with the actual versions", () => {
+  // yourpeer.nyc#718: labelled semver-minor, but 0.34 -> 0.35 is breaking under a
+  // caret range.
+  const MISLABELLED = `build(deps): bump sharp
+
+Updates \`sharp\` from 0.34.4 to 0.35.4
+
+---
+updated-dependencies:
+- dependency-name: sharp
+  dependency-type: indirect
+  update-type: version-update:semver-minor
+...`;
+
+  it('takes the harsher of the two sizings', () => {
+    const result = classifyDependabot([MISLABELLED], DEPENDENCY_FILES, ALLOWED);
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('major');
+  });
+});
