@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - develop
+  # A GITHUB_TOKEN push triggers no workflows, so dependency-auto-merge.yml has to
+  # ask for this pipeline by hand after it merges. Doubles as a break-glass
+  # redeploy of Stage, which deploy-prod.yml has always had for production.
+  workflow_dispatch:
+    inputs:
+      require_tip:
+        description: >-
+          Refuse if develop has moved past this revision. An automated dispatch
+          stands in for a suppressed push and must keep the guard a push gets;
+          clear it only to redeploy an older ref on purpose.
+        type: boolean
+        required: false
+        default: true
 
 concurrency:
   group: deploy-stage
@@ -27,6 +40,7 @@ jobs:
         with:
           branch: ${{ github.ref_name }}
           event-name: ${{ github.event_name }}
+          require-tip: ${{ inputs.require_tip }}
           on-stale: report
 
   # Reuses the real CI job (postgis service + extensions + npm test) so a red
@@ -52,6 +66,7 @@ jobs:
         with:
           branch: ${{ github.ref_name }}
           event-name: ${{ github.event_name }}
+          require-tip: ${{ inputs.require_tip }}
           on-stale: fail
 
       - name: Set up Node.js
@@ -115,6 +130,7 @@ jobs:
         with:
           branch: ${{ github.ref_name }}
           event-name: ${{ github.event_name }}
+          require-tip: ${{ inputs.require_tip }}
           on-stale: fail
 
       - name: Build the deployment artifact

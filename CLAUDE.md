@@ -37,6 +37,34 @@ redeploying an unchanged commit.
 **Hotfixes** branch from `master` and merge back to `master`, then must be **back-merged into
 `develop`** — otherwise the next `develop` → `master` PR silently reverts the fix.
 
+**Dependency updates merge themselves.** `.github/workflows/dependency-auto-merge.yml` approves and
+squash-merges Dependabot PRs into `develop` once the `test` job is green. It qualifies a PR on four
+things: the update types in its `ALLOWED_UPDATES` map (patch-only for runtime dependencies, never a
+major, and below 1.0.0 a minor counts as a major because `^0.34.4` will not take 0.35); a diff that
+touches nothing but `package.json`/`package-lock.json`; every commit authored by the bot, committed by
+GitHub's `web-flow` and signed; and the **contents** of those files — only dependency maps differ in
+`package.json`, every version is a plain range rather than an `npm:` alias or a git/tarball source,
+and every package the lockfile names resolves from the npm registry (over either scheme — this
+lockfile still carries two legacy `http://` entries). That last gate is what makes the others more
+than a statement of intent: a signature proves GitHub made the commit, not that Dependabot asked for
+it. Anything else waits for a human. **Snyk PRs never auto-merge**: Snyk does not sign
+its commits, and attribution alone is spoofable by anyone with push access, which matters because
+`package.json` carries the scripts CI executes. The classification lives in
+`.github/scripts/dependency-update-policy.js` and the privileged orchestration in
+`.github/scripts/dependency-auto-merge.js`; both are covered by `test/unit/`, which injects a fake
+`api` rather than calling GitHub. Requesting changes on such a PR, or labelling it
+`do-not-merge`, stops the merge. Production is unaffected: it still needs the reviewed
+`develop` → `master` PR.
+
+Because a push made with `GITHUB_TOKEN` triggers no workflows, that merge does **not** fire
+`deploy-test-on-develop-merge.yml` on its own — the auto-merge job dispatches it explicitly with
+`require_tip=true`, which is why that workflow now accepts a `workflow_dispatch`. `require_tip`
+matters: `check-revision` normally exempts dispatches from its freshness check, on the grounds that a
+dispatch means "deploy this ref deliberately". An automated dispatch means the opposite — it stands
+in for the push that was suppressed — so without the flag two merges landing close together could
+deploy out of order and roll Stage back against newer migrations. Any future automation that pushes
+to `develop` with `GITHUB_TOKEN` has the same problem and needs the same dispatch.
+
 **Migrations must be backward-compatible with the currently-deployed code (expand/contract).**
 Both pipelines migrate *before* they deploy, so the old Lambda serves traffic against the new
 schema for the length of the deploy. Split a rename or a column drop across two releases: add and

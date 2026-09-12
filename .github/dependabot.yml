@@ -1,0 +1,49 @@
+# Dependabot version + security updates.
+#
+# Updates that land here are auto-merged by .github/workflows/dependency-auto-merge.yml
+# once CI is green, but only for the update types that workflow classifies as safe
+# (see ALLOWED_UPDATES there). Majors are still opened as PRs; they just wait for
+# a human.
+#
+# The limits are deliberately low: this codebase carries a lot of drift, and the
+# point is a steady trickle of patches, not a hundred-PR backlog.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-patches:
+        dependency-type: production
+        update-types:
+          - patch
+    ignore:
+      # Sequelize 5/6 are migration projects, not dependency bumps, and a major
+      # here would rewrite every model in src/models.
+      - dependency-name: sequelize
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"

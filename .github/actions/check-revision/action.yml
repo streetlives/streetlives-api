@@ -16,9 +16,16 @@ inputs:
     required: true
   event-name:
     description: >-
-      Triggering event. Only a push is checked: deploying an older ref
+      Triggering event. A push is always checked: deploying an older ref
       deliberately is what the dispatch path is for.
     required: true
+  require-tip:
+    description: >-
+      `true` to check freshness even on a dispatch. An *automated* dispatch is not
+      someone deliberately deploying an older ref -- it stands in for the push that
+      GITHUB_TOKEN suppressed, so it needs the same guard a push gets.
+    required: false
+    default: ''
   sha:
     description: Revision being deployed. Defaults to the checked-out HEAD.
     required: false
@@ -46,6 +53,7 @@ runs:
         EVENT_NAME: ${{ inputs.event-name }}
         SHA: ${{ inputs.sha }}
         ON_STALE: ${{ inputs.on-stale }}
+        REQUIRE_TIP: ${{ inputs.require-tip }}
       run: |
         set -euo pipefail
 
@@ -55,7 +63,7 @@ runs:
         superseded=false
         tip=""
 
-        if [ "$EVENT_NAME" = "push" ]; then
+        if [ "$EVENT_NAME" = "push" ] || [ "${REQUIRE_TIP:-}" = "true" ]; then
           git fetch --no-tags --depth=1 origin "$BRANCH"
           tip="$(git rev-parse FETCH_HEAD)"
           if [ "$tip" != "$sha" ]; then

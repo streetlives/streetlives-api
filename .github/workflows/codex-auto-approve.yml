@@ -10,10 +10,15 @@ concurrency:
 
 jobs:
   codex_auto_approve:
-    # Guardrails: only run for non-fork PRs, and not for drafts
+    # Guardrails: only run for non-fork PRs, and not for drafts.
+    #
+    # Dependency bots are excluded: codex-action refuses to run for actors without
+    # write access, so every bot PR failed this check and could never be merged.
+    # Those PRs are gated by dependency-auto-merge.yml instead. See yourpeer.nyc#681.
     if: >
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.draft == false
+      github.event.pull_request.draft == false &&
+      !contains(fromJSON('["dependabot[bot]", "snyk-bot"]'), github.event.pull_request.user.login)
     runs-on: ubuntu-latest
     environment: CI_CD_PIPELINE
 
