@@ -35,11 +35,13 @@ updated-dependencies:
 
 Signed-off-by: dependabot[bot] <support@github.com>`;
 
-function botCommit(author = 'dependabot[bot]', { verified = true } = {}) {
+// The shape a real Dependabot commit has: authored by the bot, committed by
+// GitHub as `web-flow`, and signed. Verified against streetlives/yourpeer.nyc#643.
+function botCommit(author = 'dependabot[bot]', { verified = true, committer = 'web-flow' } = {}) {
   return {
     sha: HEAD_SHA,
     author: { login: author },
-    committer: { login: author },
+    committer: { login: committer },
     commit: {
       message: DEPENDABOT_COMMIT_MESSAGE,
       verification: { verified, reason: verified ? 'valid' : 'unsigned' },
@@ -174,7 +176,7 @@ describe('evaluatePullRequest', () => {
     it('a commit attributed to someone other than the PR author', async () => {
       await expectRefusal(
         { commits: [botCommit(), botCommit('shakilhossain1')] },
-        /not attributed to/,
+        /not authored by/,
       );
     });
 
@@ -317,10 +319,16 @@ describe('verifyProvenance', () => {
     expect(verifyProvenance([botCommit()], 'dependabot[bot]')).toBeNull();
   });
 
-  it('rejects a commit whose committer differs from its author', () => {
-    const mismatched = botCommit();
-    mismatched.committer = { login: 'shakilhossain1' };
-    expect(verifyProvenance([mismatched], 'dependabot[bot]')).toMatch(/not attributed to/);
+  it('accepts the real shape: authored by the bot, committed by web-flow', () => {
+    const real = botCommit();
+    expect(real.committer.login).toBe('web-flow');
+    expect(verifyProvenance([real], 'dependabot[bot]')).toBeNull();
+  });
+
+  it('rejects a commit pushed from a workstation rather than committed by GitHub', () => {
+    const pushed = botCommit('dependabot[bot]', { committer: 'shakilhossain1' });
+    expect(verifyProvenance([pushed], 'dependabot[bot]'))
+      .toMatch(/committed by shakilhossain1, not GitHub/);
   });
 });
 

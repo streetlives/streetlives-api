@@ -28,6 +28,9 @@ const DEPENDABOT = 'dependabot[bot]';
 const SNYK = 'snyk-bot';
 const BOT_AUTHORS = [DEPENDABOT, SNYK];
 const BLOCKING_LABELS = ['do-not-merge', 'no-auto-merge'];
+// GitHub commits on a bot's behalf as `web-flow`, the identity whose key signs
+// server-side commits. See verifyProvenance.
+const ACCEPTED_COMMITTERS = ['web-flow'];
 const PAGE_SIZE = 100;
 // The compare endpoint caps its file list at 300 and says nothing about it. A
 // dependency update changes two files, so anywhere near the cap is not one.
@@ -67,8 +70,12 @@ function whole(items, what) {
 /**
  * `commit.author.login` is resolved from the commit's author email, which anyone
  * with push access can set to the bot's, so attribution alone proves nothing. The
- * signature is the proof: commits GitHub creates for Dependabot are signed with a
- * key no contributor holds.
+ * signature is the proof: Dependabot's commits are created server-side and signed
+ * with GitHub's key, which no contributor holds.
+ *
+ * That is also why the committer is `web-flow` rather than the bot -- GitHub
+ * commits on its behalf, and `web-flow` is the identity that does it. A commit
+ * committed by anyone else was pushed from a workstation and is not Dependabot's.
  *
  * This is not belt-and-braces. `package.json` is on the changed-file allowlist and
  * carries the `scripts` CI executes, so an unsigned commit that the allowlist
@@ -77,12 +84,18 @@ function whole(items, what) {
  * here rather than merging unattended -- see the note in dependency-auto-merge.yml.
  */
 function verifyProvenance(commits, author) {
-  const foreign = commits.filter(
-    commit => !commit.author || commit.author.login !== author
-      || !commit.committer || commit.committer.login !== author,
+  const misattributed = commits.filter(
+    commit => !commit.author || commit.author.login !== author,
   );
-  if (foreign.length) {
-    return `${foreign.length} commit(s) not attributed to \`${author}\``;
+  if (misattributed.length) {
+    return `${misattributed.length} commit(s) not authored by \`${author}\``;
+  }
+  const pushed = commits.filter(
+    commit => !commit.committer || ACCEPTED_COMMITTERS.indexOf(commit.committer.login) === -1,
+  );
+  if (pushed.length) {
+    const who = pushed.map(commit => (commit.committer ? commit.committer.login : 'nobody'));
+    return `${pushed.length} commit(s) committed by ${who.join(', ')}, not GitHub`;
   }
   const unsigned = commits.filter(
     commit => !commit.commit.verification || commit.commit.verification.verified !== true,
