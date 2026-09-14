@@ -75,18 +75,26 @@ export const getLastValidatedDateForLocation = async locationId => models.sequel
 export const getMetadataForLocation = async (location, address) => {
   const phoneIds = location.Phones.map(({ id }) => id);
   const eventRelatedInfoIds = location.EventRelatedInfos.map(({ id }) => id);
+  // Streetview lives in its own table, so its metadata is keyed to the streetview
+  // row rather than the location and never turns up in locationMetadata. Roll it
+  // up into a single `streetview` field the way phones and event info are. Like
+  // those two, this covers live rows only: clearing an override deletes the row,
+  // and the field goes back to reading as unset.
+  const streetviewIds = location.Streetview ? [location.Streetview.id] : [];
   const [
     locationMetadata,
     organizationMetadata,
     addressMetadata,
     phonesLatestUpdate,
     eventInfoLatestUpdate,
+    streetviewLatestUpdate,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(location.id),
     models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
     models.Metadata.getLastUpdateDatesForResourceFields(address.id),
     models.Metadata.getLatestUpdateDateForResources(phoneIds),
     models.Metadata.getLatestUpdateDateForResources(eventRelatedInfoIds),
+    models.Metadata.getLatestUpdateDateForResources(streetviewIds),
   ]);
 
   const sources = [...new Set(await models.Metadata.getSourcesForResources([
@@ -95,6 +103,7 @@ export const getMetadataForLocation = async (location, address) => {
     address.id,
     ...phoneIds,
     ...eventRelatedInfoIds,
+    ...streetviewIds,
   ]))];
 
   return {
@@ -105,6 +114,9 @@ export const getMetadataForLocation = async (location, address) => {
         []),
       ...(eventInfoLatestUpdate ?
         [{ field_name: 'eventRelatedInfo', last_action_date: eventInfoLatestUpdate }] :
+        []),
+      ...(streetviewLatestUpdate ?
+        [{ field_name: 'streetview', last_action_date: streetviewLatestUpdate }] :
         []),
     ],
     organization: organizationMetadata,
