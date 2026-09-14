@@ -224,6 +224,62 @@ describe('update location streetview', () => {
     });
   });
 
+  describe('last-updated metadata', () => {
+    const getLocationMetadata = async () => {
+      const res = await request(app).get(`/locations/${location.id}`).expect(200);
+      return res.body.metadata;
+    };
+
+    const findStreetviewEntry = locationMetadata =>
+      locationMetadata.location.find(({ field_name: fieldName }) => fieldName === 'streetview');
+
+    it('should roll streetview edits up into a streetview field on the location', async () => {
+      const before = new Date();
+      await patchLocation({ streetview: fullStreetview }).expect(204);
+
+      const entry = findStreetviewEntry(await getLocationMetadata());
+
+      expect(entry).toBeTruthy();
+      expect(new Date(entry.last_action_date).getTime())
+        .toBeGreaterThanOrEqual(before.getTime() - 1000);
+    });
+
+    it('should report the latest edit date when the streetview is updated again', async () => {
+      await patchLocation({ streetview: fullStreetview }).expect(204);
+      const firstDate = findStreetviewEntry(await getLocationMetadata()).last_action_date;
+
+      await patchLocation({ streetview: { fov: 45 } }).expect(204);
+      const secondDate = findStreetviewEntry(await getLocationMetadata()).last_action_date;
+
+      expect(new Date(secondDate).getTime()).toBeGreaterThanOrEqual(new Date(firstDate).getTime());
+    });
+
+    it('should omit the streetview field when the location has no override', async () => {
+      const locationMetadata = await getLocationMetadata();
+
+      expect(findStreetviewEntry(locationMetadata)).toBeUndefined();
+    });
+
+    // Matches how phones and event info behave: the rollup covers live rows only, so
+    // clearing an override takes the field back to reading as unset rather than
+    // reporting the date it was removed.
+    it('should omit the streetview field once the override is cleared', async () => {
+      await patchLocation({ streetview: fullStreetview }).expect(204);
+      await patchLocation({ streetview: null }).expect(204);
+
+      expect(findStreetviewEntry(await getLocationMetadata())).toBeUndefined();
+    });
+
+    it('should attribute the source of a streetview edit', async () => {
+      const source = 'streetview-source-test';
+
+      await patchLocation({ streetview: fullStreetview, metadata: { source } }).expect(204);
+
+      const locationMetadata = await getLocationMetadata();
+      expect(locationMetadata.sources).toContain(source);
+    });
+  });
+
   describe('validation', () => {
     const invalidStreetviews = [
       ['lat above 90', { lat: 90.1 }],
