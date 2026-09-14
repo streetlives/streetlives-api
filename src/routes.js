@@ -9,6 +9,7 @@ import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
+import { createRouter as publicCallingRouter } from './controllers/public-calling';
 import {
   NotFoundError,
   AuthError,
@@ -17,6 +18,7 @@ import {
 } from './utils/errors';
 
 export default (app) => {
+  app.use('/public-calling', publicCallingRouter());
   app.get('/organizations', organizations.find);
   app.post('/organizations', getUser, dataEntryAuth, organizations.create);
   app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
@@ -63,7 +65,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);
