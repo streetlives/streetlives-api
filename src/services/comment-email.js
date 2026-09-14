@@ -2,7 +2,7 @@ import config from '../config';
 
 const nodemailer = require('nodemailer');
 
-const appUrl = config.appUrl || 'https://staging.yourpeer.nyc';
+const appUrl = config.appUrl || 'https://feedback.yourpeer.nyc';
 
 function escapeHtml(input) {
   return String(input || '')
