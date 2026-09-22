@@ -34,12 +34,12 @@ export default (app) => {
 
   app.post('/locations/:locationId/phones', getUser, dataEntryAuth, locations.addPhone);
   app.patch('/phones/:phoneId', getUser, dataEntryAuth, locations.updatePhone);
-  app.delete('/phones/:phoneId', getUser, locations.deletePhone);
+  app.delete('/phones/:phoneId', getUser, dataEntryAuth, locations.deletePhone);
 
   app.post('/services', getUser, dataEntryAuth, services.create);
   app.get('/services/get-count', services.getCount);
   app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
-  app.delete('/services/:serviceId', getUser, services.delete);
+  app.delete('/services/:serviceId', getUser, dataEntryAuth, services.delete);
 
   app.get('/geocode/analytics/all', geocode.findAnalytics);
 

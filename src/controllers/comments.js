@@ -6,6 +6,7 @@ import { createInstance, destroyInstance, updateInstance } from '../services/dat
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { regenerateHighlightsForLocation } from './comment-highlights';
 import commentEmail, { replyEmail } from '../services/comment-email';
+import { requireOrganizationScope } from '../services/organization-scope';
 import { extractCommentContent } from '../utils/helpers';
 import { getClientIp } from '../utils/request';
 
@@ -173,10 +174,11 @@ export default {
         throw new NotFoundError('Original comment not found');
       }
 
-      const organizationId = originalComment.Location.organization_id;
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      }
+      requireOrganizationScope(
+        req,
+        originalComment.Location.organization_id,
+        'Not authorized to reply on behalf of this organization',
+      );
 
       const postedReply = await createInstance(
         req.user,
@@ -228,10 +230,11 @@ export default {
         throw new NotFoundError('Reply not found');
       }
 
-      const organizationId = reply.Location.organization_id;
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      }
+      requireOrganizationScope(
+        req,
+        reply.Location.organization_id,
+        'Not authorized to reply on behalf of this organization',
+      );
 
       await updateInstance(req.user, reply, { content });
       res.sendStatus(204);
@@ -251,14 +254,14 @@ export default {
         throw new NotFoundError('Comment not found');
       }
 
-      const organizationId = comment.Location.organization_id;
-
       if (!comment.reply_to_id) {
         throw new ForbiddenError('Only allowed to delete replies');
       }
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to delete replies for this organization');
-      }
+      requireOrganizationScope(
+        req,
+        comment.Location.organization_id,
+        'Not authorized to delete replies for this organization',
+      );
 
       await destroyInstance(req.user, comment);
       res.sendStatus(204);

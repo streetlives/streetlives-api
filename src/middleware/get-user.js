@@ -1,6 +1,18 @@
 import { AuthError } from '../utils/errors';
 import config from '../config';
 
+// Cognito hands `cognito:groups` over as an array or as a comma-separated
+// string depending on how the claim reaches us; normalize so membership is an
+// exact match rather than a substring one.
+function parseGroups(groupClaims) {
+  if (!groupClaims) {
+    return [];
+  }
+
+  const groups = Array.isArray(groupClaims) ? groupClaims : groupClaims.split(',');
+  return groups.map(group => group.trim()).filter(group => group.length);
+}
+
 export default function getUser(req, res, next) {
   const claims = req.apiGateway &&
     req.apiGateway.event &&
@@ -16,9 +28,12 @@ export default function getUser(req, res, next) {
       req.userOrganizationIds = organizationClaims.split(',');
     }
 
-    const groups = claims['cognito:groups'];
-    if (groups && groups.indexOf(config.adminGroupName) !== -1) {
+    const groups = parseGroups(claims['cognito:groups']);
+    if (groups.includes(config.adminGroupName)) {
       req.userIsAdmin = true;
+    }
+    if (groups.includes(config.providerGroupName)) {
+      req.userIsProvider = true;
     }
 
     next();

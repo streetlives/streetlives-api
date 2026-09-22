@@ -567,7 +567,7 @@ export default {
   },
 
   update: async (req, res, next) => {
-    const updateLocation = (location, updateParams, metadata, transaction) => {
+    const updateLocation = async (location, updateParams, metadata, transaction) => {
       const locationUpdate = {};
       if (updateParams.name != null) { locationUpdate.name = updateParams.name; }
       if (updateParams.streetview_url != null) {
@@ -584,6 +584,18 @@ export default {
         locationUpdate.position = geometry.createPoint(longitude, latitude);
       }
       if (updateParams.organizationId != null) {
+        // Reassigning the location to another organization. Whether the caller
+        // may do so at all is settled by dataEntryAuth, which checks both the
+        // current and the target organization against their scope; here we only
+        // confirm the target exists, so an unknown id is a 404 rather than a
+        // foreign key violation surfacing as a 500.
+        const targetOrganization = await models.Organization.findByPk(
+          updateParams.organizationId,
+          { attributes: ['id'], transaction },
+        );
+        if (!targetOrganization) {
+          throw new NotFoundError('Organization not found');
+        }
         locationUpdate.organization_id = updateParams.organizationId;
       }
 

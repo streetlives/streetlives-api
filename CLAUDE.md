@@ -159,7 +159,28 @@ the PATH and records what the script actually called.
 
 **Write pattern — always use data-changes.js**: Every create/update/delete must go through `src/services/data-changes.js` (`createInstance`, `updateInstance`, `destroyInstance`). These helpers wrap mutations in a transaction and write a `Metadata` record for every changed field, creating a full audit trail.
 
-**Authentication**: In production, user identity comes from AWS Cognito JWT claims forwarded by API Gateway (`req.apiGateway.event.requestContext.authorizer.claims`). The `getUser` middleware (`src/middleware/get-user.js`) extracts `req.user`, `req.userOrganizationIds`, and `req.userIsAdmin`. In `development` and `test` environments, auth is bypassed entirely.
+**Authentication**: In production, user identity comes from AWS Cognito JWT claims forwarded by API Gateway (`req.apiGateway.event.requestContext.authorizer.claims`). The `getUser` middleware (`src/middleware/get-user.js`) extracts `req.user`, `req.userOrganizationIds`, `req.userIsAdmin`, and `req.userIsProvider`. In `development` and `test` environments, auth is bypassed entirely.
+
+**Authorization — who may write whose records**: One Cognito pool (`StreetTeam`) holds two very
+different kinds of account, so *authenticated* says nothing about *authorized*. Streetlives street
+team and admins curate the whole NYC directory; most of those accounts carry no `custom:orgs` claim
+at all. Accounts in the `Providers` group belong to external organization representatives, who are
+given logins only so they can answer feedback about the organizations in their own claim.
+
+`src/services/organization-scope.js` is the single implementation of that distinction:
+
+- `assertDataEntryScope` backs the `dataEntryAuth` middleware on every write route. Admins and
+  street-team accounts pass through with the directory-wide access they have always had; a provider
+  must own every organization the request touches. It resolves those organizations from the route
+  params and body — including the `organizationId` a location update uses to *reassign* a location,
+  where both the current and target organization are checked — and fails closed when a referenced
+  record can't be resolved.
+- `requireOrganizationScope` is the stricter check used by `comments.js`, where the action is taken
+  *on behalf of* an organization (replying to feedback as that organization) and the claim is
+  required of every caller, admins included.
+
+Because street-team access depends on *not* being in the `Providers` group, putting a data-entry
+user in that group silently narrows what they can edit.
 
 **Location search** (`src/models/location.js`): The search logic is complex — it runs many parallel queries across zip codes, phone numbers, org/location/service names (exact, prefix, full-text tsvector, levenshtein fuzzy), then deduplicates and merges results in memory. Filtering supports geo-radius (PostGIS `ST_DistanceSphere`), taxonomy, eligibility parameters, required documents, service areas, opening hours, and taxonomy-specific attributes.
 
@@ -188,3 +209,4 @@ the PATH and records what the script actually called.
 | `OPENAI_API_KEY` | — | Required for comment highlights |
 | `SLACK_WEBHOOK_URL` | — | Optional Slack notifications |
 | `ADMIN_GROUP_NAME` | `StreetlivesAdmins` | Cognito group for admin users |
+| `PROVIDER_GROUP_NAME` | `Providers` | Cognito group for external organization reps, scoped to their `custom:orgs` claim |
