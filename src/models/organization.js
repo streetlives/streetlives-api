@@ -31,7 +31,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     Organization.hasMany(models.Phone, { foreignKey: 'organization_id' });
   };
 
-  Organization.findMatching = (filterParameters, limit = 10) => {
+  Organization.findMatching = (filterParameters, limit = 10, queryOptions = {}) => {
     const { searchString } = filterParameters;
 
     const where = {};
@@ -39,8 +39,12 @@ module.exports = (sequelize, DataTypes, Op) => {
       where.name = { [Op.iLike]: `%${searchString}%` };
     }
 
-    return Organization.findAll({ limit, where });
+    return Organization.findAll({ limit, where, ...queryOptions });
   };
+
+  Organization.getPublicAttributes = () => ({
+    exclude: ['email'],
+  });
 
   return Organization;
 };

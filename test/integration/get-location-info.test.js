@@ -13,6 +13,7 @@ describe('get location info', () => {
     {
       name: 'The Test Org',
       description: 'An organization meant for testing purposes.',
+      email: 'contact@streetlives.org',
       url: 'www.streetlives.com',
       Services: [{
         name: 'A specific offering',
@@ -86,6 +87,7 @@ describe('get location info', () => {
       .get(`/locations/${location.id}`)
       .expect(200)
       .then((res) => {
+        expect(res.body.Organization).not.toHaveProperty('email');
         const strippedFields = stripTimestampsAndIds(res.body);
         expect(strippedFields).toMatchSnapshot();
       }));

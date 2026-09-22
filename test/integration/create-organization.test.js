@@ -29,6 +29,22 @@ describe('create organization', () => {
     expect(dbOrg).toHaveProperty('url', orgParams.url);
   });
 
+  it('should trim and persist a valid email address', async () => {
+    await request(app)
+      .post('/organizations')
+      .send({ ...orgParams, name: 'Org With Email', email: '  intake@streetlives.org  ' })
+      .expect(201);
+
+    const dbOrg = await models.Organization.findOne({ where: { name: 'Org With Email' } });
+    expect(dbOrg).toHaveProperty('email', 'intake@streetlives.org');
+  });
+
+  it('should reject an invalid email address', () =>
+    request(app)
+      .post('/organizations')
+      .send({ ...orgParams, name: 'Org With Invalid Email', email: 'not-an-email' })
+      .expect(400));
+
   describe('when no custom metadata is specified', () => {
     it('should create metadata with current time as the last action date', async () => {
       const startTime = Date.now();

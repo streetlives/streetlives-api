@@ -2,7 +2,26 @@ import Joi from 'joi';
 import organizationSchemas from './validation/organizations';
 import models from '../models';
 import { updateInstance, createInstance } from '../services/data-changes';
-import { NotFoundError } from '../utils/errors';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
+
+const normalizeEmail = (email) => {
+  if (email == null) {
+    return email;
+  }
+
+  const trimmedEmail = email.trim();
+  return trimmedEmail || null;
+};
+
+const assertUserCanAccessOrganization = (req, organizationId) => {
+  if (req.userIsAdmin) {
+    return;
+  }
+
+  if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
+    throw new ForbiddenError('Not authorized to view this organization');
+  }
+};
 
 export default {
   find: async (req, res, next) => {
@@ -12,7 +31,9 @@ export default {
       const { searchString } = req.query;
       const filterParameters = searchString ? { searchString: searchString.trim() } : {};
 
-      const organizations = await models.Organization.findMatching(filterParameters);
+      const organizations = await models.Organization.findMatching(filterParameters, 10, {
+        attributes: models.Organization.getPublicAttributes(),
+      });
       res.send(organizations);
     } catch (err) {
       next(err);
@@ -26,14 +47,17 @@ export default {
       const {
         name,
         description,
+        email: rawEmail,
         url,
         metadata,
       } = req.body;
+      const email = normalizeEmail(rawEmail);
 
       const modelCreateFunction = models.Organization.create.bind(models.Organization);
       const createdOrganization = await createInstance(req.user, modelCreateFunction, {
         name,
         description,
+        email,
         url,
       }, { metadata });
 
@@ -48,18 +72,23 @@ export default {
       await Joi.validate(req, organizationSchemas.update, { allowUnknown: true });
 
       const { organizationId } = req.params;
+      assertUserCanAccessOrganization(req, organizationId);
 
       const organization = await models.Organization.findByPk(organizationId);
       if (!organization) {
         throw new NotFoundError('Organization not found');
       }
 
-      const editableFields = ['name', 'description', 'url'];
-      const { metadata, ...updateParams } = req.body;
+      const editableFields = ['name', 'description', 'email', 'url'];
+      const { metadata, email, ...updateParams } = req.body;
+      const normalizedUpdateParams = email === undefined ? updateParams : {
+        ...updateParams,
+        email: normalizeEmail(email),
+      };
       await updateInstance(
         req.user,
         organization,
-        updateParams,
+        normalizedUpdateParams,
         { fields: editableFields, metadata },
       );
 
@@ -100,6 +129,24 @@ export default {
       });
 
       res.send(locations);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  get: async (req, res, next) => {
+    try {
+      await Joi.validate(req, organizationSchemas.get, { allowUnknown: true });
+
+      const { organizationId } = req.params;
+      assertUserCanAccessOrganization(req, organizationId);
+
+      const organization = await models.Organization.findByPk(organizationId);
+      if (!organization) {
+        throw new NotFoundError('Organization not found');
+      }
+
+      res.send(organization);
     } catch (err) {
       next(err);
     }

@@ -40,6 +40,7 @@ const locationAssociations = {
   include: [
     {
       model: models.Organization,
+      attributes: models.Organization.getPublicAttributes(),
       include: [models.Phone],
     },
     models.Phone,
