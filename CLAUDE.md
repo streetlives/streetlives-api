@@ -172,9 +172,19 @@ given logins only so they can answer feedback about the organizations in their o
 - `assertDataEntryScope` backs the `dataEntryAuth` middleware on every write route. Admins and
   street-team accounts pass through with the directory-wide access they have always had; a provider
   must own every organization the request touches. It resolves those organizations from the route
-  params and body — including the `organizationId` a location update uses to *reassign* a location,
-  where both the current and target organization are checked — and fails closed when a referenced
-  record can't be resolved.
+  params — including the `organizationId` a location update uses to *reassign* a location, where
+  both the current and target organization are checked — and fails closed when a referenced record
+  can't be resolved.
+  `dataEntryAuth` takes an **allowlist** of the body fields that route actually consumes
+  (`dataEntryAuth(['organizationId'])`), and a field outside it contributes no scope. This is
+  load-bearing, not tidiness: the write schemas validate with `allowUnknown`, so a body field a
+  route ignores would otherwise let a caller satisfy the check with an id they do hold while the
+  controller acts on something else. A new write route that opts in to nothing is authorized on its
+  params alone, so forgetting the allowlist fails closed.
+  Malformed identifiers are deferred rather than denied — every write schema validates ids as
+  `guid()`, so the controller answers 400; the gate must not pre-empt that with a 403 or a failed
+  query. The "malformed" test is a superset of the UUID spellings Postgres accepts (braced,
+  unhyphenated, upper-case), so nothing resolvable slips past as malformed.
 - `requireOrganizationScope` is the stricter check used by `comments.js`, where the action is taken
   *on behalf of* an organization (replying to feedback as that organization) and the claim is
   required of every caller, admins included.

@@ -18,8 +18,8 @@ import {
 
 export default (app) => {
   app.get('/organizations', organizations.find);
-  app.post('/organizations', getUser, dataEntryAuth, organizations.create);
-  app.patch('/organizations/:organizationId', getUser, dataEntryAuth, organizations.update);
+  app.post('/organizations', getUser, dataEntryAuth(), organizations.create);
+  app.patch('/organizations/:organizationId', getUser, dataEntryAuth(), organizations.update);
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
@@ -29,17 +29,17 @@ export default (app) => {
   app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
-  app.post('/locations', getUser, dataEntryAuth, locations.create);
-  app.patch('/locations/:locationId', getUser, dataEntryAuth, locations.update);
+  app.post('/locations', getUser, dataEntryAuth(['organizationId']), locations.create);
+  app.patch('/locations/:locationId', getUser, dataEntryAuth(['organizationId']), locations.update);
 
-  app.post('/locations/:locationId/phones', getUser, dataEntryAuth, locations.addPhone);
-  app.patch('/phones/:phoneId', getUser, dataEntryAuth, locations.updatePhone);
-  app.delete('/phones/:phoneId', getUser, dataEntryAuth, locations.deletePhone);
+  app.post('/locations/:locationId/phones', getUser, dataEntryAuth(), locations.addPhone);
+  app.patch('/phones/:phoneId', getUser, dataEntryAuth(), locations.updatePhone);
+  app.delete('/phones/:phoneId', getUser, dataEntryAuth(), locations.deletePhone);
 
-  app.post('/services', getUser, dataEntryAuth, services.create);
+  app.post('/services', getUser, dataEntryAuth(['locationId']), services.create);
   app.get('/services/get-count', services.getCount);
-  app.patch('/services/:serviceId', getUser, dataEntryAuth, services.update);
-  app.delete('/services/:serviceId', getUser, dataEntryAuth, services.delete);
+  app.patch('/services/:serviceId', getUser, dataEntryAuth(), services.update);
+  app.delete('/services/:serviceId', getUser, dataEntryAuth(), services.delete);
 
   app.get('/geocode/analytics/all', geocode.findAnalytics);
 

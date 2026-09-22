@@ -22,6 +22,8 @@ import { ForbiddenError } from '../utils/errors';
  * the data-entry tool entirely.
  */
 
+const NOT_AUTHORIZED = 'Not authorized to edit data for this organization';
+
 export function hasOrganizationScope(req, organizationId) {
   return !!organizationId &&
     !!req.userOrganizationIds &&
@@ -80,16 +82,42 @@ async function findPhoneOrganizationId(phoneId) {
 }
 
 /**
- * Every organization a write request touches, resolved from the route params
- * and body. Returns null when a referenced record doesn't exist, so callers can
- * fail closed rather than let an unresolvable target through.
- *
- * A location update that carries `organizationId` is reassigning the location
- * into another organization, so both the current and the target organization
- * are included - otherwise a provider could move someone else's location into
- * their own namespace, or their own location out of it.
+ * Postgres accepts a UUID with upper-case digits, wrapped in braces, and with
+ * some, all or extra hyphens, so normalizing those away and requiring 32 hex
+ * digits admits every form a lookup could actually resolve. Anything else is
+ * malformed, and the controller's own Joi schema - which validates every
+ * identifier on every write route as a guid - will reject it with a 400.
  */
-export async function findRequestOrganizationIds(req) {
+function isResolvableId(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim().replace(/^\{/, '').replace(/\}$/, '').replace(/-/g, '');
+  return /^[0-9a-f]{32}$/i.test(normalized);
+}
+
+export const scopeResult = {
+  resolved: 'resolved',
+  unresolved: 'unresolved',
+  // A malformed identifier can't name a record, so there is nothing to
+  // authorize: deferring leaves the controller's validation to answer 400
+  // rather than turning it into a 403 or a failed query.
+  malformed: 'malformed',
+};
+
+/**
+ * Every organization a write request touches, resolved from the route params
+ * and from the body fields the route actually consumes.
+ *
+ * `bodyFields` is an allowlist rather than a shape guess on purpose. A body
+ * field that a route ignores must never contribute scope: `POST /organizations`
+ * validates with `allowUnknown`, so a caller could otherwise attach an
+ * `organizationId` they do hold, satisfy the check with it, and have the
+ * controller create an entirely unrelated organization from the rest of the
+ * body. Routes opt in, so a new write route fails closed instead of open.
+ */
+export async function findRequestOrganizationIds(req, bodyFields = []) {
   const params = req.params || {};
   const body = req.body || {};
   const organizationIds = [];
@@ -100,37 +128,54 @@ export async function findRequestOrganizationIds(req) {
     }
   };
 
+  const fromBody = field => (bodyFields.includes(field) ? body[field] : undefined);
+
+  const identifiers = {
+    organizationId: params.organizationId || fromBody('organizationId'),
+    locationId: params.locationId || fromBody('locationId'),
+    phoneId: params.phoneId,
+    serviceId: params.serviceId,
+  };
+
+  const present = Object.values(identifiers).filter(value => value !== undefined);
+  if (present.some(value => !isResolvableId(value))) {
+    return { status: scopeResult.malformed, organizationIds: [] };
+  }
+
+  // A location update carrying `organizationId` is reassigning the location, so
+  // both its current and its target organization are in play - otherwise a
+  // scoped caller could move someone else's location into their own namespace,
+  // or their own location out of it.
   add(params.organizationId);
-  add(body.organizationId);
+  add(fromBody('organizationId'));
 
-  const locationId = params.locationId || body.locationId;
-  if (locationId) {
-    const organizationId = await findLocationOrganizationId(locationId);
+  if (identifiers.locationId) {
+    const organizationId = await findLocationOrganizationId(identifiers.locationId);
     if (!organizationId) {
-      return null;
+      return { status: scopeResult.unresolved, organizationIds: [] };
     }
     add(organizationId);
   }
 
-  if (params.phoneId) {
-    const organizationId = await findPhoneOrganizationId(params.phoneId);
+  if (identifiers.phoneId) {
+    const organizationId = await findPhoneOrganizationId(identifiers.phoneId);
     if (!organizationId) {
-      return null;
+      return { status: scopeResult.unresolved, organizationIds: [] };
     }
     add(organizationId);
   }
 
-  if (params.serviceId) {
-    const service = await models.Service.findByPk(params.serviceId, {
+  if (identifiers.serviceId) {
+    const service = await models.Service.findByPk(identifiers.serviceId, {
       attributes: ['organization_id'],
     });
     if (!service) {
-      return null;
+      return { status: scopeResult.unresolved, organizationIds: [] };
     }
     add(service.organization_id);
   }
 
-  return organizationIds;
+  return { status: scopeResult.resolved, organizationIds };
 }
 
 /**
@@ -138,24 +183,27 @@ export async function findRequestOrganizationIds(req) {
  * the directory-wide access they have always had; providers are held to the
  * organizations in their own claim.
  */
-export async function assertDataEntryScope(req) {
+export async function assertDataEntryScope(req, bodyFields = []) {
   if (req.userIsAdmin || !req.userIsProvider) {
     return;
   }
 
-  const organizationIds = await findRequestOrganizationIds(req);
+  const { status, organizationIds } = await findRequestOrganizationIds(req, bodyFields);
 
-  // An empty list means the request isn't tied to an existing organization at
-  // all (creating a new one); null means a referenced record couldn't be
-  // resolved. Neither is something a scoped provider may do.
-  if (!organizationIds || !organizationIds.length) {
-    throw new ForbiddenError('Not authorized to edit data for this organization');
+  if (status === scopeResult.malformed) {
+    return;
+  }
+
+  // An empty list means the request names no existing organization at all -
+  // creating a new one - which is not something a scoped caller may do.
+  if (status !== scopeResult.resolved || !organizationIds.length) {
+    throw new ForbiddenError(NOT_AUTHORIZED);
   }
 
   const outOfScope = organizationIds
     .some(organizationId => !hasOrganizationScope(req, organizationId));
   if (outOfScope) {
-    throw new ForbiddenError('Not authorized to edit data for this organization');
+    throw new ForbiddenError(NOT_AUTHORIZED);
   }
 }
 
@@ -164,4 +212,5 @@ export default {
   requireOrganizationScope,
   findRequestOrganizationIds,
   assertDataEntryScope,
+  scopeResult,
 };

@@ -58,20 +58,20 @@ const provider = extra => makeRequest({
 
 const streetTeam = extra => makeRequest({ ...extra });
 
-async function run(req) {
+async function run(req, bodyFields = []) {
   const next = jest.fn();
-  await dataEntryAuth(req, {}, next);
+  await dataEntryAuth(bodyFields)(req, {}, next);
   return next;
 }
 
-async function expectAllowed(req) {
-  const next = await run(req);
+async function expectAllowed(req, bodyFields) {
+  const next = await run(req, bodyFields);
   expect(next).toHaveBeenCalledTimes(1);
   expect(next).toHaveBeenCalledWith();
 }
 
-async function expectForbidden(req) {
-  const next = await run(req);
+async function expectForbidden(req, bodyFields) {
+  const next = await run(req, bodyFields);
   expect(next).toHaveBeenCalledTimes(1);
   const [err] = next.mock.calls[0];
   expect(err).toBeInstanceOf(ForbiddenError);
@@ -120,7 +120,11 @@ describe('providers are held to their own organizations', () => {
   });
 
   it('refuses creating a location under another organization', async () => {
-    await expectForbidden(provider({ body: { organizationId: OTHER_ORG } }));
+    await expectForbidden(provider({ body: { organizationId: OTHER_ORG } }), ['organizationId']);
+  });
+
+  it('allows creating a location under its own organization', async () => {
+    await expectAllowed(provider({ body: { organizationId: OWN_ORG } }), ['organizationId']);
   });
 
   it("refuses editing another organization's location", async () => {
@@ -157,7 +161,7 @@ describe('providers are held to their own organizations', () => {
 
   it('refuses adding a service to another organization\'s location', async () => {
     models.Location.findByPk.mockResolvedValue({ organization_id: OTHER_ORG });
-    await expectForbidden(provider({ body: { locationId: LOCATION_ID } }));
+    await expectForbidden(provider({ body: { locationId: LOCATION_ID } }), ['locationId']);
   });
 
   // Fail closed: an unresolvable target must not be read as "unscoped".
@@ -172,7 +176,7 @@ describe('reassigning a location between organizations', () => {
     await expectForbidden(provider({
       params: { locationId: LOCATION_ID },
       body: { organizationId: OTHER_ORG },
-    }));
+    }), ['organizationId']);
   });
 
   it("refuses pulling another organization's location into its own", async () => {
@@ -180,7 +184,7 @@ describe('reassigning a location between organizations', () => {
     await expectForbidden(provider({
       params: { locationId: LOCATION_ID },
       body: { organizationId: OWN_ORG },
-    }));
+    }), ['organizationId']);
   });
 
   it('allows a street-team account to reassign a location', async () => {
@@ -188,7 +192,69 @@ describe('reassigning a location between organizations', () => {
     await expectAllowed(streetTeam({
       params: { locationId: LOCATION_ID },
       body: { organizationId: OWN_ORG },
+    }), ['organizationId']);
+  });
+});
+
+// A body field a route ignores must never satisfy the check on its own.
+// `POST /organizations` validates with `allowUnknown`, so without the
+// allowlist a provider could attach an organization id they legitimately hold
+// and have the controller create an unrelated organization from the rest of
+// the body.
+describe('body fields only count where the route consumes them', () => {
+  it('refuses creating an organization even when the body names one in scope', async () => {
+    await expectForbidden(provider({ body: { name: 'New org', organizationId: OWN_ORG } }));
+  });
+
+  it('refuses creating an organization when the body names a location in scope', async () => {
+    models.Location.findByPk.mockResolvedValue({ organization_id: OWN_ORG });
+    await expectForbidden(provider({ body: { name: 'New org', locationId: LOCATION_ID } }));
+  });
+
+  it('ignores a stray organizationId on a route that does not read it', async () => {
+    models.Service.findByPk.mockResolvedValue({ organization_id: OTHER_ORG });
+    await expectForbidden(provider({
+      params: { serviceId: SERVICE_ID },
+      body: { organizationId: OWN_ORG },
     }));
+  });
+
+  it('does not query the body location id unless the route opted in', async () => {
+    await expectForbidden(provider({ body: { locationId: LOCATION_ID } }));
+    expect(models.Location.findByPk).not.toHaveBeenCalled();
+  });
+});
+
+// The controller's Joi schema validates every identifier as a guid, so a
+// malformed one is a 400 from the controller. The gate must not turn that into
+// a failed query or a 403.
+describe('malformed identifiers are left to request validation', () => {
+  it('defers instead of querying for a non-uuid service id', async () => {
+    await expectAllowed(provider({ params: { serviceId: 'not-a-uuid' } }));
+    expect(models.Service.findByPk).not.toHaveBeenCalled();
+  });
+
+  it('defers instead of querying for a non-uuid location id', async () => {
+    await expectAllowed(provider({ params: { locationId: 'not-a-uuid' } }));
+    expect(models.Location.findByPk).not.toHaveBeenCalled();
+  });
+
+  it('defers for a malformed organization id rather than answering forbidden', async () => {
+    await expectAllowed(provider({ params: { organizationId: 'nope' } }));
+  });
+
+  // Postgres accepts braced and unhyphenated uuids, so these must still be
+  // resolved and checked rather than waved through as malformed.
+  it('still enforces scope on a braced uuid', async () => {
+    models.Service.findByPk.mockResolvedValue({ organization_id: OTHER_ORG });
+    await expectForbidden(provider({ params: { serviceId: `{${SERVICE_ID}}` } }));
+    expect(models.Service.findByPk).toHaveBeenCalled();
+  });
+
+  it('still enforces scope on an unhyphenated uuid', async () => {
+    models.Service.findByPk.mockResolvedValue({ organization_id: OTHER_ORG });
+    await expectForbidden(provider({ params: { serviceId: SERVICE_ID.replace(/-/g, '') } }));
+    expect(models.Service.findByPk).toHaveBeenCalled();
   });
 });
 
