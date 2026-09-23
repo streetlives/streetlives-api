@@ -372,13 +372,17 @@ describe('update location streetview', () => {
   });
 
   describe('transaction rollback', () => {
+    // Reassigning the location to an unknown organization fails the last update
+    // in the transaction, after the streetview work has already been done. The
+    // location controller rejects the unknown id itself, so this answers 404
+    // rather than surfacing a foreign key violation as a 500.
     const nonExistentOrganizationId = '22222222-2222-2222-2222-222222222222';
 
     it('should roll back a streetview creation when another update fails', async () => {
       await patchLocation({
         streetview: fullStreetview,
         organizationId: nonExistentOrganizationId,
-      }).expect(500);
+      }).expect(404);
 
       const streetview = await getStreetviewRow();
       expect(streetview).toBeNull();
@@ -390,7 +394,7 @@ describe('update location streetview', () => {
       await patchLocation({
         streetview: null,
         organizationId: nonExistentOrganizationId,
-      }).expect(500);
+      }).expect(404);
 
       const streetview = await getStreetviewRow();
       expect(streetview).not.toBeNull();
@@ -403,7 +407,7 @@ describe('update location streetview', () => {
       await patchLocation({
         streetview: { fov: 45 },
         organizationId: nonExistentOrganizationId,
-      }).expect(500);
+      }).expect(404);
 
       const streetview = await getStreetviewRow();
       expect(streetview.fov).toEqual(fullStreetview.fov);

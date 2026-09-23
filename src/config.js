@@ -5,6 +5,7 @@ export default {
   port: process.env.PORT || 3000,
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
   adminGroupName: process.env.ADMIN_GROUP_NAME || 'StreetlivesAdmins',
+  providerGroupName: process.env.PROVIDER_GROUP_NAME || 'Providers',
   db: {
     database: process.env.DATABASE_NAME || 'streetlives',
     username: process.env.DATABASE_USER,
