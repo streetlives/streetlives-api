@@ -1,0 +1,78 @@
+# Linux host networking is intentional for WebRTC and SIP media.
+# See docs/public-calling.md before opening ports or enabling PUBLIC_CALLING_ENABLED.
+name: yourpeer-public-calling
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+services:
+  redis:
+    image: redis:7.4.8-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    # Private bind-mounted configuration is mode 0600. Bypass the image's UID
+    # switch so it remains readable; this runs only on the dedicated gateway.
+    user: '0:0'
+    entrypoint: [redis-server]
+    command: [/etc/redis/redis.conf]
+    security_opt: [no-new-privileges:true]
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./runtime/redis.conf:/etc/redis/redis.conf:ro
+      - redis-data:/data
+    logging: *logging
+  livekit:
+    image: livekit/livekit-server:v1.13.6@sha256:e37d68f172556d02aa77968b9fc55ef481468c0315fa38e4fa6c56ce72e3a815
+    command: [--config, /etc/livekit.yaml]
+    user: '0:0'
+    security_opt: [no-new-privileges:true]
+    network_mode: host
+    restart: unless-stopped
+    depends_on: [redis]
+    volumes:
+      - ./runtime/livekit.yaml:/etc/livekit.yaml:ro
+    logging: *logging
+  sip:
+    image: livekit/sip:v1.14.0@sha256:1487f39ca985f64879cc74b045e1ddc22f7afdb02e8a4739d92d749b9c3c3ad2
+    command: [--config, /etc/sip.yaml]
+    user: '0:0'
+    security_opt: [no-new-privileges:true]
+    network_mode: host
+    restart: unless-stopped
+    depends_on: [redis, livekit]
+    volumes:
+      - ./runtime/sip.yaml:/etc/sip.yaml:ro
+    logging: *logging
+  tls:
+    image: haproxy:3.2.7-alpine@sha256:3b80483d47e1c7d1fc7eb4b9104f33d9a51259769be299eb675524dca2bc8157
+    network_mode: host
+    user: '0:0'
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    depends_on: [livekit]
+    volumes:
+      - ./runtime/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./certs:/etc/calling-certs:ro
+    logging: *logging
+  reaper:
+    image: node:22.19.0-alpine@sha256:d2166de198f26e17e5a442f537754dd616ab069c47cc57b889310a717e0abbf9
+    command: [node, /app/reaper.mjs]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    user: node
+    env_file: ./runtime/reaper.env
+    volumes:
+      - ./reaper.mjs:/app/reaper.mjs:ro
+    healthcheck:
+      test: [CMD, node, /app/reaper.mjs, --healthcheck]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+    # Health state uses shared memory; no call/session data is written here.
+    tmpfs: [/tmp:size=1m,mode=1777]
+    logging: *logging
+volumes:
+  redis-data:
