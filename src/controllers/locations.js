@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import locationSchemas from './validation/locations';
+import locationSchemas, { PHOTO_MAX_BYTES } from './validation/locations';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {
@@ -12,7 +12,9 @@ import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { formatIsoWithTimezone } from '../utils/times';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { NotFoundError, ValidationError, ServiceUnavailableError } from '../utils/errors';
+import { detectImage } from '../utils/image';
+import * as photoStorage from '../services/photo-storage';
 import { redactPii } from '../utils/redact-pii';
 import { getClientIp } from '../utils/request';
 import { parseNaturalLanguageQuery } from './openai';
@@ -26,6 +28,16 @@ const MAX_TAXONOMY_IDS = 200;
 const NL_STREET_ADDRESS_RADIUS_METERS = 1500;
 
 const CLOSURE_EVENT_TYPE = 'CLOSURE';
+
+// The operational columns are not part of the public contract. Kept in one
+// place so the upload response and the association include agree on the shape.
+const PRIVATE_PHOTO_FIELDS = ['location_id', 's3_bucket', 'sha256'];
+
+const toPublicPhoto = (instance) => {
+  const plain = instance.get({ plain: true });
+  PRIVATE_PHOTO_FIELDS.forEach((field) => { delete plain[field]; });
+  return plain;
+};
 
 const isLocationClosed = (eventRelatedInfos) => {
   if (!eventRelatedInfos) {
@@ -47,6 +59,13 @@ const locationAssociations = {
     models.AccessibilityForDisabilities,
     models.EventRelatedInfo,
     models.Streetview,
+    {
+      model: models.LocationPhoto,
+      // Operational columns stay off a public response, and leaving them out
+      // keeps this join's SQL small - locationAssociations is split from
+      // serviceAssociations to stay under the RDS Proxy pinning threshold.
+      attributes: { exclude: ['location_id', 's3_bucket', 'sha256'] },
+    },
   ],
 };
 const serviceAssociations = {
@@ -818,6 +837,162 @@ export default {
       res.sendStatus(201);
     } catch (err) {
       next(err);
+    }
+  },
+
+  setPhoto: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.setPhoto, { allowUnknown: true });
+
+      if (!photoStorage.isConfigured()) {
+        throw new ServiceUnavailableError('Location photo storage is not configured');
+      }
+
+      const { locationId } = req.params;
+      const {
+        contentType, data, filename, metadata,
+      } = req.body;
+
+      const location = await models.Location.findByPk(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      const body = Buffer.from(data, 'base64');
+      if (body.length === 0) {
+        throw new ValidationError('Uploaded image is empty');
+      }
+      if (body.length > PHOTO_MAX_BYTES) {
+        throw new ValidationError(`Uploaded image exceeds the ${PHOTO_MAX_BYTES} byte limit`);
+      }
+
+      // The declared type is not trusted: these bytes end up on a public CDN
+      // under whatever type we record, so an `image/png` label on an SVG or an
+      // HTML document would become stored XSS on the CDN domain.
+      const detected = detectImage(body);
+      if (!detected) {
+        throw new ValidationError('Unrecognized image data');
+      }
+      if (detected.contentType !== contentType) {
+        const message = `Declared content type ${contentType} does not match `
+          + `the uploaded image (${detected.contentType})`;
+        throw new ValidationError(message);
+      }
+
+      const sha256 = photoStorage.hashPhoto(body);
+      const key = photoStorage.buildObjectKey({
+        locationId, sha256, contentType: detected.contentType,
+      });
+
+      // S3 first, then the database. A rollback after a successful write leaks
+      // an unreferenced object, which is invisible and cheap; the other order
+      // can commit a row pointing at an object that does not exist, which is a
+      // broken image on the public site.
+      await photoStorage.putPhoto({
+        key, body, contentType: detected.contentType, locationId, sha256,
+      });
+
+      const values = {
+        s3_bucket: photoStorage.getBucketName(),
+        s3_key: key,
+        content_type: detected.contentType,
+        byte_size: body.length,
+        width: detected.width,
+        height: detected.height,
+        original_filename: filename || null,
+        sha256,
+      };
+
+      let previousKey = null;
+      let saved = null;
+
+      await models.sequelize.transaction(async (t) => {
+        // Lock the parent location for the rest of the transaction: without it
+        // two concurrent uploads both find no row and both insert, and the
+        // loser hits the location_id unique constraint instead of updating.
+        await models.Location.findByPk(locationId, {
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+
+        const existing = await models.LocationPhoto.findOne({
+          where: { location_id: locationId },
+          transaction: t,
+        });
+
+        if (existing) {
+          previousKey = existing.s3_key;
+          saved = await updateInstance(req.user, existing, values, { metadata, transaction: t });
+        } else {
+          saved = await createInstance(
+            req.user,
+            models.LocationPhoto.create.bind(models.LocationPhoto),
+            { location_id: locationId, ...values },
+            { metadata, transaction: t },
+          );
+        }
+      });
+
+      // Only after the commit, and only when the object actually changed:
+      // re-uploading identical bytes produces the same key, and deleting it
+      // here would remove the object the surviving row points at.
+      if (previousKey && previousKey !== key) {
+        await photoStorage.deletePhoto(previousKey);
+      }
+
+      const photo = saved || await models.LocationPhoto.findOne({
+        where: { location_id: locationId },
+      });
+
+      return res.status(200).send(toPublicPhoto(photo));
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  deletePhoto: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.deletePhoto, { allowUnknown: true });
+
+      if (!photoStorage.isConfigured()) {
+        throw new ServiceUnavailableError('Location photo storage is not configured');
+      }
+
+      const { locationId } = req.params;
+
+      const location = await models.Location.findByPk(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      let removedKey = null;
+
+      await models.sequelize.transaction(async (t) => {
+        await models.Location.findByPk(locationId, {
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+
+        const existing = await models.LocationPhoto.findOne({
+          where: { location_id: locationId },
+          transaction: t,
+        });
+
+        // No photo is not an error: the delete is idempotent, matching how
+        // `streetview: null` behaves on a location with no override.
+        if (!existing) return;
+
+        removedKey = existing.s3_key;
+        await destroyInstance(req.user, existing, { transaction: t });
+      });
+
+      if (removedKey) {
+        await photoStorage.deletePhoto(removedKey);
+      }
+
+      return res.sendStatus(204);
+    } catch (err) {
+      return next(err);
     }
   },
 };

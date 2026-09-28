@@ -6,6 +6,13 @@ const updateMetadataSchema = Joi.object().keys({
   lastUpdated: Joi.date().iso(),
 });
 
+// Lambda's synchronous invoke payload limit is 6MB, and that binds well before
+// API Gateway's 10MB request cap - the event JSON carries the body plus the
+// headers. Base64 inflates by 4/3, so 4MiB decoded leaves comfortable room.
+export const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
+const PHOTO_MAX_BASE64_CHARS = (Math.ceil(PHOTO_MAX_BYTES / 3) * 4) + 4;
+const PHOTO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 export default {
   find: {
     query: Joi.object().keys({
@@ -174,6 +181,33 @@ export default {
       latitude: Joi.number().required(),
       longitude: Joi.number().required(),
       taxonomyIds: Joi.string().allow(''),
+    }).required(),
+  },
+
+  setPhoto: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      contentType: Joi.string().valid(PHOTO_CONTENT_TYPES).required(),
+      // .max() deliberately precedes .base64(): joi runs tests in chain order,
+      // and regexing several megabytes of garbage before checking the length
+      // is wasted work on every oversized request.
+      data: Joi.string().required().max(PHOTO_MAX_BASE64_CHARS)
+        .base64({ paddingRequired: true }),
+      filename: Joi.string().max(255),
+      metadata: updateMetadataSchema,
+      // No .unknown(false) here, unlike the streetview sub-schema. That flag
+      // exists there because .min(1) could be satisfied by a key the
+      // controller ignores, creating an all-null row. This schema has required
+      // fields and no such hazard, and dataEntryAuth() takes no body fields, so
+      // no unknown key can contribute authorization scope either.
+    }).required(),
+  },
+
+  deletePhoto: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
     }).required(),
   },
 };

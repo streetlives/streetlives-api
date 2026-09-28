@@ -220,3 +220,9 @@ user in that group silently narrows what they can edit.
 | `SLACK_WEBHOOK_URL` | — | Optional Slack notifications |
 | `ADMIN_GROUP_NAME` | `StreetlivesAdmins` | Cognito group for admin users |
 | `PROVIDER_GROUP_NAME` | `Providers` | Cognito group for external organization reps, scoped to their `custom:orgs` claim |
+| `LOCATION_PHOTO_S3_BUCKET` | — | Bucket for organization-provided location photos. Unset ⇒ the photo endpoints answer 503 |
+| `LOCATION_PHOTO_PUBLIC_BASE_URL` | — | CDN origin the photos are served from; required alongside the bucket |
+| `LOCATION_PHOTO_S3_REGION` | `us-east-1` | |
+| `LOCATION_PHOTO_KEY_PREFIX` | `location-photos` | |
+| `LOCATION_PHOTO_MAX_BYTES` | 4MiB | Decoded size cap; Lambda's 6MB sync invoke payload is the real ceiling |
+| `LOCATION_PHOTO_STORAGE_DRIVER` | inferred | `s3` when a bucket is set, or `memory` for the test suite |

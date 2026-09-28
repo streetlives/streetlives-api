@@ -61,6 +61,17 @@ All configuration options can be passed to the server using environment variable
 * `DATABASE_CLIENT_MIN_MESSAGES` - Postgres `client_min_messages` level. Keep as `ignore` with RDS Proxy to avoid connection pinning from session-level `SET` commands (Default: `ignore`)
 * `DATABASE_KEEP_DEFAULT_TIMEZONE` - When `true`, sequelize will not issue `SET TIME ZONE ...` per connection, which avoids RDS Proxy session pinning (Default: `true`)
 
+Organization-provided location photos (`PUT`/`DELETE /locations/:locationId/photo`) need an S3
+bucket fronted by a CDN. With these unset the endpoints answer `503` and `LocationPhoto.url` is
+`null`, so the API runs normally without them:
+
+* `LOCATION_PHOTO_S3_BUCKET` - Bucket the uploaded photos are written to. Unset disables uploads
+* `LOCATION_PHOTO_PUBLIC_BASE_URL` - Public CDN origin the objects are served from, e.g. `https://photos.yourpeer.nyc`. Required alongside the bucket: storing objects nobody can read is not a useful state
+* `LOCATION_PHOTO_S3_REGION` - Region of the bucket (Default: `us-east-1`)
+* `LOCATION_PHOTO_KEY_PREFIX` - Key prefix for stored objects (Default: `location-photos`)
+* `LOCATION_PHOTO_MAX_BYTES` - Largest accepted image, decoded (Default: 4MiB). Lambda's synchronous invoke payload limit is 6MB and base64 inflates by 4/3, so raising this much will start failing at the edge instead
+* `LOCATION_PHOTO_STORAGE_DRIVER` - `s3` (inferred when a bucket is set) or `memory`, an in-process fake used by the test suite
+
 Environment variables depends on the operating system, but can generally be set in the command-line when running the server.
 
 For example, on Linux/Mac:
