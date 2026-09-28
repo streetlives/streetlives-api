@@ -1,6 +1,11 @@
 // An organization-provided photo that replaces the Google Street View still on
 // yourpeer.nyc. The bytes live in S3; this table holds the object's identity.
 //
+// This has no HSDS equivalent - the specification's only image field anywhere
+// is organization.logo - so it is a documented extension. See the README's
+// `LocationPhoto` section. Only `url` is published; the bucket, key and digest
+// stay internal so the payload does not carry one vendor's object layout.
+//
 // The photo deliberately does NOT live on `streetviews`: streetlives-web
 // collapses an all-null streetview payload to null to delete the override row,
 // so a column here would mean clearing a Street View override silently

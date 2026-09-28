@@ -228,8 +228,32 @@ describe('location photo', () => {
       const res = await request(app).get(`/locations/${location.id}`);
 
       expect(res.body.LocationPhoto.url).toBe(`https://photos.test.invalid/${row.s3_key}`);
-      expect(res.body.LocationPhoto).not.toHaveProperty('s3_bucket');
-      expect(res.body.LocationPhoto).not.toHaveProperty('sha256');
+    });
+
+    // `url` is the portable representation. The bucket, key and digest are how
+    // this deployment happens to store the file, and publishing them ties
+    // consumers - and any HSDS export built on this payload - to one vendor's
+    // object layout. s3_key is the easy one to regress: the virtual `url`
+    // declares it as a dependency, so sequelize puts it back into any SELECT
+    // that tries to exclude it.
+    it.each([
+      ['the upload response', async () => (await putPhoto(pngBody())).body],
+      ['the detail endpoint', async () => {
+        await putPhoto(pngBody());
+        return (await request(app).get(`/locations/${location.id}`)).body.LocationPhoto;
+      }],
+      ['the by-slug endpoint', async () => {
+        await putPhoto(pngBody());
+        const fresh = await models.Location.findByPk(location.id);
+        return (await request(app).get(`/locations-by-slug/${fresh.slug}`)).body.LocationPhoto;
+      }],
+    ])('keeps storage internals out of %s', async (_label, fetchPhoto) => {
+      const photo = await fetchPhoto();
+
+      expect(photo.url).toEqual(expect.stringContaining('https://photos.test.invalid/'));
+      ['s3_key', 's3_bucket', 'sha256', 'location_id'].forEach((field) => {
+        expect(photo).not.toHaveProperty(field);
+      });
     });
 
     it('appears on the by-slug endpoint', async () => {

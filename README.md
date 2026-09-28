@@ -84,6 +84,48 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
+### `LocationPhoto` — an extension beyond HSDS
+
+This schema is derived from the [Human Services Data
+Specification](https://docs.openreferral.org/en/latest/hsds/) (HSDS). HSDS has no
+concept of a photo attached to a location: its only image field anywhere is
+`organization.logo`, a bare URL on the organization, and the `url` object added
+in HSDS 3.0 attaches to organizations and services rather than locations and is
+meant for links, not media.
+
+`LocationPhoto` is therefore an **extension**. HSDS permits this — a publication
+stays conformant when it carries properties not defined in the specification, as
+long as no suitable HSDS property already exists and the addition is documented
+([Extending HSDS](https://docs.openreferral.org/en/latest/hsds/extending.html)).
+This section is that documentation.
+
+It appears on `GET /locations/:id` and `GET /locations-by-slug/:slug`, and is
+`null` when a location has no photo:
+
+```jsonc
+"LocationPhoto": {
+  "id": "…",
+  "url": "https://photos.yourpeer.nyc/location-photos/<location>/<sha256>.jpg",
+  "content_type": "image/jpeg",
+  "byte_size": 184233,
+  "width": 1600,
+  "height": 1200,
+  "original_filename": "front-door.jpg",
+  "createdAt": "…",
+  "updatedAt": "…"
+}
+```
+
+`url` is the only field a consumer needs, and it is the only portable one. The
+bucket, object key and content digest are stored but never published, so
+consumers are not coupled to how this deployment happens to store the file. If
+these records are ever exported as HSDS, `url` is the field to map; the closest
+thing in the specification is `organization.logo`, which is also just a URL.
+
+Provenance is not on the object. Who uploaded a photo and when comes from the
+`metadata` table like every other change in this schema, and surfaces on the
+location's `metadata.location` array as a `photo` entry.
+
 The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
 text to the OpenAI API. Populating the param is itself the consent signal:
 clients must only send it after showing the user the third-party-AI notice —

@@ -155,6 +155,20 @@ the PATH and records what the script actually called.
 
 **Runtime**: Express app (`src/app.js`) that runs both as a standard HTTP server (`src/index.js`) and as an AWS Lambda handler (`src/lambda.js`) via `aws-serverless-express`. Routes are defined in `src/routes.js`.
 
+**Schema lineage — HSDS**: the core tables are derived from the [Human Services Data
+Specification](https://docs.openreferral.org/en/latest/hsds/) (`organizations`, `services`,
+`locations`, `service_at_locations`, `physical_addresses`, `accessibility_for_disabilities`,
+`taxonomies`, `metadata`, …). The derivation is loose and nothing in the repo claims conformance:
+table names are pluralized where HSDS is singular, association keys serialize as PascalCase
+(`Streetview`, `PhysicalAddresses`), and timestamps come out camelCase. Match the repo's
+conventions, not the specification's, when adding to it.
+
+Where a new concept has no HSDS equivalent, HSDS allows the extension provided no suitable
+property already exists and the addition is **documented** — so document it in the README's API
+section. `LocationPhoto` is the worked example: HSDS has no location photo, its only image field
+anywhere is `organization.logo`. Keep storage internals out of anything published, so the payload
+stays portable if these records are ever exported as HSDS.
+
 **Database**: PostgreSQL + PostGIS, accessed via Sequelize 6. Models live in `src/models/` and are auto-loaded by `src/models/index.js`. Migrations and seeders are in `sequelize/`. The Sequelize CLI config is in `sequelize/config/database.js`.
 
 **Write pattern — always use data-changes.js**: Every create/update/delete must go through `src/services/data-changes.js` (`createInstance`, `updateInstance`, `destroyInstance`). These helpers wrap mutations in a transaction and write a `Metadata` record for every changed field, creating a full audit trail.

@@ -31,13 +31,29 @@ const CLOSURE_EVENT_TYPE = 'CLOSURE';
 
 // The operational columns are not part of the public contract. Kept in one
 // place so the upload response and the association include agree on the shape.
-const PRIVATE_PHOTO_FIELDS = ['location_id', 's3_bucket', 'sha256'];
+// Storage internals stay out of the published payload. `url` is the portable
+// representation of where the photo lives; the bucket, key and digest are how
+// this deployment happens to store it, and data modelled on HSDS should not
+// carry one vendor's object layout.
+const PRIVATE_PHOTO_FIELDS = ['location_id', 's3_bucket', 's3_key', 'sha256'];
 
-const toPublicPhoto = (instance) => {
-  const plain = instance.get({ plain: true });
-  PRIVATE_PHOTO_FIELDS.forEach((field) => { delete plain[field]; });
-  return plain;
+// s3_key cannot be dropped at query level: the virtual `url` declares it as a
+// dependency, so sequelize adds it back to the SELECT and it reappears in the
+// serialized output. Excluding the rest still keeps the join's SQL small.
+const PHOTO_QUERY_EXCLUDE = PRIVATE_PHOTO_FIELDS.filter(field => field !== 's3_key');
+
+/* eslint-disable no-param-reassign */
+// Mutates in place deliberately: the caller holds the nested object inside an
+// already-built plain location, and rebuilding that tree to drop four keys
+// would be worse than saying so here.
+const scrubPhoto = (photo) => {
+  if (!photo) return photo;
+  PRIVATE_PHOTO_FIELDS.forEach((field) => { delete photo[field]; });
+  return photo;
 };
+/* eslint-enable no-param-reassign */
+
+const toPublicPhoto = instance => scrubPhoto(instance.get({ plain: true }));
 
 const isLocationClosed = (eventRelatedInfos) => {
   if (!eventRelatedInfos) {
@@ -64,7 +80,7 @@ const locationAssociations = {
       // Operational columns stay off a public response, and leaving them out
       // keeps this join's SQL small - locationAssociations is split from
       // serviceAssociations to stay under the RDS Proxy pinning threshold.
-      attributes: { exclude: ['location_id', 's3_bucket', 'sha256'] },
+      attributes: { exclude: PHOTO_QUERY_EXCLUDE },
     },
   ],
 };
@@ -131,6 +147,8 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
   }
 
   const address = addresses[0];
+
+  scrubPhoto(unchangedProps.LocationPhoto);
 
   const responseData = {
     ...unchangedProps,
