@@ -47,4 +47,19 @@ export default {
     password: process.env.MAIL_PASSWORD,
     from: process.env.MAIL_FROM,
   },
+  // Organization-provided location photos (issue #735). Read through getters
+  // rather than captured at import: the storage driver is chosen per call so
+  // tests can flip these without re-importing the module graph, and nothing
+  // here may throw at import time - config.js is pulled in by any migration
+  // that imports src/models, so a throw would break db:migrate.
+  locationPhotos: {
+    get bucket() { return process.env.LOCATION_PHOTO_S3_BUCKET; },
+    get region() { return process.env.LOCATION_PHOTO_S3_REGION || 'us-east-1'; },
+    get publicBaseUrl() { return process.env.LOCATION_PHOTO_PUBLIC_BASE_URL; },
+    get keyPrefix() { return process.env.LOCATION_PHOTO_KEY_PREFIX || 'location-photos'; },
+    get maxBytes() {
+      return parseNumber(process.env.LOCATION_PHOTO_MAX_BYTES, 4 * 1024 * 1024);
+    },
+    get driver() { return process.env.LOCATION_PHOTO_STORAGE_DRIVER; },
+  },
 };

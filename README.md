@@ -61,6 +61,17 @@ All configuration options can be passed to the server using environment variable
 * `DATABASE_CLIENT_MIN_MESSAGES` - Postgres `client_min_messages` level. Keep as `ignore` with RDS Proxy to avoid connection pinning from session-level `SET` commands (Default: `ignore`)
 * `DATABASE_KEEP_DEFAULT_TIMEZONE` - When `true`, sequelize will not issue `SET TIME ZONE ...` per connection, which avoids RDS Proxy session pinning (Default: `true`)
 
+Organization-provided location photos (`PUT`/`DELETE /locations/:locationId/photo`) need an S3
+bucket fronted by a CDN. With these unset the endpoints answer `503` and `LocationPhoto.url` is
+`null`, so the API runs normally without them:
+
+* `LOCATION_PHOTO_S3_BUCKET` - Bucket the uploaded photos are written to. Unset disables uploads
+* `LOCATION_PHOTO_PUBLIC_BASE_URL` - Public CDN origin the objects are served from, e.g. `https://photos.yourpeer.nyc`. Required alongside the bucket: storing objects nobody can read is not a useful state
+* `LOCATION_PHOTO_S3_REGION` - Region of the bucket (Default: `us-east-1`)
+* `LOCATION_PHOTO_KEY_PREFIX` - Key prefix for stored objects (Default: `location-photos`)
+* `LOCATION_PHOTO_MAX_BYTES` - Largest accepted image, decoded (Default and maximum: 4MiB). **Lowers the limit only.** A larger value is rejected by request validation before the controller sees it, and could not work anyway: Lambda's synchronous invoke payload limit is 6MB, base64 inflates by 4/3, and the request would fail at the edge
+* `LOCATION_PHOTO_STORAGE_DRIVER` - `s3` (inferred when a bucket is set) or `memory`, an in-process fake used by the test suite
+
 Environment variables depends on the operating system, but can generally be set in the command-line when running the server.
 
 For example, on Linux/Mac:
@@ -72,6 +83,48 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 ## API
 
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
+
+### `LocationPhoto` — an extension beyond HSDS
+
+This schema is derived from the [Human Services Data
+Specification](https://docs.openreferral.org/en/latest/hsds/) (HSDS). HSDS has no
+concept of a photo attached to a location: its only image field anywhere is
+`organization.logo`, a bare URL on the organization, and the `url` object added
+in HSDS 3.0 attaches to organizations and services rather than locations and is
+meant for links, not media.
+
+`LocationPhoto` is therefore an **extension**. HSDS permits this — a publication
+stays conformant when it carries properties not defined in the specification, as
+long as no suitable HSDS property already exists and the addition is documented
+([Extending HSDS](https://docs.openreferral.org/en/latest/hsds/extending.html)).
+This section is that documentation.
+
+It appears on `GET /locations/:id` and `GET /locations-by-slug/:slug`, and is
+`null` when a location has no photo:
+
+```jsonc
+"LocationPhoto": {
+  "id": "…",
+  "url": "https://photos.yourpeer.nyc/location-photos/<location>/<sha256>.jpg",
+  "content_type": "image/jpeg",
+  "byte_size": 184233,
+  "width": 1600,
+  "height": 1200,
+  "original_filename": "front-door.jpg",
+  "createdAt": "…",
+  "updatedAt": "…"
+}
+```
+
+`url` is the only field a consumer needs, and it is the only portable one. The
+bucket, object key and content digest are stored but never published, so
+consumers are not coupled to how this deployment happens to store the file. If
+these records are ever exported as HSDS, `url` is the field to map; the closest
+thing in the specification is `organization.logo`, which is also just a URL.
+
+Provenance is not on the object. Who uploaded a photo and when comes from the
+`metadata` table like every other change in this schema, and surfaces on the
+location's `metadata.location` array as a `photo` entry.
 
 The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
 text to the OpenAI API. Populating the param is itself the consent signal:

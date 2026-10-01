@@ -9,11 +9,13 @@ import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
+import { LOCATION_PHOTO_ROUTE } from './utils/photo-upload-path';
 import {
   NotFoundError,
   AuthError,
   ForbiddenError,
   ValidationError,
+  ServiceUnavailableError,
 } from './utils/errors';
 
 export default (app) => {
@@ -33,6 +35,12 @@ export default (app) => {
   app.patch('/locations/:locationId', getUser, dataEntryAuth(['organizationId']), locations.update);
 
   app.post('/locations/:locationId/phones', getUser, dataEntryAuth(), locations.addPhone);
+
+  // Organization-provided photo that replaces the Street View still on yourpeer.nyc.
+  // dataEntryAuth() takes no body allowlist on purpose: scope comes entirely from
+  // the locationId param, and no body field of these routes names an organization.
+  app.put(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.setPhoto);
+  app.delete(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.deletePhoto);
   app.patch('/phones/:phoneId', getUser, dataEntryAuth(), locations.updatePhone);
   app.delete('/phones/:phoneId', getUser, dataEntryAuth(), locations.deletePhone);
 
@@ -96,6 +104,18 @@ export default (app) => {
 
     if (err instanceof ForbiddenError) {
       return res.status(403).send({ error: err.message });
+    }
+
+    if (err instanceof ServiceUnavailableError
+      || err.name === 'PhotoStorageUnavailableError') {
+      return res.status(503).send({ error: err.message });
+    }
+
+    // body-parser rejects an oversized body with this before any route runs.
+    // Without the branch it falls through to the 500 below and answers with a
+    // stack trace, which is wrong for every route, not just the photo upload.
+    if (err.type === 'entity.too.large') {
+      return res.status(413).send({ error: 'Request body too large' });
     }
 
     // eslint-disable-next-line no-console
