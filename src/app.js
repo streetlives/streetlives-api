@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware';
 import setupRoutes from './routes';
 import { isPhotoUpload } from './utils/photo-upload-path';
+import { PHOTO_REQUEST_LIMIT_BYTES } from './controllers/validation/locations';
 
 const app = express();
 
@@ -15,11 +16,10 @@ app.use(cors());
 // Only the location-photo upload may exceed body-parser's 100KB default. A
 // route-level parser would be too late - the app-level one runs first and
 // would 413 before the route is matched - so the limit is chosen here, per
-// request. 6mb sits above the 4MiB decoded cap the schema enforces, so a
-// slightly oversized upload gets a clean 400 naming the limit rather than an
-// opaque 413.
+// request. The ceiling sits above the configured decoded cap, so an upload a
+// little over that gets a clean 400 naming the limit rather than an opaque 413.
 const defaultJsonParser = bodyParser.json();
-const photoJsonParser = bodyParser.json({ limit: '6mb' });
+const photoJsonParser = bodyParser.json({ limit: PHOTO_REQUEST_LIMIT_BYTES });
 app.use((req, res, next) =>
   (isPhotoUpload(req) ? photoJsonParser : defaultJsonParser)(req, res, next));
 

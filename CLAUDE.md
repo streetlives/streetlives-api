@@ -238,5 +238,5 @@ user in that group silently narrows what they can edit.
 | `LOCATION_PHOTO_PUBLIC_BASE_URL` | — | CDN origin the photos are served from; required alongside the bucket |
 | `LOCATION_PHOTO_S3_REGION` | `us-east-1` | |
 | `LOCATION_PHOTO_KEY_PREFIX` | `location-photos` | |
-| `LOCATION_PHOTO_MAX_BYTES` | 4MiB | Decoded size cap; Lambda's 6MB sync invoke payload is the real ceiling |
+| `LOCATION_PHOTO_MAX_BYTES` | 4MiB | Decoded size cap, **lowers only** — 4MiB is the maximum, since Lambda's 6MB sync invoke payload bounds the base64 |
 | `LOCATION_PHOTO_STORAGE_DRIVER` | inferred | `s3` when a bucket is set, or `memory` for the test suite |

@@ -6,11 +6,23 @@ const updateMetadataSchema = Joi.object().keys({
   lastUpdated: Joi.date().iso(),
 });
 
-// Lambda's synchronous invoke payload limit is 6MB, and that binds well before
-// API Gateway's 10MB request cap - the event JSON carries the body plus the
-// headers. Base64 inflates by 4/3, so 4MiB decoded leaves comfortable room.
+// The hard ceiling on a photo upload *request*. Lambda's synchronous invoke
+// payload limit is 6MB and binds well before API Gateway's 10MB request cap,
+// because the event JSON carries the body plus the headers. Nothing above this
+// can reach our code, so it is not configurable; it drives the body-parser
+// limit in app.js, which answers 413.
+export const PHOTO_REQUEST_LIMIT_BYTES = 6 * 1024 * 1024;
+
+// The largest decoded image the stack is known to handle, and the bound the
+// base64 length check uses. LOCATION_PHOTO_MAX_BYTES can only lower the
+// effective limit from here, which is enforced on the decoded bytes in the
+// controller: raising it could not work anyway, since base64 of much more than
+// this will not fit inside PHOTO_REQUEST_LIMIT_BYTES.
 export const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
-const PHOTO_MAX_BASE64_CHARS = (Math.ceil(PHOTO_MAX_BYTES / 3) * 4) + 4;
+
+const base64CharsFor = bytes => (Math.ceil(bytes / 3) * 4) + 4;
+const PHOTO_MAX_BASE64_CHARS = base64CharsFor(PHOTO_MAX_BYTES);
+
 const PHOTO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export default {
@@ -190,11 +202,14 @@ export default {
     }).required(),
     body: Joi.object().keys({
       contentType: Joi.string().valid(PHOTO_CONTENT_TYPES).required(),
-      // .max() deliberately precedes .base64(): joi runs tests in chain order,
-      // and regexing several megabytes of garbage before checking the length
-      // is wasted work on every oversized request.
-      data: Joi.string().required().max(PHOTO_MAX_BASE64_CHARS)
-        .base64({ paddingRequired: true }),
+      // .max() MUST precede .base64(): joi runs tests in chain order, and its
+      // base64 regex overflows the call stack on a multi-megabyte string -
+      // answering 500 instead of 400. The length check is what keeps the regex
+      // off anything that large, not merely an optimisation.
+      // No .base64() here: joi's implementation overflows the stack on a
+      // multi-megabyte value. src/utils/base64.js does that check in linear
+      // time, and the controller applies it. See the comment there.
+      data: Joi.string().required().max(PHOTO_MAX_BASE64_CHARS),
       filename: Joi.string().max(255),
       metadata: updateMetadataSchema,
       // No .unknown(false) here, unlike the streetview sub-schema. That flag

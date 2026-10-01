@@ -1,5 +1,6 @@
 import Joi from 'joi';
-import locationSchemas, { PHOTO_MAX_BYTES } from './validation/locations';
+import locationSchemas from './validation/locations';
+import config from '../config';
 import models from '../models';
 import { updateInstance, createInstance, destroyInstance } from '../services/data-changes';
 import {
@@ -14,6 +15,7 @@ import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { formatIsoWithTimezone } from '../utils/times';
 import { NotFoundError, ValidationError, ServiceUnavailableError } from '../utils/errors';
 import { detectImage } from '../utils/image';
+import { isBase64 } from '../utils/base64';
 import * as photoStorage from '../services/photo-storage';
 import { redactPii } from '../utils/redact-pii';
 import { getClientIp } from '../utils/request';
@@ -876,12 +878,19 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
+      if (!isBase64(data)) {
+        throw new ValidationError('Image data must be base64 with padding');
+      }
+
       const body = Buffer.from(data, 'base64');
       if (body.length === 0) {
         throw new ValidationError('Uploaded image is empty');
       }
-      if (body.length > PHOTO_MAX_BYTES) {
-        throw new ValidationError(`Uploaded image exceeds the ${PHOTO_MAX_BYTES} byte limit`);
+      // Read per request, not captured at import, so an operator lowering
+      // LOCATION_PHOTO_MAX_BYTES actually takes effect.
+      const { maxBytes } = config.locationPhotos;
+      if (body.length > maxBytes) {
+        throw new ValidationError(`Uploaded image exceeds the ${maxBytes} byte limit`);
       }
 
       // The declared type is not trusted: these bytes end up on a public CDN

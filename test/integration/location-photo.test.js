@@ -7,7 +7,8 @@ import request from 'supertest';
 import app from '../../src/app';
 import models from '../../src/models';
 import * as memoryStorage from '../../src/services/photo-storage-memory';
-import { PHOTO_MAX_BYTES } from '../../src/controllers/validation/locations';
+import config from '../../src/config';
+import { PHOTO_REQUEST_LIMIT_BYTES } from '../../src/controllers/validation/locations';
 
 // Minimal but genuinely valid images: the controller sniffs magic bytes, so a
 // fixture of random data would be rejected before reaching any of the
@@ -370,7 +371,7 @@ describe('location photo', () => {
     });
 
     it('rejects an image over the byte cap', async () => {
-      const oversized = Buffer.concat([PNG, Buffer.alloc(PHOTO_MAX_BYTES)]);
+      const oversized = Buffer.concat([PNG, Buffer.alloc(config.locationPhotos.maxBytes)]);
 
       const res = await putPhoto({
         contentType: 'image/png', data: oversized.toString('base64'),
@@ -378,6 +379,56 @@ describe('location photo', () => {
 
       expect(res.statusCode).toBe(400);
       expect(await getPhotoRow()).toBeNull();
+    });
+
+    // Joi's base64 regex overflows the call stack on a multi-megabyte string,
+    // answering 500 instead of 400. The schema's length check is what keeps the
+    // regex off anything that big, so a body between the decoded cap and the
+    // request ceiling has to come back as a clean 400.
+    it('answers 400, not 500, for a body between the cap and the request ceiling', async () => {
+      const midpoint = (config.locationPhotos.maxBytes + PHOTO_REQUEST_LIMIT_BYTES) / 2;
+      const between = Math.floor(midpoint * (3 / 4));
+      const data = Buffer.alloc(between, 0x41).toString('base64');
+
+      const res = await putPhoto({ contentType: 'image/png', data });
+
+      expect(res.statusCode).toBe(400);
+      expect(String(res.body.error)).not.toContain('Maximum call stack');
+      expect(await getPhotoRow()).toBeNull();
+    });
+
+    // LOCATION_PHOTO_MAX_BYTES was documented as configurable while the checks
+    // used a hard-coded constant, so setting it did nothing. An image that is
+    // accepted at the default has to be rejected once the limit is below it.
+    describe('with a lowered LOCATION_PHOTO_MAX_BYTES', () => {
+      let saved;
+
+      beforeEach(() => {
+        saved = process.env.LOCATION_PHOTO_MAX_BYTES;
+        process.env.LOCATION_PHOTO_MAX_BYTES = String(PNG.length - 1);
+      });
+
+      afterEach(() => {
+        if (saved === undefined) delete process.env.LOCATION_PHOTO_MAX_BYTES;
+        else process.env.LOCATION_PHOTO_MAX_BYTES = saved;
+      });
+
+      it('rejects an image the default limit would have accepted', async () => {
+        const res = await putPhoto(pngBody());
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body.error).toContain(String(PNG.length - 1));
+        expect(await getPhotoRow()).toBeNull();
+        expect(memoryStorage.listKeys()).toHaveLength(0);
+      });
+
+      it('accepts the same image once the limit is restored', async () => {
+        delete process.env.LOCATION_PHOTO_MAX_BYTES;
+
+        const res = await putPhoto(pngBody());
+
+        expect(res.statusCode).toBe(200);
+      });
     });
 
     it('rejects a malformed location id', async () => {
