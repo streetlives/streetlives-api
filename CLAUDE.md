@@ -151,6 +151,21 @@ runs the shell steps that matter — the security-group open/revoke cycle, the v
 the smoke check — under `test/support/shell-step.js`, which puts stub `aws` and `curl` binaries on
 the PATH and records what the script actually called.
 
+### Security checks
+
+Run on PRs, on pushes to `develop`/`master` (CodeQL), and every Monday.
+
+| Check | Workflow | Blocks PRs? |
+|---|---|---|
+| Dependency review: a PR that *adds* a high/critical runtime vulnerability | `security-audit.yml` | Yes |
+| `npm audit --omit=dev` report of all known production vulnerabilities | `security-audit.yml` | No (job summary + warning) |
+| CodeQL for JS and GitHub Actions | `codeql.yml` | No until made required in branch protection; alerts land in the Security tab |
+| Dependabot weekly npm + github-actions update PRs (minor/patch grouped) | `.github/dependabot.yml` | n/a |
+
+Existing vulnerabilities on `develop` don't fail PRs, so the npm audit report is the backlog to
+work down. Several of the direct ones (`sequelize`, `joi`, `nodemailer`, `axios`) need major
+upgrades, which belong in their own PRs.
+
 ## Architecture
 
 **Runtime**: Express app (`src/app.js`) that runs both as a standard HTTP server (`src/index.js`) and as an AWS Lambda handler (`src/lambda.js`) via `aws-serverless-express`. Routes are defined in `src/routes.js`.
