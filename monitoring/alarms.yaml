@@ -9,6 +9,14 @@ Parameters:
     Default: arn:aws:sns:us-east-1:710263499164:alarms
     Description: SNS topic that receives ALARM and OK notifications.
 
+Rules:
+  # The APIs, their metrics and the alarm topic all live in us-east-1. Alarms created
+  # anywhere else would watch metrics that never arrive and stay quiet forever.
+  UsEast1Only:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Deploy this stack to us-east-1, where the Streetlives APIs run.
+
 Resources:
   # API Gateway 5XX alarms for the prod stages. They replace the old
   # StreetlivesServerlessApi_*_5XXError alarms, which watched the API these replaced and

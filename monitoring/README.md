@@ -2,11 +2,20 @@
 
 `alarms.yaml` is a CloudFormation stack holding the API's CloudWatch alarms
 (tracked in streetlives/yourpeer.nyc#673). The CI deploy workflows don't touch it. Someone with
-write access to the AWS account deploys it by hand:
+write access to the AWS account deploys it by hand, in `us-east-1` (the template refuses any
+other region):
 
 ```bash
-aws cloudformation validate-template --template-body file://monitoring/alarms.yaml
-aws cloudformation deploy \
+# Both APIs must report prod metrics under these exact names, or the alarms watch nothing.
+for api in StreetlivesPublicApi StreetlivesInternalApi; do
+  aws cloudwatch list-metrics --region us-east-1 --namespace AWS/ApiGateway \
+    --metric-name 5XXError --dimensions Name=ApiName,Value=$api Name=Stage,Value=prod \
+    --query "length(Metrics)" --output text | sed "s/^/$api: /"   # expect 1 each
+done
+
+aws cloudformation validate-template --region us-east-1 \
+  --template-body file://monitoring/alarms.yaml
+aws cloudformation deploy --region us-east-1 \
   --stack-name streetlives-monitoring \
   --template-file monitoring/alarms.yaml
 ```
@@ -32,7 +41,7 @@ intentionally have no alarms.
 These hand-made alarms are superseded by the stack and should be deleted once it is up:
 
 ```bash
-aws cloudwatch delete-alarms --alarm-names \
+aws cloudwatch delete-alarms --region us-east-1 --alarm-names \
   StreetlivesServerlessApi_Stage_5XXError \
   StreetlivesServerlessApi_prod_5XXError
 ```
