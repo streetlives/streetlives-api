@@ -14,6 +14,19 @@ aws cloudformation deploy \
 Alarm notifications go to the `alarms` SNS topic (override with
 `--parameter-overrides AlarmTopicArn=...`).
 
+## What is monitored
+
+Two API Gateway REST APIs front the same Lambda (`StreetlivesApiProdFunction` on their `prod`
+stages), and both carry production traffic:
+
+| API | Id |
+|---|---|
+| `StreetlivesPublicApi` | `rdxk79h7wa` (also mapped to `api.yourpeer.nyc`) |
+| `StreetlivesInternalApi` | `czmlz2z6h3` |
+
+Only the `prod` stages are alarmed. The `Stage` stages (test Lambda) are staging and
+intentionally have no alarms.
+
 ## One-time cleanup after the first deploy
 
 These hand-made alarms are superseded by the stack and should be deleted once it is up:
