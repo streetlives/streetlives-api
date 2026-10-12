@@ -9,10 +9,18 @@ monitoring/deploy.sh --check-only   # verify targets and template, change nothin
 monitoring/deploy.sh                # verify, then deploy the stack to us-east-1
 ```
 
-Before deploying, the script requires each API the alarms watch (`APIS` in `deploy.sh`, which must
-match the `ApiName`s in `alarms.yaml`) to show `prod` requests in us-east-1 over the last 7 days. It
-stops on any AWS error, and the template itself refuses any region but us-east-1. An alarm on a
+Before deploying, the script stops unless, for each API the alarms watch (`TARGETS` in
+`deploy.sh`, as `ApiName=rest-api-id`):
+
+- the `ApiName`s in `alarms.yaml` are exactly the ones in `TARGETS`;
+- the `ApiName` belongs to exactly the expected API id in us-east-1. Names aren't unique, so a
+  renamed, retired or duplicated API is caught here;
+- that API has a `prod` stage, and its `prod` stage shows requests over the last 7 days.
+
+It also stops on any AWS error, and the template refuses any region but us-east-1. An alarm on a
 wrong `ApiName`/`Stage` would watch a metric that never arrives and stay quiet forever.
+`test/unit/monitoring-deploy.test.js` runs the script against a stubbed `aws` to cover each of
+these.
 
 Alarm notifications go to the `alarms` SNS topic (the template's `AlarmTopicArn` parameter).
 
