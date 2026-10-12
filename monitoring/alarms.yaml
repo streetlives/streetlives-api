@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudWatch alarms for the Streetlives API (streetlives/yourpeer.nyc#673).
+  Deployed by hand, separately from the Lambda code deploys; see monitoring/README.md.
+
+Parameters:
+  AlarmTopicArn:
+    Type: String
+    Default: arn:aws:sns:us-east-1:710263499164:alarms
+    Description: SNS topic that receives ALARM and OK notifications.
+
+Resources:
+  # API Gateway 5XX alarms for the prod stages. They replace the old
+  # StreetlivesServerlessApi_*_5XXError alarms, which watched the API these replaced and
+  # have had no data since it was retired on 2026-09-14. Staging stages are not alarmed.
+  #
+  # Threshold: >=5 5XX responses in 2 of the last 3 five-minute periods. Replayed against
+  # the old prod API's 5XX history (2026-08-09 to 2026-09-14), this would have fired on
+  # about six distinct incidents. It would have ignored the ~50 isolated five-minute
+  # spikes that didn't persist.
+
+  PublicApiProd5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: StreetlivesPublicApi-prod-5XX
+      AlarmDescription: StreetlivesPublicApi (prod stage, api.yourpeer.nyc) is returning 5XX responses.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: StreetlivesPublicApi
+        - Name: Stage
+          Value: prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+      OKActions: [!Ref AlarmTopicArn]
+
+  InternalApiProd5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: StreetlivesInternalApi-prod-5XX
+      AlarmDescription: StreetlivesInternalApi (prod stage) is returning 5XX responses.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: StreetlivesInternalApi
+        - Name: Stage
+          Value: prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+      OKActions: [!Ref AlarmTopicArn]
+
