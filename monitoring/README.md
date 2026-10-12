@@ -2,29 +2,19 @@
 
 `alarms.yaml` is a CloudFormation stack holding the API's CloudWatch alarms
 (tracked in streetlives/yourpeer.nyc#673). The CI deploy workflows don't touch it. Someone with
-write access to the AWS account deploys it by hand, in `us-east-1` (the template refuses any
-other region):
+write access to the AWS account deploys it by hand with `deploy.sh`:
 
 ```bash
-# Both APIs must report prod metrics under these exact names and carry traffic, or the alarms
-# watch nothing. Expect a non-zero 7-day request count for each.
-for api in StreetlivesPublicApi StreetlivesInternalApi; do
-  aws cloudwatch get-metric-statistics --region us-east-1 --namespace AWS/ApiGateway \
-    --metric-name Count --dimensions Name=ApiName,Value=$api Name=Stage,Value=prod \
-    --start-time "$(date -u -v-7d +%FT%TZ 2>/dev/null || date -u -d '7 days ago' +%FT%TZ)" \
-    --end-time "$(date -u +%FT%TZ)" --period 86400 --statistics Sum \
-    --query "sum(Datapoints[].Sum)" --output text | sed "s/^/$api prod requests (7d): /"
-done
-
-aws cloudformation validate-template --region us-east-1 \
-  --template-body file://monitoring/alarms.yaml
-aws cloudformation deploy --region us-east-1 \
-  --stack-name streetlives-monitoring \
-  --template-file monitoring/alarms.yaml
+monitoring/deploy.sh --check-only   # verify targets and template, change nothing
+monitoring/deploy.sh                # verify, then deploy the stack to us-east-1
 ```
 
-Alarm notifications go to the `alarms` SNS topic (override with
-`--parameter-overrides AlarmTopicArn=...`).
+Before deploying, the script requires each API the alarms watch (`APIS` in `deploy.sh`, which must
+match the `ApiName`s in `alarms.yaml`) to show `prod` requests in us-east-1 over the last 7 days. It
+stops on any AWS error, and the template itself refuses any region but us-east-1. An alarm on a
+wrong `ApiName`/`Stage` would watch a metric that never arrives and stay quiet forever.
+
+Alarm notifications go to the `alarms` SNS topic (the template's `AlarmTopicArn` parameter).
 
 ## What is monitored
 
