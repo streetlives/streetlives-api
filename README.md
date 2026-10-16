@@ -96,6 +96,15 @@ The slug-history migration preserves the existing organization/neighborhood/addr
 naming algorithm and does not rename existing locations. Deploy this API migration
 and API before the corresponding YourPeer SEO change.
 
+Legacy historical aliases that are already shadowed by another location's current
+canonical slug are reserved for that canonical location, preserving the URL's
+existing destination and allowing later edits. The displaced historical claim and
+its original timestamps remain in `location_slug_redirect_conflicts`, without
+foreign keys so the audit survives location deletion. Unshadowed aliases are
+unchanged. Duplicate current canonical slugs abort the migration transaction for
+manual reconciliation. Rolling the migration back retains aliases and the conflict
+archive; it does not restore ambiguous historical claims.
+
 ### `LocationPhoto` — an extension beyond HSDS
 
 This schema is derived from the [Human Services Data

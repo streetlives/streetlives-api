@@ -13,6 +13,7 @@ describe('durable location slug history', () => {
   const queryInterface = models.sequelize.getQueryInterface();
   const firstPosition = geometry.createPoint(-74.5, 40.5);
   const secondPosition = geometry.createPoint(-73.5, 40.5);
+  const legacyConflicts = [];
 
   const createLocation = (organization, address = '123 Main St') => organization.createLocation({
     name: 'A location',
@@ -48,7 +49,58 @@ describe('durable location slug history', () => {
     // Exercise the production geocoded get_slug, rather than the old ZIP-based
     // function installed by the shared integration setup.
     await geoMigration.up(queryInterface, models.Sequelize);
+    // Build the production state allowed by the old slug_exists: a new canonical
+    // URL shadows another location's history. Test the upgrade, not just fresh rows.
+    for (const change of ['rename', 'move', 'reassignment']) {
+      const formerOrg = await models.Organization.create({ name: `Legacy ${change}` });
+      const formerLocation = await createLocation(formerOrg);
+      const slug = await currentSlug(formerLocation);
+      await formerOrg.update({ name: `Former legacy ${change}` });
+      const originalAlias = await models.LocationSlugRedirect.findByPk(slug);
+      const currentOrg = await models.Organization.create({ name: `Legacy ${change}` });
+      const currentLocation = await createLocation(currentOrg);
+      expect(await currentSlug(currentLocation)).toBe(slug);
+      legacyConflicts.push({
+        change, slug, formerLocation, currentLocation, currentOrg, originalAlias,
+      });
+    }
+    await models.LocationSlugRedirect.create({
+      slug: 'legacy-unclaimed-alias', location_id: legacyConflicts[0].formerLocation.id,
+    });
     await migration.up(queryInterface);
+  });
+
+  it('reconciles shadowed history before guarding later canonical-owner edits', async () => {
+    for (const conflict of legacyConflicts) {
+      const {
+        slug, formerLocation, currentLocation, currentOrg, originalAlias, change,
+      } = conflict;
+      expect(await currentSlug(currentLocation)).toBe(slug);
+      const [archive] = await models.sequelize.query(`
+        SELECT * FROM location_slug_redirect_conflicts WHERE slug = $1
+      `, { bind: [slug] });
+      expect(archive).toHaveLength(1);
+      expect(archive[0]).toMatchObject({
+        slug,
+        displaced_location_id: formerLocation.id,
+        canonical_location_id: currentLocation.id,
+        original_created_at: originalAlias.createdAt,
+        original_updated_at: originalAlias.updatedAt,
+      });
+      expect((await models.LocationSlugRedirect.findByPk(slug)).location_id)
+        .toBe(currentLocation.id);
+      if (change === 'rename') await currentOrg.update({ name: 'Renamed legacy canonical' });
+      if (change === 'move') await currentLocation.update({ position: secondPosition });
+      if (change === 'reassignment') {
+        const targetOrg = await models.Organization.create({ name: 'Reassigned legacy canonical' });
+        await currentLocation.update({ organization_id: targetOrg.id });
+      }
+      await expectRedirect(slug, currentLocation);
+      await expect(formerLocation.update({ slug }))
+        .rejects.toMatchObject({ name: 'SequelizeUniqueConstraintError' });
+    }
+    expect((await models.LocationSlugRedirect.findByPk('legacy-unclaimed-alias')).location_id)
+      .toBe(legacyConflicts[0].formerLocation.id);
   });
 
   it('redirects all former slugs to the latest slug after moves and renames', async () => {
@@ -165,8 +217,16 @@ describe('durable location slug history', () => {
       AND tgname IN ('init_slug_on_location_identity_update', 'guard_location_slug_owner')
     `);
     expect(triggers).toEqual([]);
+    const archiveQuery = 'SELECT * FROM location_slug_redirect_conflicts ORDER BY id';
+    const [archiveBefore] = await models.sequelize.query(archiveQuery);
+    expect(archiveBefore).toHaveLength(legacyConflicts.length);
+    for (const conflict of legacyConflicts) {
+      await expectRedirect(conflict.slug, conflict.currentLocation);
+    }
     await migration.up(queryInterface);
     expect(await currentSlug(location)).toBe(beforeRollback);
     await expectRedirect(oldSlug, location);
+    const [archiveAfter] = await models.sequelize.query(archiveQuery);
+    expect(archiveAfter).toEqual(archiveBefore);
   });
 });

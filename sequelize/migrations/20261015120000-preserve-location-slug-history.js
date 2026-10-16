@@ -82,6 +82,48 @@ const existingFunctions = reliable => `
 module.exports = {
   async up(queryInterface) {
     return queryInterface.sequelize.transaction(async (transaction) => {
+      await queryInterface.sequelize.query(`
+        -- Old slug_exists ignored history, so a current canonical URL may already
+        -- shadow another location's alias. Freeze claims until ownership is
+        -- reconciled and the guard is installed in this same transaction.
+        LOCK TABLE locations, location_slug_redirects IN SHARE ROW EXCLUSIVE MODE;
+
+        DO $$ BEGIN
+          IF EXISTS (SELECT slug FROM locations WHERE slug IS NOT NULL
+                     GROUP BY slug HAVING COUNT(*) > 1) THEN
+            RAISE EXCEPTION 'Duplicate canonical location slugs require manual reconciliation';
+          END IF;
+        END $$;
+
+        -- No foreign keys: this evidence must survive deletion of either location.
+        -- Keep the table on rollback, including across later reapplications.
+        CREATE TABLE IF NOT EXISTS location_slug_redirect_conflicts (
+          id bigserial PRIMARY KEY,
+          slug varchar(255) NOT NULL,
+          displaced_location_id uuid,
+          canonical_location_id uuid NOT NULL,
+          original_created_at timestamp with time zone,
+          original_updated_at timestamp with time zone,
+          reconciled_at timestamp with time zone NOT NULL DEFAULT NOW()
+        );
+
+        INSERT INTO location_slug_redirect_conflicts
+          (slug, displaced_location_id, canonical_location_id,
+           original_created_at, original_updated_at)
+        SELECT history.slug, history.location_id, canonical.id,
+          history.created_at, history.updated_at
+        FROM location_slug_redirects history
+        JOIN locations canonical ON canonical.slug = history.slug
+        WHERE history.location_id IS DISTINCT FROM canonical.id;
+
+        -- The canonical route already won for this URL before the migration.
+        -- Reserve it for that same location after its next rename as well.
+        UPDATE location_slug_redirects history
+        SET location_id = canonical.id, updated_at = NOW()
+        FROM locations canonical
+        WHERE canonical.slug = history.slug
+          AND history.location_id IS DISTINCT FROM canonical.id;
+      `, { transaction });
       await queryInterface.sequelize.query(existingFunctions(true), { transaction });
       await queryInterface.sequelize.query(`
         CREATE OR REPLACE FUNCTION guard_location_slug_owner()
@@ -132,7 +174,8 @@ module.exports = {
         DROP TRIGGER guard_location_slug_owner ON locations;
         DROP FUNCTION guard_location_slug_owner();
       `, { transaction });
-      // Retain aliases captured while this migration was active.
+      // Retain aliases and the conflict archive. Restoring displaced claims would
+      // resurrect the ambiguity (or redirect a renamed canonical URL elsewhere).
       await queryInterface.sequelize.query(existingFunctions(false), { transaction });
     });
   },
