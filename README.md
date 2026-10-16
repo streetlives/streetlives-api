@@ -86,8 +86,10 @@ See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncd
 
 `GET /locations?locationFieldsOnly=true` includes the extension `has_service_hours`.
 It is true when at least one associated service has a `HolidaySchedules` entry
-with both `opens_at` and `closes_at`, matching the hours displayed by YourPeer.
-It describes published hours, regardless of whether the service is open now.
+with a non-null `opens_at` or `closes_at`, or an explicit `closed: true` status.
+This is directory eligibility: closed services and partially recorded hours count.
+It is false only when there are no services or all service hours/status are unknown;
+it does not require the service to be open now or to have a complete time pair.
 
 `GET /location-slug-redirects/:slug` resolves a historical slug to its location's
 current `{ id, slug }`. Historical slugs remain reserved for that location and

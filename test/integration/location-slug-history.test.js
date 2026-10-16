@@ -199,6 +199,10 @@ describe('durable location slug history', () => {
     expect(await getFlag()).toBe(false);
     await schedule.update({ opens_at: '00:00:00', closes_at: '23:59:00' });
     expect(await getFlag()).toBe(true);
+    await schedule.update({ closed: true });
+    expect(await getFlag()).toBe(true);
+    await schedule.update({ closed: false });
+    expect(await getFlag()).toBe(true);
     await schedule.destroy();
     expect(await getFlag()).toBe(false);
   });

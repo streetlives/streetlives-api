@@ -12,8 +12,22 @@ describe('simplified location hours availability', () => {
     try {
       for (const [services, expected] of [
         [[], false],
-        [[{ HolidaySchedules: [{ opens_at: null, closes_at: '17:00:00' }] }], false],
+        [[{ HolidaySchedules: [{ opens_at: null, closes_at: null }] }], false],
+        [[{ HolidaySchedules: [{ opens_at: null, closes_at: '17:00:00' }] }], true],
+        [[{ HolidaySchedules: [{ opens_at: '09:00:00', closes_at: null }] }], true],
+        [[{ HolidaySchedules: [{ closed: true, opens_at: null, closes_at: null }] }], true],
         [[{ HolidaySchedules: [{ opens_at: '00:00:00', closes_at: '23:59:00' }] }], true],
+        [[{
+          HolidaySchedules: [{
+            closed: true, opens_at: '09:00:00', closes_at: '17:00:00',
+          }],
+        }], true],
+        [[{
+          HolidaySchedules: [
+            { closed: true, opens_at: '09:00:00', closes_at: '17:00:00' },
+            { closed: false, opens_at: '00:00:00', closes_at: '23:59:00' },
+          ],
+        }], true],
         [[{ HolidaySchedules: [] }], false],
       ]) {
         search.mockResolvedValue({
