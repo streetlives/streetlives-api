@@ -96,6 +96,9 @@ describe('durable location slug history', () => {
         await currentLocation.update({ organization_id: targetOrg.id });
       }
       await expectRedirect(slug, currentLocation);
+      // The organization's rename updated this slug in a database trigger;
+      // refresh the instance so Sequelize actually sends the attempted claim.
+      await formerLocation.reload();
       await expect(formerLocation.update({ slug }))
         .rejects.toMatchObject({ name: 'SequelizeUniqueConstraintError' });
     }
