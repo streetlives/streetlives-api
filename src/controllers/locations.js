@@ -13,6 +13,7 @@ import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
 import { formatIsoWithTimezone } from '../utils/times';
+import hasServiceHours from '../utils/service-hours';
 import { NotFoundError, ValidationError, ServiceUnavailableError } from '../utils/errors';
 import { detectImage } from '../utils/image';
 import { isBase64 } from '../utils/base64';
@@ -427,14 +428,14 @@ export default {
       const paginationCount = Math.ceil(totalNumLocations / pageSize);
 
       const formattedLocations = plainLocations.map((location) => {
-        // eslint-disable-next-line no-unused-vars
-        const { EventRelatedInfos, Services: _Services, ...simplifiedLocation } = location;
+        const { EventRelatedInfos, Services, ...simplifiedLocation } = location;
         const closed = isLocationClosed(EventRelatedInfos);
 
         if (locationFieldsOnly) {
           return {
             ...simplifiedLocation,
             closed,
+            has_service_hours: hasServiceHours(Services),
           };
         }
 
@@ -534,16 +535,13 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      const locationSlugs = await models.LocationSlugRedirect.findAll({
-        where: {
-          slug: req.params.slug,
-        },
+      const locationSlug = await models.LocationSlugRedirect.findByPk(req.params.slug, {
         attributes: ['slug', 'location_id'],
       });
 
-      if (locationSlugs.length) {
-        const location = await models.Location.findByPk(locationSlugs[0].location_id);
-        if (!location) {
+      if (locationSlug) {
+        const location = await models.Location.findByPk(locationSlug.location_id);
+        if (!location || !location.slug) {
           res.status(404).send({ error: 'Location not found' });
           return;
         }

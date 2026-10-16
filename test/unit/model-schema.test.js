@@ -11,6 +11,11 @@ describe('model definitions match migrated schemas', () => {
     await models.sequelize.close();
   });
 
+  it('uses the historical slug as its primary key without an invented id column', () => {
+    expect(models.LocationSlugRedirect.primaryKeyAttributes).toEqual(['slug']);
+    expect(models.LocationSlugRedirect.rawAttributes.id).toBeUndefined();
+  });
+
   it('does not generate UUIDs for CommentLike integer ids', () => {
     const idAttribute = models.CommentLike.rawAttributes.id;
 

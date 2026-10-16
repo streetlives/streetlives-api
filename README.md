@@ -84,6 +84,18 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
+`GET /locations?locationFieldsOnly=true` includes the extension `has_service_hours`.
+It is true when at least one associated service has a `HolidaySchedules` entry
+with both `opens_at` and `closes_at`, matching the hours displayed by YourPeer.
+It describes published hours, regardless of whether the service is open now.
+
+`GET /location-slug-redirects/:slug` resolves a historical slug to its location's
+current `{ id, slug }`. Historical slugs remain reserved for that location and
+can be reclaimed by it. Removing services or hours does not remove slug history.
+The slug-history migration preserves the existing organization/neighborhood/address
+naming algorithm and does not rename existing locations. Deploy this API migration
+and API before the corresponding YourPeer SEO change.
+
 ### `LocationPhoto` — an extension beyond HSDS
 
 This schema is derived from the [Human Services Data

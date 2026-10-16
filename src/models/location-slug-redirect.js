@@ -1,18 +1,22 @@
 module.exports = (sequelize, DataTypes) => {
   const LocationSlugRedirect = sequelize.define(
-    "LocationSlugRedirect",
+    'LocationSlugRedirect',
     {
-      slug: DataTypes.TEXT,
+      slug: {
+        type: DataTypes.TEXT,
+        primaryKey: true,
+        allowNull: false,
+      },
     },
     {
       underscored: true,
       underscoredAll: true,
-    }
+    },
   );
 
   LocationSlugRedirect.associate = (models) => {
     LocationSlugRedirect.belongsTo(models.Location, {
-      foreignKey: "location_id",
+      foreignKey: 'location_id',
     });
   };
 
