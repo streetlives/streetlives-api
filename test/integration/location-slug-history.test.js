@@ -230,10 +230,26 @@ describe('durable location slug history', () => {
     for (const conflict of legacyConflicts) {
       await expectRedirect(conflict.slug, conflict.currentLocation);
     }
+    // A legacy writer may replay the same ambiguous claim while rolled back.
+    // Reapplying must reconcile it without duplicating the original audit event.
+    const replay = legacyConflicts[0];
+    await models.Location.update({ slug: replay.slug }, {
+      where: { id: replay.currentLocation.id },
+    });
+    // Copy timestamps inside PostgreSQL so sub-millisecond precision is retained.
+    await models.sequelize.query(`
+      UPDATE location_slug_redirects history
+      SET location_id = archived.displaced_location_id,
+        created_at = archived.original_created_at,
+        updated_at = archived.original_updated_at
+      FROM location_slug_redirect_conflicts archived
+      WHERE history.slug = $1 AND archived.slug = history.slug
+    `, { bind: [replay.slug] });
     await migration.up(queryInterface);
     expect(await currentSlug(location)).toBe(beforeRollback);
     await expectRedirect(oldSlug, location);
     const [archiveAfter] = await models.sequelize.query(archiveQuery);
     expect(archiveAfter).toEqual(archiveBefore);
+    await expectRedirect(replay.slug, replay.currentLocation);
   });
 });

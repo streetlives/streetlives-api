@@ -114,7 +114,15 @@ module.exports = {
           history.created_at, history.updated_at
         FROM location_slug_redirects history
         JOIN locations canonical ON canonical.slug = history.slug
-        WHERE history.location_id IS DISTINCT FROM canonical.id;
+        WHERE history.location_id IS DISTINCT FROM canonical.id
+          AND NOT EXISTS (
+            SELECT 1 FROM location_slug_redirect_conflicts archived
+            WHERE archived.slug = history.slug
+              AND archived.displaced_location_id IS NOT DISTINCT FROM history.location_id
+              AND archived.canonical_location_id = canonical.id
+              AND archived.original_created_at IS NOT DISTINCT FROM history.created_at
+              AND archived.original_updated_at IS NOT DISTINCT FROM history.updated_at
+          );
 
         -- The canonical route already won for this URL before the migration.
         -- Reserve it for that same location after its next rename as well.
