@@ -15,6 +15,22 @@ module.exports = (sequelize, DataTypes) => {
     end_date: DataTypes.DATEONLY,
     weekday: DataTypes.INTEGER,
     occasion: DataTypes.TEXT,
+    // HSDS 3.0 schedule fields.
+    freq: {
+      type: DataTypes.TEXT,
+      validate: { isIn: [['WEEKLY', 'MONTHLY']] },
+    },
+    interval: DataTypes.INTEGER,
+    byday: DataTypes.TEXT,
+    bymonthday: DataTypes.TEXT,
+    valid_from: DataTypes.DATEONLY,
+    valid_to: DataTypes.DATEONLY,
+    description: DataTypes.TEXT,
+    notes: DataTypes.TEXT,
+    timezone: {
+      type: DataTypes.TEXT,
+      defaultValue: 'America/New_York',
+    },
   }, {
     underscored: true,
     underscoredAll: true,
@@ -25,6 +41,23 @@ module.exports = (sequelize, DataTypes) => {
     HolidaySchedule.belongsTo(models.Service, { foreignKey: 'service_id' });
     HolidaySchedule.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
   };
+
+  // Include options that leave out rows whose HSDS valid_to date has passed in New York.
+  HolidaySchedule.notExpiredInclude = () => ({
+    model: HolidaySchedule,
+    required: false,
+    where: {
+      [sequelize.Sequelize.Op.or]: [
+        { valid_to: null },
+        {
+          valid_to: {
+            [sequelize.Sequelize.Op.gte]:
+              sequelize.literal("(now() AT TIME ZONE 'America/New_York')::date"),
+          },
+        },
+      ],
+    },
+  });
 
   return HolidaySchedule;
 };

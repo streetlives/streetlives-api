@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { SORT_ORDER } from '../controllers/sort-by';
-import { getDayOfWeekIntegerFromDate, formatTime } from '../utils/times';
+import { getDayOfWeekIntegerFromDate, formatTime, formatDateOnly } from '../utils/times';
 
 // Escape regex metacharacters so user-supplied search text can be safely
 // interpolated into POSIX regular-expression (Op.iRegexp) conditions.
@@ -221,7 +221,22 @@ module.exports = (sequelize, DataTypes, Op) => {
     const timeOfDay = formatTime(openAt, openingHoursTimezone);
 
     if (occasion) {
+      const date = formatDateOnly(openAt, openingHoursTimezone);
       return {
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { '$Services.HolidaySchedules.valid_from$': null },
+              { '$Services.HolidaySchedules.valid_from$': { [Op.lte]: date } },
+            ],
+          },
+          {
+            [Op.or]: [
+              { '$Services.HolidaySchedules.valid_to$': null },
+              { '$Services.HolidaySchedules.valid_to$': { [Op.gte]: date } },
+            ],
+          },
+        ],
         '$Services.HolidaySchedules.occasion$': occasion,
         '$Services.HolidaySchedules.weekday$': weekday,
         '$Services.HolidaySchedules.opens_at$': { [Op.lte]: timeOfDay },
@@ -813,7 +828,7 @@ module.exports = (sequelize, DataTypes, Op) => {
       {
         model: sequelize.models.Service,
         include: [
-          sequelize.models.HolidaySchedule,
+          sequelize.models.HolidaySchedule.notExpiredInclude(),
         ],
       },
     ] : [
@@ -824,7 +839,7 @@ module.exports = (sequelize, DataTypes, Op) => {
         include: [
           sequelize.models.Taxonomy,
           sequelize.models.RequiredDocument,
-          sequelize.models.HolidaySchedule,
+          sequelize.models.HolidaySchedule.notExpiredInclude(),
         ],
       },
       sequelize.models.Phone,

@@ -101,7 +101,7 @@ const serviceAssociations = {
       through: { attributes: [] },
     },
     models.RegularSchedule,
-    models.HolidaySchedule,
+    models.HolidaySchedule.notExpiredInclude(),
     {
       model: models.Language,
       through: { attributes: [] },

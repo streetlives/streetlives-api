@@ -11,6 +11,9 @@ const weekdays = [
 ];
 
 const hourRegex = /^\d{2}:\d{2}$/;
+// RFC 5545 BYDAY as used by HSDS 3.0 schedule.byday, e.g. "MO,WE", "2FR", "-1MO".
+const bydayRegex = /^(-?[1-5])?(MO|TU|WE|TH|FR|SA|SU)(,(-?[1-5])?(MO|TU|WE|TH|FR|SA|SU))*$/;
+const bymonthdayRegex = /^-?([1-9]|[12]\d|3[01])(,-?([1-9]|[12]\d|3[01]))*$/;
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -57,8 +60,16 @@ export default {
         startDate: Joi.date(),
         endDate: Joi.date(),
         occasion: Joi.string(),
+        freq: Joi.string().valid(['WEEKLY', 'MONTHLY']).allow(null),
+        interval: Joi.number().integer().min(1).allow(null),
+        byday: Joi.string().regex(bydayRegex, { name: 'BYDAY' }).allow(null),
+        bymonthday: Joi.string().regex(bymonthdayRegex, { name: 'BYMONTHDAY' }).allow(null),
+        validFrom: Joi.date().allow(null),
+        validTo: Joi.date().min(Joi.ref('validFrom')).allow(null),
+        description: Joi.string().allow('', null),
+        notes: Joi.string().allow('', null),
       })
-        .or('occasion', 'startDate')
+        .or('occasion', 'startDate', 'validFrom')
         .and('startDate', 'endDate')
         .and('opensAt', 'closesAt')),
       languageIds: Joi.array().items(Joi.string().guid().required()),

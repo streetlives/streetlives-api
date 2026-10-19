@@ -15,6 +15,14 @@ export const getDayOfWeekIntegerFromDate = (date) => {
   return (jsDayOfWeek === 0) ? 7 : jsDayOfWeek;
 };
 
+// YYYY-MM-DD calendar date of `date` in the given IANA timezone.
+export const formatDateOnly = (date, timeZone) => new Intl.DateTimeFormat('en-CA', {
+  timeZone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(date);
+
 export const formatTime = (date, timeZone) => new Intl.DateTimeFormat([], {
   timeZone,
   hour: 'numeric',

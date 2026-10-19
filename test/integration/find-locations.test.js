@@ -985,6 +985,30 @@ describe('find locations', () => {
               occasion: 'COVID-19',
             }))
           .then(expectMatchPrimaryLocation));
+
+      it('should ignore occasion hours outside their valid_from..valid_to range', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2000-01-01',
+          valid_to: '2000-12-31',
+        });
+
+        return request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+            occasion: 'COVID-19',
+          })
+          .then(expectNoMatchingLocations);
+      });
     });
   });
 
