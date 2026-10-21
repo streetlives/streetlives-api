@@ -26,7 +26,6 @@ module.exports = (sequelize, DataTypes) => {
     valid_from: DataTypes.DATEONLY,
     valid_to: DataTypes.DATEONLY,
     description: DataTypes.TEXT,
-    notes: DataTypes.TEXT,
     timezone: {
       type: DataTypes.TEXT,
       defaultValue: 'America/New_York',

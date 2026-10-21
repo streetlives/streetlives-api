@@ -66,7 +66,6 @@ const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
     byday: hoursPart.byday,
     bymonthday: hoursPart.bymonthday,
     description: hoursPart.description,
-    notes: hoursPart.notes,
   }, { transaction: t, metadata })));
 };
 

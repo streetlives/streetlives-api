@@ -67,7 +67,6 @@ export default {
         validFrom: Joi.date().allow(null),
         validTo: Joi.date().min(Joi.ref('validFrom')).allow(null),
         description: Joi.string().allow('', null),
-        notes: Joi.string().allow('', null),
       })
         .or('occasion', 'startDate', 'validFrom')
         .and('startDate', 'endDate')
