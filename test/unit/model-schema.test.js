@@ -33,6 +33,25 @@ describe('model definitions match migrated schemas', () => {
     expect(Object.keys(models.PhysicalAddress.rawAttributes)).not.toContain('neighborhood');
   });
 
+  describe('HolidaySchedule', () => {
+    it('maps the HSDS 3.0 schedule fields', () => {
+      const attributes = Object.keys(models.HolidaySchedule.rawAttributes);
+
+      ['freq', 'interval', 'byday', 'bymonthday', 'valid_from', 'valid_to',
+        'description', 'timezone'].forEach((field) => {
+        expect(attributes).toContain(field);
+      });
+      // schedule.description holds the street team's notes; HSDS notes is unused.
+      expect(attributes).not.toContain('notes');
+    });
+
+    it('only accepts HSDS frequencies yourpeer can render', async () => {
+      const schedule = models.HolidaySchedule.build({ closed: false, freq: 'DAILY' });
+
+      await expect(schedule.validate()).rejects.toThrow();
+    });
+  });
+
   describe('LocationPhoto', () => {
     // Metadata.associate scopes its hasMany by model.tableName, so the audit
     // trail's resource_table depends on this deriving to location_photos.

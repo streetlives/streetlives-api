@@ -54,10 +54,18 @@ const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
     opens_at: hoursPart.opensAt,
     closes_at: hoursPart.closesAt,
     closed: hoursPart.closed || false,
-    start_date: hoursPart.startDate,
-    end_date: hoursPart.endDate,
+    // start_date/end_date are kept in sync with the HSDS valid_from/valid_to until they're dropped.
+    start_date: hoursPart.validFrom || hoursPart.startDate,
+    end_date: hoursPart.validTo || hoursPart.endDate,
+    valid_from: hoursPart.validFrom || hoursPart.startDate,
+    valid_to: hoursPart.validTo || hoursPart.endDate,
     occasion: hoursPart.occasion,
     weekday: hoursPart.weekday != null ? getDayOfWeekInteger(hoursPart.weekday) : undefined,
+    freq: hoursPart.freq,
+    interval: hoursPart.interval,
+    byday: hoursPart.byday,
+    bymonthday: hoursPart.bymonthday,
+    description: hoursPart.description,
   }, { transaction: t, metadata })));
 };
 

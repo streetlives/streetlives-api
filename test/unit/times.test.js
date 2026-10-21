@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { formatIsoWithTimezone } from '../../src/utils/times';
+import { formatIsoWithTimezone, formatDateOnly } from '../../src/utils/times';
 
 describe('formatIsoWithTimezone', () => {
   it('formats an instant as New York local time even across the UTC day boundary', () => {
@@ -20,5 +20,13 @@ describe('formatIsoWithTimezone', () => {
     const instant = new Date('2026-03-08T06:59:00Z'); // just before the DST switch
     const formatted = formatIsoWithTimezone(instant, 'America/New_York');
     expect(new Date(formatted).getTime()).toBe(instant.getTime());
+  });
+});
+
+describe('formatDateOnly', () => {
+  it('returns the New York calendar date, not the UTC one', () => {
+    // 02:00 UTC on Dec 1 is still Nov 30 in New York.
+    expect(formatDateOnly(new Date('2026-12-01T02:00:00Z'), 'America/New_York'))
+      .toBe('2026-11-30');
   });
 });
