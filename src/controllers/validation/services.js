@@ -11,8 +11,9 @@ const weekdays = [
 ];
 
 const hourRegex = /^\d{2}:\d{2}$/;
-// RFC 5545 BYDAY as used by HSDS 3.0 schedule.byday, e.g. "MO,WE", "2FR", "-1MO".
-const bydayRegex = /^(-?[1-5])?(MO|TU|WE|TH|FR|SA|SU)(,(-?[1-5])?(MO|TU|WE|TH|FR|SA|SU))*$/;
+// RFC 5545 BYDAY as used by HSDS 3.0 schedule.byday, e.g. "MO,WE", "2FR", "-1MO". Only the
+// last week counts from the end (-1): the front ends have no words for "-2FR" and the like.
+const bydayRegex = /^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)(,(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU))*$/;
 const bymonthdayRegex = /^-?([1-9]|[12]\d|3[01])(,-?([1-9]|[12]\d|3[01]))*$/;
 
 const updateMetadataSchema = Joi.object().keys({

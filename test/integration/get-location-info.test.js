@@ -118,15 +118,31 @@ describe('get location info', () => {
     it('leaves out schedules whose valid_to has passed', async () => {
       await models.HolidaySchedule.bulkCreate([
         {
-          service_id: service.id, closed: false, weekday: 1, opens_at: '09:00', closes_at: '17:00',
-          occasion: 'EXPIRED', valid_from: '2020-03-27', valid_to: '2020-07-27',
+          service_id: service.id,
+          closed: false,
+          weekday: 1,
+          opens_at: '09:00',
+          closes_at: '17:00',
+          occasion: 'EXPIRED',
+          valid_from: '2020-03-27',
+          valid_to: '2020-07-27',
         },
         {
-          service_id: service.id, closed: false, weekday: 2, opens_at: '09:00', closes_at: '17:00',
-          occasion: 'ONGOING', valid_from: '2020-03-27', valid_to: '2999-07-27',
+          service_id: service.id,
+          closed: false,
+          weekday: 2,
+          opens_at: '09:00',
+          closes_at: '17:00',
+          occasion: 'ONGOING',
+          valid_from: '2020-03-27',
+          valid_to: '2999-07-27',
         },
         {
-          service_id: service.id, closed: false, weekday: 3, opens_at: '09:00', closes_at: '17:00',
+          service_id: service.id,
+          closed: false,
+          weekday: 3,
+          opens_at: '09:00',
+          closes_at: '17:00',
           occasion: 'OPEN_ENDED',
         },
       ]);
@@ -176,6 +192,19 @@ describe('get location info', () => {
             closed: false,
             occasion: 'MONTHLY',
             byday: 'second friday',
+          }],
+        })
+        .expect(400));
+    it('rejects BYDAY weeks counted from the end other than the last', () =>
+      request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            byday: '-2FR',
           }],
         })
         .expect(400));
