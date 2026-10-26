@@ -211,17 +211,54 @@ module.exports = (sequelize, DataTypes, Op) => {
   }
 };
 
+  const BYDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
+  // Matches HolidaySchedules rows whose HSDS recurrence (byday, bymonthday, interval)
+  // falls on `date`, a YYYY-MM-DD day in New York time with ISO weekday `weekday`.
+  const getRecurrenceCondition = (date, weekday) => {
+    const [year, month, day] = date.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const code = BYDAY_CODES[weekday - 1];
+    const bydays = [code, `${Math.ceil(day / 7)}${code}`];
+    if (day + 7 > daysInMonth) {
+      bydays.push(`-1${code}`);
+    }
+    const monthDays = [String(day), String(day - daysInMonth - 1)];
+
+    const column = name => `"Services->HolidaySchedules"."${name}"`;
+    const list = values => values.map(value => sequelize.escape(value)).join(', ');
+    const dateLiteral = `${sequelize.escape(date)}::date`;
+
+    return sequelize.where(sequelize.literal(`(
+      (${column('weekday')} = ${weekday} OR (${column('weekday')} IS NULL
+        AND (${column('byday')} IS NOT NULL OR ${column('bymonthday')} IS NOT NULL)))
+      AND (${column('byday')} IS NULL
+        OR string_to_array(${column('byday')}, ',') && ARRAY[${list(bydays)}])
+      AND (${column('bymonthday')} IS NULL
+        OR string_to_array(${column('bymonthday')}, ',') && ARRAY[${list(monthDays)}])
+      AND (COALESCE(${column('interval')}, 1) <= 1 OR (${column('valid_from')} IS NOT NULL AND (
+        CASE WHEN ${column('freq')} = 'MONTHLY'
+          THEN (EXTRACT(YEAR FROM ${dateLiteral}) - EXTRACT(YEAR FROM ${column('valid_from')})) * 12
+            + EXTRACT(MONTH FROM ${dateLiteral}) - EXTRACT(MONTH FROM ${column('valid_from')})
+          ELSE (date_trunc('week', ${dateLiteral})::date
+            - date_trunc('week', ${column('valid_from')})::date) / 7
+        END
+      )::integer % ${column('interval')} = 0))
+    )`), true);
+  };
+
   const getOpeningHoursCondition = (openAt, occasion) => {
     // For now, all opening hours are assumed to be in New York time (EST/DST depending on date).
     // Once we have locations elsewhere, the Google Time Zone API can give us a TZ per position
     // (or we just store the timezone with the hours).
     const openingHoursTimezone = 'America/New_York';
 
-    const weekday = getDayOfWeekIntegerFromDate(openAt);
+    // Take the weekday from the New York date, not UTC, so late evenings count as the same day.
+    const date = formatDateOnly(openAt, openingHoursTimezone);
+    const weekday = getDayOfWeekIntegerFromDate(new Date(`${date}T00:00:00Z`));
     const timeOfDay = formatTime(openAt, openingHoursTimezone);
 
     if (occasion) {
-      const date = formatDateOnly(openAt, openingHoursTimezone);
       return {
         [Op.and]: [
           {
@@ -236,9 +273,9 @@ module.exports = (sequelize, DataTypes, Op) => {
               { '$Services.HolidaySchedules.valid_to$': { [Op.gte]: date } },
             ],
           },
+          getRecurrenceCondition(date, weekday),
         ],
         '$Services.HolidaySchedules.occasion$': occasion,
-        '$Services.HolidaySchedules.weekday$': weekday,
         '$Services.HolidaySchedules.opens_at$': { [Op.lte]: timeOfDay },
         '$Services.HolidaySchedules.closes_at$': { [Op.gt]: timeOfDay },
         '$Services.HolidaySchedules.closed$': { [Op.or]: [false, null] },

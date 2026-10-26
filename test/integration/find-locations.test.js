@@ -1031,6 +1031,87 @@ describe('find locations', () => {
           })
           .then(expectNoMatchingLocations);
       });
+
+      describe('with HSDS recurrence', () => {
+        // June 2019: Saturdays fall on the 1st, 8th, 15th, 22nd and 29th.
+        const createRecurringSchedule = async (recurrence) => {
+          await setupBaseSchedule();
+          await aSpecificOffering1.createHolidaySchedule({
+            weekday: 6,
+            opens_at: '8:00',
+            closes_at: '10:00',
+            occasion: 'COVID-19',
+            closed: false,
+            ...recurrence,
+          });
+        };
+        const searchOpenAt = date => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${date}T09:00`),
+            occasion: 'COVID-19',
+          });
+
+        it('matches an ordinal weekday only in its week of the month', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '2SA' });
+
+          await searchOpenAt('2019-06-08').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-01').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-06-15').then(expectNoMatchingLocations);
+        });
+
+        it('matches the last weekday of the month only in the last week', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '-1SA' });
+
+          await searchOpenAt('2019-06-29').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-22').then(expectNoMatchingLocations);
+        });
+
+        it('matches any of several ordinal weekdays', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '1SA,3SA' });
+
+          await searchOpenAt('2019-06-01').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+        });
+
+        it('matches a day of the month only on that day', async () => {
+          await createRecurringSchedule({ weekday: null, freq: 'MONTHLY', bymonthday: '15' });
+
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+        });
+
+        it('counts a monthly interval from valid_from', async () => {
+          await createRecurringSchedule({
+            freq: 'MONTHLY',
+            interval: 2,
+            byday: '2SA',
+            valid_from: '2019-05-01',
+          });
+
+          await searchOpenAt('2019-05-11').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-07-13').then(expectMatchPrimaryLocation);
+        });
+
+        it('counts a weekly interval from valid_from', async () => {
+          await createRecurringSchedule({ freq: 'WEEKLY', interval: 2, valid_from: '2019-06-01' });
+
+          await searchOpenAt('2019-06-01').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+        });
+
+        it('never matches an interval without a valid_from to count from', async () => {
+          await createRecurringSchedule({ freq: 'WEEKLY', interval: 2 });
+
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+        });
+      });
     });
   });
 
