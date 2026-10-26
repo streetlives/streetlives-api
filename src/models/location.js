@@ -549,6 +549,10 @@ module.exports = (sequelize, DataTypes, Op) => {
       havingConditions.push(getTaxonomySpecificAttributesCondition(taxonomySpecificAttributes));
     }
 
+    // An openAt search asks about that date, so keep schedules still valid on it.
+    const holidayScheduleInclude = sequelize.models.HolidaySchedule
+      .notExpiredInclude(openAt && formatDateOnly(openAt, 'America/New_York'));
+
     async function findAll(_whereConditions) {
       return Location.findAll({
         ...queryProps,
@@ -581,7 +585,7 @@ module.exports = (sequelize, DataTypes, Op) => {
               sequelize.models.Taxonomy,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
-              ...(occasion ? [sequelize.models.HolidaySchedule.notExpiredInclude()] : []),
+              ...(occasion ? [holidayScheduleInclude] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
               ...(shouldJoinEligibilities ? [{
                 model: sequelize.models.Eligibility,

@@ -41,8 +41,9 @@ module.exports = (sequelize, DataTypes) => {
     HolidaySchedule.belongsTo(models.ServiceAtLocation, { foreignKey: 'service_at_location_id' });
   };
 
-  // Include options that leave out rows whose HSDS valid_to date has passed in New York.
-  HolidaySchedule.notExpiredInclude = () => ({
+  // Include options that leave out rows whose HSDS valid_to date has passed in New York,
+  // or has passed by `onDate` (YYYY-MM-DD) when one is given.
+  HolidaySchedule.notExpiredInclude = onDate => ({
     model: HolidaySchedule,
     required: false,
     where: {
@@ -50,7 +51,7 @@ module.exports = (sequelize, DataTypes) => {
         { valid_to: null },
         {
           valid_to: {
-            [sequelize.Sequelize.Op.gte]:
+            [sequelize.Sequelize.Op.gte]: onDate ||
               sequelize.literal("(now() AT TIME ZONE 'America/New_York')::date"),
           },
         },

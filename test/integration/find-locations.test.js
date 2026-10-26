@@ -1032,6 +1032,30 @@ describe('find locations', () => {
           .then(expectNoMatchingLocations);
       });
 
+      it('should keep occasion hours valid on the searched date but expired now', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2019-06-01',
+          valid_to: '2019-06-30',
+        });
+
+        return request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+            occasion: 'COVID-19',
+          })
+          .then(expectMatchPrimaryLocation);
+      });
+
       describe('with HSDS recurrence', () => {
         // June 2019: Saturdays fall on the 1st, 8th, 15th, 22nd and 29th.
         const createRecurringSchedule = async (recurrence) => {
