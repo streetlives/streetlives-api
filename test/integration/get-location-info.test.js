@@ -225,10 +225,48 @@ describe('get location info', () => {
             opensAt: '09:00',
             closesAt: '17:00',
             closed: false,
+            freq: 'MONTHLY',
             byday: '-2FR',
           }],
         })
         .expect(400));
+
+    describe('frequency and recurrence fields', () => {
+      const patchRecurrence = recurrence => request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            validFrom: '2026-03-27',
+            ...recurrence,
+          }],
+        });
+
+      // RFC 5545: numbered BYDAY and BYMONTHDAY only make sense within a month.
+      [
+        { freq: 'WEEKLY', byday: '2FR' },
+        { freq: null, byday: '-1FR' },
+        { byday: 'MO,2FR' },
+        { freq: 'WEEKLY', bymonthday: '15' },
+        { bymonthday: '15' },
+      ].forEach((recurrence) => {
+        it(`rejects ${JSON.stringify(recurrence)}`, () =>
+          patchRecurrence(recurrence).expect(400));
+      });
+
+      [
+        { freq: 'MONTHLY', byday: '2FR' },
+        { freq: 'MONTHLY', bymonthday: '15' },
+        { freq: 'WEEKLY', byday: 'MO,FR' },
+        { byday: 'FR' },
+      ].forEach((recurrence) => {
+        it(`accepts ${JSON.stringify(recurrence)}`, () =>
+          patchRecurrence(recurrence).expect(204));
+      });
+    });
   });
 
   describe('closed flag', () => {

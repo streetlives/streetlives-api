@@ -52,6 +52,17 @@ describe('model definitions match migrated schemas', () => {
 
       await expect(schedule.validate()).rejects.toThrow();
     });
+
+    it('only accepts a numbered byday or a bymonthday on monthly rows', async () => {
+      const build = fields => models.HolidaySchedule.build({ closed: false, ...fields });
+
+      await expect(build({ freq: 'WEEKLY', byday: '2FR' }).validate()).rejects.toThrow();
+      await expect(build({ byday: '-1FR' }).validate()).rejects.toThrow();
+      await expect(build({ freq: 'WEEKLY', bymonthday: '15' }).validate()).rejects.toThrow();
+      await expect(build({ freq: 'MONTHLY', byday: '2FR' }).validate()).resolves.toBeDefined();
+      await expect(build({ freq: 'MONTHLY', bymonthday: '15' }).validate()).resolves.toBeDefined();
+      await expect(build({ freq: 'WEEKLY', byday: 'MO,FR' }).validate()).resolves.toBeDefined();
+    });
   });
 
   describe('LocationPhoto', () => {

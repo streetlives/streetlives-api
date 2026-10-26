@@ -24,6 +24,14 @@ export default {
            ADD CONSTRAINT holiday_schedules_freq_check CHECK (freq IN ('WEEKLY', 'MONTHLY'))`,
         { transaction },
       );
+      // RFC 5545: a numbered BYDAY ("2FR") and BYMONTHDAY only apply within a month.
+      await queryInterface.sequelize.query(
+        `ALTER TABLE holiday_schedules
+           ADD CONSTRAINT holiday_schedules_recurrence_check CHECK (
+             COALESCE(freq, '') = 'MONTHLY'
+             OR ((byday IS NULL OR byday !~ '[0-9]') AND bymonthday IS NULL))`,
+        { transaction },
+      );
       await queryInterface.sequelize.query(
         'UPDATE holiday_schedules SET valid_from = start_date, valid_to = end_date',
         { transaction },

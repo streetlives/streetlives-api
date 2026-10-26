@@ -29,6 +29,14 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     underscored: true,
     underscoredAll: true,
+    validate: {
+      // RFC 5545: a numbered BYDAY ("2FR") and BYMONTHDAY only apply within a month.
+      monthlyOnlyRecurrence() {
+        if (this.freq !== 'MONTHLY' && ((this.byday && /\d/.test(this.byday)) || this.bymonthday)) {
+          throw new Error('A numbered byday or a bymonthday needs freq MONTHLY');
+        }
+      },
+    },
   });
 
   HolidaySchedule.associate = (models) => {
