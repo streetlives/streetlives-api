@@ -151,6 +151,27 @@ describe('get location info', () => {
       expect(occasions).toEqual(['ONGOING', 'OPEN_ENDED']);
     });
 
+    it('replaces dated rows sent without an occasion instead of adding to them', async () => {
+      const christmas = closesAt => ({
+        closed: false,
+        opensAt: '10:00',
+        closesAt,
+        validFrom: '2026-12-25',
+        validTo: '2026-12-25',
+      });
+      await request(app)
+        .patch(`/services/${service.id}`)
+        .send({ irregularHours: [christmas('12:00')] })
+        .expect(204);
+      await request(app)
+        .patch(`/services/${service.id}`)
+        .send({ irregularHours: [christmas('14:00')] })
+        .expect(204);
+
+      const rows = await getHolidaySchedules();
+      expect(rows.map(({ closes_at: closesAt }) => closesAt)).toEqual(['14:00:00']);
+    });
+
     it('stores HSDS recurrence fields sent through PATCH /services/:id', async () => {
       await request(app)
         .patch(`/services/${service.id}`)

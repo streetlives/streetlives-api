@@ -986,6 +986,28 @@ describe('find locations', () => {
             }))
           .then(expectMatchPrimaryLocation));
 
+      it('should ignore expired occasion hours when filtering by occasion alone', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2020-03-01',
+          valid_to: '2020-03-31',
+        });
+        await request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            occasion: 'COVID-19',
+          })
+          .then(expectNoMatchingLocations);
+      });
+
       it('should ignore occasion hours outside their valid_from..valid_to range', async () => {
         await setupBaseSchedule();
         await aSpecificOffering1.createHolidaySchedule({

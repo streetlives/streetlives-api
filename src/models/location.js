@@ -544,7 +544,7 @@ module.exports = (sequelize, DataTypes, Op) => {
               sequelize.models.Taxonomy,
               ...(areRequiredDocsSpecified ? [sequelize.models.RequiredDocument] : []),
               ...((openAt && !occasion) ? [sequelize.models.RegularSchedule] : []),
-              ...(occasion ? [sequelize.models.HolidaySchedule] : []),
+              ...(occasion ? [sequelize.models.HolidaySchedule.notExpiredInclude()] : []),
               ...(servesZipcode ? [sequelize.models.ServiceArea] : []),
               ...(shouldJoinEligibilities ? [{
                 model: sequelize.models.Eligibility,
