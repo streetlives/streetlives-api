@@ -98,6 +98,177 @@ describe('get location info', () => {
       .expect(404);
   });
 
+  describe('dated holiday schedules', () => {
+    let service;
+
+    beforeAll(async () => {
+      [service] = await location.getServices();
+      // PATCH /services/:id refuses services without a DocumentsInfo row.
+      await models.DocumentsInfo.create({ service_id: service.id });
+    });
+    afterEach(() => models.HolidaySchedule.destroy({ where: { service_id: service.id } }));
+
+    const getHolidaySchedules = async () => {
+      const res = await request(app)
+        .get(`/locations/${location.id}`)
+        .expect(200);
+      return res.body.Services[0].HolidaySchedules;
+    };
+
+    it('leaves out schedules whose valid_to has passed', async () => {
+      await models.HolidaySchedule.bulkCreate([
+        {
+          service_id: service.id,
+          closed: false,
+          weekday: 1,
+          opens_at: '09:00',
+          closes_at: '17:00',
+          occasion: 'EXPIRED',
+          valid_from: '2020-03-27',
+          valid_to: '2020-07-27',
+        },
+        {
+          service_id: service.id,
+          closed: false,
+          weekday: 2,
+          opens_at: '09:00',
+          closes_at: '17:00',
+          occasion: 'ONGOING',
+          valid_from: '2020-03-27',
+          valid_to: '2999-07-27',
+        },
+        {
+          service_id: service.id,
+          closed: false,
+          weekday: 3,
+          opens_at: '09:00',
+          closes_at: '17:00',
+          occasion: 'OPEN_ENDED',
+        },
+      ]);
+
+      const occasions = (await getHolidaySchedules()).map(({ occasion }) => occasion).sort();
+      expect(occasions).toEqual(['ONGOING', 'OPEN_ENDED']);
+    });
+
+    it('replaces dated rows sent without an occasion instead of adding to them', async () => {
+      const christmas = closesAt => ({
+        closed: false,
+        opensAt: '10:00',
+        closesAt,
+        validFrom: '2026-12-25',
+        validTo: '2026-12-25',
+      });
+      await request(app)
+        .patch(`/services/${service.id}`)
+        .send({ irregularHours: [christmas('12:00')] })
+        .expect(204);
+      await request(app)
+        .patch(`/services/${service.id}`)
+        .send({ irregularHours: [christmas('14:00')] })
+        .expect(204);
+
+      const rows = await getHolidaySchedules();
+      expect(rows.map(({ closes_at: closesAt }) => closesAt)).toEqual(['14:00:00']);
+    });
+
+    it('stores HSDS recurrence fields sent through PATCH /services/:id', async () => {
+      await request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            occasion: 'MONTHLY',
+            freq: 'MONTHLY',
+            byday: '2FR',
+            validFrom: '2026-03-27',
+            validTo: '2999-07-27',
+          }],
+        })
+        .expect(204);
+
+      const [schedule] = await getHolidaySchedules();
+      expect(schedule).toMatchObject({
+        freq: 'MONTHLY',
+        byday: '2FR',
+        valid_from: '2026-03-27',
+        valid_to: '2999-07-27',
+        // The legacy columns are kept in sync until they're dropped.
+        start_date: '2026-03-27',
+        end_date: '2999-07-27',
+      });
+    });
+
+    it('rejects a BYDAY value that isn\'t RFC 5545', () =>
+      request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            occasion: 'MONTHLY',
+            byday: 'second friday',
+          }],
+        })
+        .expect(400));
+    it('rejects BYDAY weeks counted from the end other than the last', () =>
+      request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            freq: 'MONTHLY',
+            byday: '-2FR',
+          }],
+        })
+        .expect(400));
+
+    describe('frequency and recurrence fields', () => {
+      const patchRecurrence = recurrence => request(app)
+        .patch(`/services/${service.id}`)
+        .send({
+          irregularHours: [{
+            weekday: 'Friday',
+            opensAt: '09:00',
+            closesAt: '17:00',
+            closed: false,
+            validFrom: '2026-03-27',
+            ...recurrence,
+          }],
+        });
+
+      // RFC 5545: numbered BYDAY and BYMONTHDAY only make sense within a month.
+      [
+        { freq: 'WEEKLY', byday: '2FR' },
+        { freq: null, byday: '-1FR' },
+        { byday: 'MO,2FR' },
+        { freq: 'WEEKLY', bymonthday: '15' },
+        { bymonthday: '15' },
+      ].forEach((recurrence) => {
+        it(`rejects ${JSON.stringify(recurrence)}`, () =>
+          patchRecurrence(recurrence).expect(400));
+      });
+
+      [
+        { freq: 'MONTHLY', byday: '2FR' },
+        { freq: 'MONTHLY', bymonthday: '15' },
+        { freq: 'WEEKLY', byday: 'MO,FR' },
+        { byday: 'FR' },
+      ].forEach((recurrence) => {
+        it(`accepts ${JSON.stringify(recurrence)}`, () =>
+          patchRecurrence(recurrence).expect(204));
+      });
+    });
+  });
+
   describe('closed flag', () => {
     afterEach(() => models.EventRelatedInfo.destroy({ where: { location_id: location.id } }));
 

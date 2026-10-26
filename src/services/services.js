@@ -37,9 +37,16 @@ const updateHours = async (service, hours, { t, user, metadata }) => {
 
 const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
   const relevantOccasions = [...new Set(hours.map(({ occasion }) => occasion))];
+  const occasions = relevantOccasions.filter(occasion => occasion != null);
 
   const whereClause = { service_id: service.id };
-  if (hours.length) whereClause.occasion = { [Op.in]: relevantOccasions };
+  if (hours.length) {
+    // Rows sent without an occasion (HSDS rows dated with validFrom) replace the stored rows
+    // that have none; `IN (NULL)` would match nothing and leave them behind.
+    whereClause.occasion = occasions.length < relevantOccasions.length
+      ? { [Op.or]: [{ [Op.in]: occasions }, { [Op.is]: null }] }
+      : { [Op.in]: occasions };
+  }
 
   await models.HolidaySchedule.destroy({
     where: whereClause,
@@ -54,10 +61,18 @@ const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
     opens_at: hoursPart.opensAt,
     closes_at: hoursPart.closesAt,
     closed: hoursPart.closed || false,
-    start_date: hoursPart.startDate,
-    end_date: hoursPart.endDate,
+    // start_date/end_date are kept in sync with the HSDS valid_from/valid_to until they're dropped.
+    start_date: hoursPart.validFrom || hoursPart.startDate,
+    end_date: hoursPart.validTo || hoursPart.endDate,
+    valid_from: hoursPart.validFrom || hoursPart.startDate,
+    valid_to: hoursPart.validTo || hoursPart.endDate,
     occasion: hoursPart.occasion,
     weekday: hoursPart.weekday != null ? getDayOfWeekInteger(hoursPart.weekday) : undefined,
+    freq: hoursPart.freq,
+    interval: hoursPart.interval,
+    byday: hoursPart.byday,
+    bymonthday: hoursPart.bymonthday,
+    description: hoursPart.description,
   }, { transaction: t, metadata })));
 };
 

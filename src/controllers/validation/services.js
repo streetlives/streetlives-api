@@ -11,6 +11,12 @@ const weekdays = [
 ];
 
 const hourRegex = /^\d{2}:\d{2}$/;
+// RFC 5545 BYDAY as used by HSDS 3.0 schedule.byday, e.g. "MO,WE", "2FR", "-1MO". Only the
+// last week counts from the end (-1): the front ends have no words for "-2FR" and the like.
+const bydayRegex = /^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)(,(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU))*$/;
+// Outside freq MONTHLY, RFC 5545 allows only plain weekdays and no BYMONTHDAY.
+const weeklyBydayRegex = /^(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*$/;
+const bymonthdayRegex = /^-?([1-9]|[12]\d|3[01])(,-?([1-9]|[12]\d|3[01]))*$/;
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -57,8 +63,23 @@ export default {
         startDate: Joi.date(),
         endDate: Joi.date(),
         occasion: Joi.string(),
+        freq: Joi.string().valid(['WEEKLY', 'MONTHLY']).allow(null),
+        interval: Joi.number().integer().min(1).allow(null),
+        byday: Joi.string().allow(null).when('freq', {
+          is: 'MONTHLY',
+          then: Joi.string().regex(bydayRegex, { name: 'BYDAY' }),
+          otherwise: Joi.string().regex(weeklyBydayRegex, { name: 'weekly BYDAY' }),
+        }),
+        bymonthday: Joi.string().allow(null).when('freq', {
+          is: 'MONTHLY',
+          then: Joi.string().regex(bymonthdayRegex, { name: 'BYMONTHDAY' }),
+          otherwise: Joi.valid(null),
+        }),
+        validFrom: Joi.date().allow(null),
+        validTo: Joi.date().min(Joi.ref('validFrom')).allow(null),
+        description: Joi.string().allow('', null),
       })
-        .or('occasion', 'startDate')
+        .or('occasion', 'startDate', 'validFrom')
         .and('startDate', 'endDate')
         .and('opensAt', 'closesAt')),
       languageIds: Joi.array().items(Joi.string().guid().required()),

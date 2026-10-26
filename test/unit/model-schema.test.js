@@ -33,6 +33,38 @@ describe('model definitions match migrated schemas', () => {
     expect(Object.keys(models.PhysicalAddress.rawAttributes)).not.toContain('neighborhood');
   });
 
+  describe('HolidaySchedule', () => {
+    it('maps the HSDS 3.0 schedule fields', () => {
+      const attributes = Object.keys(models.HolidaySchedule.rawAttributes);
+
+      ['freq', 'interval', 'byday', 'bymonthday', 'valid_from', 'valid_to',
+        'description'].forEach((field) => {
+        expect(attributes).toContain(field);
+      });
+      // schedule.description holds the street team's notes; HSDS notes is unused.
+      expect(attributes).not.toContain('notes');
+      // Times are New York time (see the README); HSDS timezone is a fixed UTC offset.
+      expect(attributes).not.toContain('timezone');
+    });
+
+    it('only accepts HSDS frequencies yourpeer can render', async () => {
+      const schedule = models.HolidaySchedule.build({ closed: false, freq: 'DAILY' });
+
+      await expect(schedule.validate()).rejects.toThrow();
+    });
+
+    it('only accepts a numbered byday or a bymonthday on monthly rows', async () => {
+      const build = fields => models.HolidaySchedule.build({ closed: false, ...fields });
+
+      await expect(build({ freq: 'WEEKLY', byday: '2FR' }).validate()).rejects.toThrow();
+      await expect(build({ byday: '-1FR' }).validate()).rejects.toThrow();
+      await expect(build({ freq: 'WEEKLY', bymonthday: '15' }).validate()).rejects.toThrow();
+      await expect(build({ freq: 'MONTHLY', byday: '2FR' }).validate()).resolves.toBeDefined();
+      await expect(build({ freq: 'MONTHLY', bymonthday: '15' }).validate()).resolves.toBeDefined();
+      await expect(build({ freq: 'WEEKLY', byday: 'MO,FR' }).validate()).resolves.toBeDefined();
+    });
+  });
+
   describe('LocationPhoto', () => {
     // Metadata.associate scopes its hasMany by model.tableName, so the audit
     // trail's resource_table depends on this deriving to location_photos.
