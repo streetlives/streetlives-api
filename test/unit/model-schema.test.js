@@ -38,11 +38,13 @@ describe('model definitions match migrated schemas', () => {
       const attributes = Object.keys(models.HolidaySchedule.rawAttributes);
 
       ['freq', 'interval', 'byday', 'bymonthday', 'valid_from', 'valid_to',
-        'description', 'timezone'].forEach((field) => {
+        'description'].forEach((field) => {
         expect(attributes).toContain(field);
       });
       // schedule.description holds the street team's notes; HSDS notes is unused.
       expect(attributes).not.toContain('notes');
+      // Times are New York time (see the README); HSDS timezone is a fixed UTC offset.
+      expect(attributes).not.toContain('timezone');
     });
 
     it('only accepts HSDS frequencies yourpeer can render', async () => {

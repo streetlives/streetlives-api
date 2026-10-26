@@ -8,7 +8,6 @@ const columns = Sequelize => ({
   valid_from: Sequelize.DATEONLY,
   valid_to: Sequelize.DATEONLY,
   description: Sequelize.TEXT,
-  timezone: { type: Sequelize.TEXT, defaultValue: 'America/New_York' },
 });
 
 export default {

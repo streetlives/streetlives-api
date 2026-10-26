@@ -84,6 +84,15 @@ DATABASE_HOST=localhost DATABASE_USER=myuser DATABASE_PASSWORD=mypassword npm ru
 
 See [Postman documentation](https://documenter.getpostman.com/view/3922811/RVncdbse).
 
+### Schedule times are New York time
+
+`HolidaySchedules` rows carry the HSDS 3.0 `schedule` fields `freq`, `interval`,
+`byday`, `bymonthday`, `valid_from`, `valid_to` and `description`. They leave out
+the optional `timezone`: HSDS defines it as a fixed UTC offset, which can't
+follow daylight saving time. Every `opens_at`/`closes_at` and date is instead
+New York local time (`America/New_York`), and the `openAt` search evaluates
+schedules on the New York date.
+
 ### `LocationPhoto` — an extension beyond HSDS
 
 This schema is derived from the [Human Services Data
