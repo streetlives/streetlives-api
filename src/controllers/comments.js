@@ -197,7 +197,8 @@ export default {
       const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
       if (isValidEmail && location) {
         replyEmail({
-          locationName: location.Organization ? location.Organization.name : '',
+          locationName: location.name
+            || (location.Organization ? location.Organization.name : ''),
           toEmail: contactEmail,
           locationSlug: location.slug,
           replyContent: content,

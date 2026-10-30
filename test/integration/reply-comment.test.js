@@ -54,6 +54,7 @@ function makeOriginalComment(contactInfo) {
     location_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
     Location: {
       id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      name: 'Test Shelter Bronx',
       slug: LOCATION_SLUG,
       organization_id: ORG_ID,
       Organization: { name: 'Test Shelter' },
@@ -131,6 +132,23 @@ describe('comments.reply — email side-effects', () => {
       toEmail: email,
       locationSlug: LOCATION_SLUG,
       replyContent: 'Thank you for your feedback.',
+    }));
+  });
+
+  it('names the location, falling back to the organization, in the reply email', async () => {
+    const email = 'commenter@example.com';
+    models.Comment.findByPk.mockResolvedValueOnce(makeOriginalComment(email));
+    await commentsController.reply(makeReq(), makeRes(), jest.fn());
+    expect(replyEmail).toHaveBeenLastCalledWith(expect.objectContaining({
+      locationName: 'Test Shelter Bronx',
+    }));
+
+    const unnamed = makeOriginalComment(email);
+    unnamed.Location.name = null;
+    models.Comment.findByPk.mockResolvedValueOnce(unnamed);
+    await commentsController.reply(makeReq(), makeRes(), jest.fn());
+    expect(replyEmail).toHaveBeenLastCalledWith(expect.objectContaining({
+      locationName: 'Test Shelter',
     }));
   });
 
