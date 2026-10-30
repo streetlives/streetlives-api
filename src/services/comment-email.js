@@ -13,6 +13,12 @@ function escapeHtml(input) {
     .replace(/'/g, '&#39;');
 }
 
+// Trailing newlines would otherwise render inside the pre-wrap comment box and push the
+// closing quote mark onto a line of its own.
+function trimText(input) {
+  return String(input || '').trim();
+}
+
 const transport = nodemailer.createTransport({
   host: config.mail.host,
   port: config.mail.port,
@@ -115,8 +121,10 @@ async function commentEmail({
   const escapedName = escapeHtml(locationName);
   const commentLines = [
     servicesUsed ? `Services used: ${servicesUsed.map(escapeHtml).join(', ')}` : '',
-    whatWentWell ? `What went well: ${escapeHtml(whatWentWell)}` : '',
-    whatCouldBeImproved ? `What could be improved: ${escapeHtml(whatCouldBeImproved)}` : '',
+    whatWentWell ? `What went well: ${escapeHtml(trimText(whatWentWell))}` : '',
+    whatCouldBeImproved
+      ? `What could be improved: ${escapeHtml(trimText(whatCouldBeImproved))}`
+      : '',
   ].filter(Boolean).join('\n');
   const safeSlug = encodeURIComponent(locationSlug);
   const bodyHtml = `
@@ -150,13 +158,19 @@ async function replyEmail({
     throw new Error('Invalid recipient email address');
   }
 
-  const subject = '📝 A provider replied to your comment on YourPeer!';
+  // Collapsed to one line: the name goes into the subject header as well as the body.
+  const replierName = trimText(locationName).replace(/\s+/g, ' ');
+  const title = replierName
+    ? `${replierName} replied to your comment on YourPeer`
+    : 'A provider replied to your comment on YourPeer!';
+  const subject = `📝 ${title}`;
+  const replierHtml = replierName ? `<strong>${escapeHtml(replierName)}</strong>` : 'A provider';
   const safeSlug = encodeURIComponent(locationSlug);
   const bodyHtml = `
     <p>Hi,</p>
-    <p>A provider has replied to your comment on YourPeer. Here's what they shared:</p>
+    <p>${replierHtml} has replied to your comment on YourPeer. Here's what they shared:</p>
 
-    <div class="comment-box">"${escapeHtml(replyContent)}"</div>
+    <div class="comment-box">"${escapeHtml(trimText(replyContent))}"</div>
 
     <p>Click <a href="${appUrl}/locations/${safeSlug}#reviews">here</a>
     and "View All" to see your comment.</p>
@@ -166,8 +180,8 @@ async function replyEmail({
     to: toEmail,
     subject,
     html: buildEmailHtml({
-      title: 'A provider replied to your comment on YourPeer!',
-      header: subject,
+      title: escapeHtml(title),
+      header: escapeHtml(subject),
       bodyHtml,
       footerMessage: 'Thanks for using YourPeer!',
     }),

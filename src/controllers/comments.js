@@ -197,7 +197,9 @@ export default {
       const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
       if (isValidEmail && location) {
         replyEmail({
-          locationName: location.Organization ? location.Organization.name : '',
+          // A whitespace-only location name counts as missing, so the org name is used.
+          locationName: (location.name || '').trim()
+            || (location.Organization ? location.Organization.name : ''),
           toEmail: contactEmail,
           locationSlug: location.slug,
           replyContent: content,

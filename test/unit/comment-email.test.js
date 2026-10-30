@@ -131,3 +131,65 @@ describe('replyEmail — HTML escaping', () => {
     })).rejects.toThrow('Invalid recipient email address');
   });
 });
+
+describe('replyEmail — names the replying location', () => {
+  const baseArgs = {
+    toEmail: 'commenter@example.com',
+    locationSlug: 'lantern-house',
+    replyContent: 'Thanks!',
+  };
+
+  it('puts the location name in the subject, header and body', async () => {
+    await replyEmail({ ...baseArgs, locationName: 'Lantern House' });
+    const { subject, html } = mockSendMail.mock.calls[0][0];
+    expect(subject).toBe('📝 Lantern House replied to your comment on YourPeer');
+    expect(html).toContain('<title>Lantern House replied to your comment on YourPeer</title>');
+    expect(html).toContain('<strong>Lantern House</strong> has replied to your comment');
+  });
+
+  it('falls back to "A provider" when no location name is given', async () => {
+    await replyEmail({ ...baseArgs, locationName: '  ' });
+    const { subject, html } = mockSendMail.mock.calls[0][0];
+    expect(subject).toBe('📝 A provider replied to your comment on YourPeer!');
+    expect(html).toContain('A provider has replied to your comment');
+  });
+
+  it('escapes the location name in the HTML but not in the subject', async () => {
+    await replyEmail({ ...baseArgs, locationName: 'Tom & Jerry <Shelter>' });
+    const { subject, html } = mockSendMail.mock.calls[0][0];
+    expect(subject).toBe('📝 Tom & Jerry <Shelter> replied to your comment on YourPeer');
+    expect(html).toContain('Tom &amp; Jerry &lt;Shelter&gt;');
+    expect(html).not.toContain('<Shelter>');
+  });
+
+  it('collapses line breaks in the location name so the subject stays one line', async () => {
+    await replyEmail({ ...baseArgs, locationName: 'Lantern\r\nHouse' });
+    expect(mockSendMail.mock.calls[0][0].subject)
+      .toBe('📝 Lantern House replied to your comment on YourPeer');
+  });
+});
+
+describe('closing quote stays on the same line as the comment text', () => {
+  it('trims surrounding whitespace from replyContent', async () => {
+    await replyEmail({
+      locationName: 'Lantern House',
+      toEmail: 'commenter@example.com',
+      locationSlug: 'lantern-house',
+      replyContent: '\n  Thanks for the feedback!\n\n',
+    });
+    expect(captureHtml()).toContain('<div class="comment-box">"Thanks for the feedback!"</div>');
+  });
+
+  it('trims trailing whitespace from new-comment fields', async () => {
+    await commentEmail({
+      locationName: 'Lantern House',
+      providersEmail: 'provider@example.com',
+      locationSlug: 'lantern-house',
+      servicesUsed: null,
+      whatWentWell: 'Friendly staff\n',
+      whatCouldBeImproved: 'Longer hours\n\n',
+    });
+    expect(captureHtml()).toContain('What could be improved: Longer hours"</div>');
+    expect(captureHtml()).toContain('What went well: Friendly staff\nWhat could be improved');
+  });
+});
