@@ -152,6 +152,16 @@ describe('comments.reply — email side-effects', () => {
     }));
   });
 
+  it('falls back to the organization name when the location name is whitespace-only', async () => {
+    const blank = makeOriginalComment('commenter@example.com');
+    blank.Location.name = '   ';
+    models.Comment.findByPk.mockResolvedValueOnce(blank);
+    await commentsController.reply(makeReq(), makeRes(), jest.fn());
+    expect(replyEmail).toHaveBeenLastCalledWith(expect.objectContaining({
+      locationName: 'Test Shelter',
+    }));
+  });
+
   it('does not send a reply email when contact_info is a plain name', async () => {
     models.Comment.findByPk.mockResolvedValue(makeOriginalComment('John Smith'));
 
