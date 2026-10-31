@@ -92,12 +92,24 @@ describe('model definitions match migrated schemas', () => {
       expect(closedSaturday.freq).toBeFalsy();
     });
 
-    it('makes a one-off without an end date last one day', async () => {
-      const oneOff = models.HolidaySchedule.build({ closed: true, valid_from: '2026-12-25' });
+    it('leaves an open weekday row with dates as it is', async () => {
+      const novemberSaturdays = models.HolidaySchedule.build({
+        closed: false, weekday: 6, valid_from: '2026-11-01',
+      });
+
+      await novemberSaturdays.validate();
+
+      expect([novemberSaturdays.freq, novemberSaturdays.valid_to]).toEqual([undefined, undefined]);
+    });
+
+    it('makes a one-off without an end date last one day, in both date columns', async () => {
+      const oneOff = models.HolidaySchedule.build({
+        closed: true, valid_from: '2026-12-25', start_date: '2026-12-25',
+      });
 
       await oneOff.validate();
 
-      expect(oneOff.valid_to).toBe('2026-12-25');
+      expect([oneOff.valid_to, oneOff.end_date]).toEqual(['2026-12-25', '2026-12-25']);
     });
 
     it('needs a valid_from to count an interval from', async () => {

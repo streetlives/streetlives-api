@@ -2,8 +2,9 @@
 // - exdates lists the dates a series skips ("delete this occurrence");
 // - bymonth (RFC 5545 BYMONTH) limits a rule to some months, and lets FREQ=YEARLY rows name
 //   a date or a weekday in a month: "every December 25", "every 4th Thursday of November";
-// - every open row with a weekday but no freq is a weekly series, so readers can tell series
-//   (freq set) from dated one-offs (freq NULL) by freq alone.
+// - every open row with only a weekday (no freq, no dates) is a weekly series, as readers
+//   already took it. Dated weekday rows are left alone: readers take them as that weekday every
+//   week between the dates, as before.
 // HSDS has neither exdates nor bymonth.
 const RECURRENCE_CHECK = 'holiday_schedules_recurrence_check';
 const FREQ_CHECK = 'holiday_schedules_freq_check';
@@ -45,15 +46,18 @@ export default {
                  byday,
                  (ARRAY['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'])[weekday + 1]
                )
-           WHERE freq IS NULL AND weekday IS NOT NULL AND NOT closed`);
+           WHERE freq IS NULL AND weekday IS NOT NULL AND NOT closed
+             AND valid_from IS NULL AND valid_to IS NULL`);
     });
   },
 
-  // The backfilled freq/byday stay: they say what the rows already meant. Rows that are yearly
-  // or skip dates have to go first.
+  // The backfilled freq/byday stay: they say what the rows already meant. Yearly rows (closures
+  // that repeat every year) can't be kept, as the restored constraints only allow WEEKLY and
+  // MONTHLY, so they go; skipped dates and month limits go with their columns.
   down: async (queryInterface) => {
     await queryInterface.sequelize.transaction(async (transaction) => {
       const query = sql => queryInterface.sequelize.query(sql, { transaction });
+      await query("DELETE FROM holiday_schedules WHERE freq = 'YEARLY'");
       await query(`ALTER TABLE holiday_schedules DROP CONSTRAINT IF EXISTS ${YEARLY_CHECK}`);
       await query(`ALTER TABLE holiday_schedules DROP CONSTRAINT IF EXISTS ${FREQ_CHECK}`);
       await query(`ALTER TABLE holiday_schedules DROP CONSTRAINT IF EXISTS ${RECURRENCE_CHECK}`);

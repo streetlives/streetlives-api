@@ -126,7 +126,8 @@ counting overnight hours, or that make a date both closed and open
 `exdates` and `bymonth` are extensions: HSDS has no way to skip one occurrence
 and no `bymonth`. Rows saved before `freq` existed (an open row with only a
 `weekday`) are weekly series; the model and migration fill in `freq`/`byday` for
-them. The location responses leave out rows whose `valid_to` has passed, and
+them. An open row with a `weekday` and dates but no `freq` is left as it is, and
+readers take it as that weekday every week between the dates, as they did before. The location responses leave out rows whose `valid_to` has passed, and
 gogetta drops them (and past `exdates`) the next time the hours are saved.
 
 The `openAt` search (`src/utils/schedule-sql.js`), the clash check

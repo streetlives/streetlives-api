@@ -17,10 +17,13 @@ const sqlWeekdays = weekday => (weekday === 7 ? '7, 0' : String(weekday));
 export default function scheduleSql(escape) {
   const sqlDate = date => `${escape(date)}::date`;
 
-  // `table`'s row is a one-off covering `date` (YYYY-MM-DD).
+  // `table`'s row is a one-off covering `date` (YYYY-MM-DD). An open row with a weekday is a
+  // series even without freq (rows saved before freq existed), so it isn't one.
   const getOneOffSql = (table, date) => {
     const column = name => `${table}."${name}"`;
-    return `(${column('freq')} IS NULL AND ${column('valid_from')} <= ${sqlDate(date)}
+    return `(${column('freq')} IS NULL
+      AND (${column('weekday')} IS NULL OR ${column('closed')})
+      AND ${column('valid_from')} <= ${sqlDate(date)}
       AND COALESCE(${column('valid_to')}, ${column('valid_from')}) >= ${sqlDate(date)}
       AND (${column('weekday')} IS NULL
         OR ${column('weekday')} IN (${sqlWeekdays(weekdayOf(date))})))`;
@@ -28,7 +31,7 @@ export default function scheduleSql(escape) {
 
   // `table`'s row repeats on `date`, whether it opens or closes: inside valid_from..valid_to,
   // not skipped, in its months, on a matching byday/bymonthday, and on an interval counted from
-  // valid_from.
+  // valid_from. A row with a weekday but no freq repeats every week on it.
   const getRecursSql = (table, date) => {
     const weekday = weekdayOf(date);
     const [year, month, day] = date.split('-').map(Number);
@@ -46,7 +49,7 @@ export default function scheduleSql(escape) {
     const years = `(EXTRACT(YEAR FROM ${dateLiteral})
       - EXTRACT(YEAR FROM ${column('valid_from')}))`;
 
-    return `(${column('freq')} IS NOT NULL
+    return `((${column('freq')} IS NOT NULL OR ${column('weekday')} IS NOT NULL)
       AND (${column('valid_from')} IS NULL OR ${column('valid_from')} <= ${dateLiteral})
       AND (${column('valid_to')} IS NULL OR ${column('valid_to')} >= ${dateLiteral})
       AND NOT (${dateLiteral} = ANY(COALESCE(${column('exdates')}, '{}')))
@@ -81,7 +84,7 @@ export default function scheduleSql(escape) {
   const getAppliesOnSql = (table, date) => `(CASE
     WHEN ${existsInScheduleSql(table, 'one_off', getOneOffSql('one_off', date))}
       THEN ${getOneOffSql(table, date)}
-    WHEN ${existsInScheduleSql(table, 'closure', `closure.closed
+    WHEN ${existsInScheduleSql(table, 'closure', `closure.closed AND closure.freq IS NOT NULL
       AND ${getRecursSql('closure', date)}`)}
       THEN FALSE
     ELSE ${getRecursSql(table, date)}

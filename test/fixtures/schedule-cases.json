@@ -52,6 +52,43 @@
       ]
     },
     {
+      "name": "a weekday row with dates but no freq repeats every week between its dates",
+      "rows": [
+        {
+          "weekday": 6,
+          "valid_from": "2026-11-01",
+          "valid_to": "2026-11-30",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "freq": "WEEKLY",
+          "byday": "SU",
+          "weekday": 7,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-14T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-08T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-05T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
       "name": "1st and 3rd Saturday of the month",
       "rows": [
         {

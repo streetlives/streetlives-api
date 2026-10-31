@@ -39,14 +39,18 @@ module.exports = (sequelize, DataTypes) => {
     hooks: {
       /* eslint-disable no-param-reassign */
       beforeValidate(schedule) {
-        if (!schedule.freq && !schedule.closed && schedule.weekday != null) {
-          // An open row with a weekday and no freq repeats every week on that weekday, as rows
-          // did before HSDS recurrence. Saying so in freq lets readers go by freq alone.
+        if (schedule.freq) return;
+        const isOpenWeekday = !schedule.closed && schedule.weekday != null;
+        if (isOpenWeekday && !schedule.valid_from && !schedule.valid_to) {
+          // An open row with only a weekday repeats every week on it, as rows did before HSDS
+          // recurrence; freq says so. Dated weekday rows are left as they are: readers already
+          // take them as that weekday every week between the dates (see the README).
           schedule.freq = 'WEEKLY';
           schedule.byday = schedule.byday || BYDAY_CODES[(schedule.weekday + 6) % 7];
-        } else if (!schedule.freq && schedule.valid_from && !schedule.valid_to) {
-          // A one-off without an end date is that one day.
+        } else if (!isOpenWeekday && schedule.valid_from && !schedule.valid_to) {
+          // A one-off without an end date is that one day, in the legacy column too.
           schedule.valid_to = schedule.valid_from;
+          schedule.end_date = schedule.end_date || schedule.valid_from;
         }
       },
       /* eslint-enable no-param-reassign */

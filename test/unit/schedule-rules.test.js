@@ -61,6 +61,26 @@ describe('assertNoScheduleConflicts', () => {
     ])).toThrow('2026-12-25 is both closed and open');
   });
 
+  it('refuses ranges that touch at midnight, which should be one overnight range', () => {
+    expect(check([
+      { ...saturday, opensAt: '22:00', closesAt: '00:00' },
+      {
+        ...saturday, weekday: 'Sunday', byday: 'SU', opensAt: '00:00', closesAt: '06:00',
+      },
+    ])).toThrow('SA 22:00-00:00 and SU 00:00-06:00 touch (make them one range)');
+  });
+
+  it('accepts whole days one after another', () => {
+    const allDay = ['Monday', 'Tuesday'].map(weekday => ({
+      ...saturday,
+      weekday,
+      byday: weekday.slice(0, 2).toUpperCase(),
+      opensAt: '00:00',
+      closesAt: '00:00',
+    }));
+    expect(check(allDay)).not.toThrow();
+  });
+
   it('accepts overnight hours split at midnight the old way', () => {
     expect(check([
       { ...saturday, opensAt: '21:00', closesAt: '23:59' },
