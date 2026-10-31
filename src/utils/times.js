@@ -23,6 +23,12 @@ export const formatDateOnly = (date, timeZone) => new Intl.DateTimeFormat('en-CA
   day: '2-digit',
 }).format(date);
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// The YYYY-MM-DD date `days` days after the YYYY-MM-DD `date`.
+export const addDaysToDateOnly = (date, days) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + (days * DAY_MS)).toISOString().slice(0, 10);
+
 export const formatTime = (date, timeZone) => new Intl.DateTimeFormat([], {
   timeZone,
   hour: 'numeric',
