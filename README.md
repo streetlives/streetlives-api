@@ -93,6 +93,48 @@ follow daylight saving time. Every `opens_at`/`closes_at` and date is instead
 New York local time (`America/New_York`), and the `openAt` search evaluates
 schedules on the New York date.
 
+### Schedules are series
+
+`HolidaySchedules` rows work like Google Calendar events:
+
+- **An open row with `freq` is a series.** It occurs on the days `byday` or
+  `bymonthday` name (`SA`, `1SA,3SA`, `-1FR`, `15`), in the months `bymonth`
+  names (`6,7,8` for summer only), every `interval` weeks, months or years counted
+  from `valid_from`, from `valid_from` (its first occurrence) until `valid_to`,
+  except on the dates in `exdates`. Setting `valid_to` stops it; adding a date to
+  `exdates` deletes that one occurrence; "new hours from December 1" ends one row
+  on November 30 and starts another on December 1.
+- **A closed row with `freq` is a closure that repeats**, so holidays don't need
+  entering every year: `YEARLY` with `bymonth` and `bymonthday` ("every December
+  25") or a numbered `byday` ("4TH" in November: Thanksgiving), or every day of the
+  month ("all of August"); `MONTHLY` ("the last Friday of every month"). Its
+  `exdates` skip a year.
+- **A row without `freq` but with `valid_from` is a one-off** for
+  `valid_from`..`valid_to` ("special hours"), closed or with its own hours.
+- **A date's hours** come from its one-offs, else nothing if a repeating closure
+  falls on it, else its series. So "open 10 AM–2 PM this Christmas" beats "closed
+  every Christmas".
+- **Each occurrence belongs to the day it starts on** and runs into the next day
+  when `closes_at` <= `opens_at`, so a Saturday closure doesn't cut Friday
+  night's 10 PM–2 AM short.
+
+`PATCH /services/:id` refuses `irregularHours` whose time ranges overlap or touch
+on some date in the coming year (9 AM–1 PM with 1–5 PM should be one range),
+counting overnight hours, or that make a date both closed and open
+(`src/services/schedule-conflicts.js`).
+
+`exdates` and `bymonth` are extensions: HSDS has no way to skip one occurrence
+and no `bymonth`. Rows saved before `freq` existed (an open row with only a
+`weekday`) are weekly series; the model and migration fill in `freq`/`byday` for
+them. An open row with a `weekday` and dates but no `freq` is left as it is, and
+readers take it as that weekday every week between the dates, as they did before. The location responses leave out rows whose `valid_to` has passed, and
+gogetta drops them (and past `exdates`) the next time the hours are saved.
+
+The `openAt` search (`src/utils/schedule-sql.js`), the clash check
+(`src/utils/schedule-rules.js`), gogetta's editor and yourpeer.nyc all apply
+these rules, and all are tested against `test/fixtures/schedule-cases.json`.
+Change the copies of that file and of `schedule-rules.js` together.
+
 ### `LocationPhoto` — an extension beyond HSDS
 
 This schema is derived from the [Human Services Data

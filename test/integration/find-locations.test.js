@@ -1130,10 +1130,48 @@ describe('find locations', () => {
           await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
         });
 
-        it('never matches an interval without a valid_from to count from', async () => {
-          await createRecurringSchedule({ freq: 'WEEKLY', interval: 2 });
+        it('refuses an interval without a valid_from to count from', async () => {
+          await expect(createRecurringSchedule({ freq: 'WEEKLY', interval: 2 })).rejects.toThrow();
+        });
+      });
 
-          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+      describe('shared schedule cases', () => {
+        // The cases gogetta and yourpeer.nyc test their schedule rules against.
+        // eslint-disable-next-line global-require
+        const { cases } = require('../fixtures/schedule-cases.json');
+
+        // A New York local time like 2026-11-07T10:00, as an instant in the right DST offset.
+        const fromNyTime = (localTime) => {
+          const guess = new Date(`${localTime}:00Z`);
+          const asNy = new Date(guess.toLocaleString('en-US', { timeZone }));
+          const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
+          return new Date(guess.getTime() + (asUtc.getTime() - asNy.getTime()));
+        };
+
+        cases.forEach(({ name, rows, checks }) => {
+          it(name, async () => {
+            await Promise.all(rows.map(row => aSpecificOffering1.createHolidaySchedule({
+              closed: false,
+              occasion: 'COVID-19',
+              ...row,
+            })));
+
+            // eslint-disable-next-line no-restricted-syntax
+            for (const { at, open } of checks) {
+              // eslint-disable-next-line no-await-in-loop
+              const { body } = await request(app)
+                .get('/locations')
+                .query({
+                  latitude: originLatitude,
+                  longitude: originLongitude,
+                  radius,
+                  openAt: fromNyTime(at),
+                  occasion: 'COVID-19',
+                });
+              expect({ at, names: body.map(location => location.name) })
+                .toEqual({ at, names: open ? [primaryLocation.name] : [] });
+            }
+          });
         });
       });
     });

@@ -63,6 +63,73 @@ describe('model definitions match migrated schemas', () => {
       await expect(build({ freq: 'MONTHLY', bymonthday: '15' }).validate()).resolves.toBeDefined();
       await expect(build({ freq: 'WEEKLY', byday: 'MO,FR' }).validate()).resolves.toBeDefined();
     });
+
+    it('maps the dates a series skips and the months a rule applies in', () => {
+      expect(models.HolidaySchedule.rawAttributes.exdates.type.key).toBe(DataTypes.ARRAY.key);
+      expect(models.HolidaySchedule.rawAttributes.bymonth.type.key).toBe(DataTypes.TEXT.key);
+    });
+
+    it('needs a yearly row to name its months and days', async () => {
+      const build = fields => models.HolidaySchedule.build({
+        closed: true, freq: 'YEARLY', ...fields,
+      });
+
+      await expect(build({ bymonthday: '25' }).validate()).rejects.toThrow();
+      await expect(build({ bymonth: '12' }).validate()).rejects.toThrow();
+      await expect(build({ bymonth: '12', bymonthday: '25' }).validate()).resolves.toBeDefined();
+      await expect(build({ bymonth: '11', byday: '4TH' }).validate()).resolves.toBeDefined();
+    });
+
+    it('makes an open weekday row without freq a weekly series', async () => {
+      const saturday = models.HolidaySchedule.build({ closed: false, weekday: 6 });
+      const sunday = models.HolidaySchedule.build({ closed: false, weekday: 0 });
+      const closedSaturday = models.HolidaySchedule.build({ closed: true, weekday: 6 });
+
+      await Promise.all([saturday, sunday, closedSaturday].map(row => row.validate()));
+
+      expect([saturday.freq, saturday.byday]).toEqual(['WEEKLY', 'SA']);
+      expect([sunday.freq, sunday.byday]).toEqual(['WEEKLY', 'SU']);
+      expect(closedSaturday.freq).toBeFalsy();
+    });
+
+    it('leaves an open weekday row with dates as it is', async () => {
+      const novemberSaturdays = models.HolidaySchedule.build({
+        closed: false, weekday: 6, valid_from: '2026-11-01',
+      });
+
+      await novemberSaturdays.validate();
+
+      expect([novemberSaturdays.freq, novemberSaturdays.valid_to]).toEqual([undefined, undefined]);
+    });
+
+    it('makes a one-off without an end date last one day, in both date columns', async () => {
+      const oneOff = models.HolidaySchedule.build({
+        closed: true, valid_from: '2026-12-25', start_date: '2026-12-25',
+      });
+
+      await oneOff.validate();
+
+      expect([oneOff.valid_to, oneOff.end_date]).toEqual(['2026-12-25', '2026-12-25']);
+    });
+
+    it('needs a valid_from to count an interval from', async () => {
+      const build = fields => models.HolidaySchedule.build({
+        closed: false, freq: 'WEEKLY', ...fields,
+      });
+
+      await expect(build({ interval: 2 }).validate()).rejects.toThrow();
+      await expect(build({ interval: 2, valid_from: '2021-10-31' }).validate())
+        .resolves.toBeDefined();
+    });
+
+    it('only lets a series skip dates', async () => {
+      const build = fields => models.HolidaySchedule.build({ closed: false, ...fields });
+
+      await expect(build({ valid_from: '2026-12-25', exdates: ['2026-12-25'] }).validate())
+        .rejects.toThrow();
+      await expect(build({ freq: 'WEEKLY', byday: 'SA', exdates: ['2026-11-14'] }).validate())
+        .resolves.toBeDefined();
+    });
   });
 
   describe('LocationPhoto', () => {
