@@ -1,5 +1,6 @@
 import { isOpenAt } from '../../src/utils/schedule-rules';
 import assertNoScheduleConflicts from '../../src/services/schedule-conflicts';
+import { ValidationError } from '../../src/utils/errors';
 
 const { cases } = require('../fixtures/schedule-cases.json');
 
@@ -46,8 +47,8 @@ describe('assertNoScheduleConflicts', () => {
     }])).toThrow('overlap on 2026-11-07');
   });
 
-  it('refuses a date that is both closed and open', () => {
-    expect(check([
+  it('refuses a date that is both closed and open, as a validation error', () => {
+    const closedAndOpen = check([
       {
         occasion: 'COVID19', closed: true, validFrom: '2026-12-24', validTo: '2026-12-26',
       },
@@ -58,7 +59,9 @@ describe('assertNoScheduleConflicts', () => {
         opensAt: '10:00',
         closesAt: '14:00',
       },
-    ])).toThrow('2026-12-25 is both closed and open');
+    ]);
+    expect(closedAndOpen).toThrow(ValidationError);
+    expect(closedAndOpen).toThrow('2026-12-25 is both closed and open');
   });
 
   it('refuses ranges that touch at midnight, which should be one overnight range', () => {

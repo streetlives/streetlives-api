@@ -9,11 +9,17 @@
 const RECURRENCE_CHECK = 'holiday_schedules_recurrence_check';
 const FREQ_CHECK = 'holiday_schedules_freq_check';
 const YEARLY_CHECK = 'holiday_schedules_yearly_check';
+// Where a rollback keeps what the old schema can't hold, until up puts it back.
+const BACKUP = 'holiday_schedules_series_backup';
 
 export default {
   up: async (queryInterface, Sequelize) => {
     await queryInterface.sequelize.transaction(async (transaction) => {
       const query = sql => queryInterface.sequelize.query(sql, { transaction });
+      const select = sql => queryInterface.sequelize.query(
+        sql,
+        { transaction, type: Sequelize.QueryTypes.SELECT },
+      );
       await queryInterface.addColumn(
         'holiday_schedules',
         'exdates',
@@ -48,15 +54,36 @@ export default {
                )
            WHERE freq IS NULL AND weekday IS NOT NULL AND NOT closed
              AND valid_from IS NULL AND valid_to IS NULL`);
+
+      // Puts back what a rollback set aside (see down): the yearly rows it removed, and the
+      // skipped dates and month limits of the rows it kept.
+      const backupQuery = `SELECT to_regclass('${BACKUP}') IS NOT NULL AS "backedUp"`;
+      const [{ backedUp }] = await select(backupQuery);
+      if (backedUp) {
+        const [{ columns }] = await select(`SELECT
+            string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) AS columns
+          FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = '${BACKUP}'`);
+        await query(`INSERT INTO holiday_schedules (${columns})
+          SELECT ${columns} FROM ${BACKUP} WHERE freq = 'YEARLY'`);
+        await query(`UPDATE holiday_schedules
+             SET exdates = backup.exdates, bymonth = backup.bymonth
+            FROM ${BACKUP} backup
+           WHERE holiday_schedules.id = backup.id AND backup.freq IS DISTINCT FROM 'YEARLY'`);
+        await query(`DROP TABLE ${BACKUP}`);
+      }
     });
   },
 
-  // The backfilled freq/byday stay: they say what the rows already meant. Yearly rows (closures
-  // that repeat every year) can't be kept, as the restored constraints only allow WEEKLY and
-  // MONTHLY, so they go; skipped dates and month limits go with their columns.
+  // The old schema can't hold yearly rows (closures that repeat every year: its constraints only
+  // allow WEEKLY and MONTHLY), skipped dates or month limits, so the rows that have them are
+  // copied to BACKUP before they go, and up puts them back. The backfilled freq/byday stay:
+  // they say what the rows already meant.
   down: async (queryInterface) => {
     await queryInterface.sequelize.transaction(async (transaction) => {
       const query = sql => queryInterface.sequelize.query(sql, { transaction });
+      await query(`CREATE TABLE ${BACKUP} AS SELECT * FROM holiday_schedules
+        WHERE freq = 'YEARLY' OR exdates IS NOT NULL OR bymonth IS NOT NULL`);
       await query("DELETE FROM holiday_schedules WHERE freq = 'YEARLY'");
       await query(`ALTER TABLE holiday_schedules DROP CONSTRAINT IF EXISTS ${YEARLY_CHECK}`);
       await query(`ALTER TABLE holiday_schedules DROP CONSTRAINT IF EXISTS ${FREQ_CHECK}`);

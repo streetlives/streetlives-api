@@ -21,12 +21,17 @@ const toRow = hours => ({
   exdates: hours.exdates || null,
 });
 
+// Only open hours overlap or touch, but a row without them is still named, so a clash is
+// always a 400 rather than a crash.
 const describeRow = (row) => {
   const on = row.freq || row.weekday != null
     ? [row.byday, row.bymonthday && `day ${row.bymonthday}`, row.bymonth && `month ${row.bymonth}`]
       .filter(Boolean).join(' ')
     : row.valid_from;
-  return `${on} ${row.opens_at.slice(0, 5)}-${row.closes_at.slice(0, 5)}`;
+  const hours = row.opens_at && row.closes_at
+    ? `${row.opens_at.slice(0, 5)}-${row.closes_at.slice(0, 5)}`
+    : 'closed';
+  return `${on} ${hours}`;
 };
 
 const describeConflict = ({
