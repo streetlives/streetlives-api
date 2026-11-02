@@ -17,6 +17,10 @@ const bydayRegex = /^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)(,(-1|[1-5])?(MO|TU|WE|TH|
 // Outside freq MONTHLY, RFC 5545 allows only plain weekdays and no BYMONTHDAY.
 const weeklyBydayRegex = /^(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*$/;
 const bymonthdayRegex = /^-?([1-9]|[12]\d|3[01])(,-?([1-9]|[12]\d|3[01]))*$/;
+const bymonthRegex = /^([1-9]|1[0-2])(,([1-9]|1[0-2]))*$/;
+// Numbered BYDAY and BYMONTHDAY need a month to count in (RFC 5545). Required, or a missing
+// freq would match too.
+const withinMonth = Joi.valid('MONTHLY', 'YEARLY').required();
 
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
@@ -63,21 +67,44 @@ export default {
         startDate: Joi.date(),
         endDate: Joi.date(),
         occasion: Joi.string(),
-        freq: Joi.string().valid(['WEEKLY', 'MONTHLY']).allow(null),
+        freq: Joi.string().valid(['WEEKLY', 'MONTHLY', 'YEARLY']).allow(null),
         interval: Joi.number().integer().min(1).allow(null),
         byday: Joi.string().allow(null).when('freq', {
-          is: 'MONTHLY',
+          is: withinMonth,
           then: Joi.string().regex(bydayRegex, { name: 'BYDAY' }),
           otherwise: Joi.string().regex(weeklyBydayRegex, { name: 'weekly BYDAY' }),
         }),
         bymonthday: Joi.string().allow(null).when('freq', {
-          is: 'MONTHLY',
+          is: withinMonth,
           then: Joi.string().regex(bymonthdayRegex, { name: 'BYMONTHDAY' }),
           otherwise: Joi.valid(null),
         }),
-        validFrom: Joi.date().allow(null),
-        validTo: Joi.date().min(Joi.ref('validFrom')).allow(null),
+        // The months a rule applies in; a yearly row has to name them.
+        bymonth: Joi.when('freq', {
+          is: 'YEARLY',
+          then: Joi.string().regex(bymonthRegex, { name: 'BYMONTH' }).required(),
+          otherwise: Joi.when('freq', {
+            is: Joi.string().required(),
+            then: Joi.string().regex(bymonthRegex, { name: 'BYMONTH' }).allow(null),
+            otherwise: Joi.valid(null),
+          }),
+        }),
+        // The first occurrence; "every 2 weeks" counts from it.
+        validFrom: Joi.date().allow(null).when('interval', {
+          is: Joi.number().greater(1).required(),
+          then: Joi.date().required(),
+        }),
+        // A series can stop on a date without saying when it started.
+        validTo: Joi.date().allow(null).when('validFrom', {
+          is: Joi.date().required(),
+          then: Joi.date().min(Joi.ref('validFrom')).allow(null),
+        }),
         description: Joi.string().allow('', null),
+        // Dates a repeating row skips.
+        exdates: Joi.array().items(Joi.date()).allow(null).when('freq', {
+          is: Joi.string().required(),
+          otherwise: Joi.array().max(0).allow(null),
+        }),
       })
         .or('occasion', 'startDate', 'validFrom')
         .and('startDate', 'endDate')

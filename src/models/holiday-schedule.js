@@ -1,3 +1,6 @@
+// Indexed by (ISO weekday + 6) % 7, so 1 is Monday and both 7 and a legacy 0 are Sunday.
+const BYDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
 module.exports = (sequelize, DataTypes) => {
   const HolidaySchedule = sequelize.define('HolidaySchedule', {
     id: {
@@ -18,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
     // HSDS 3.0 schedule fields.
     freq: {
       type: DataTypes.TEXT,
-      validate: { isIn: [['WEEKLY', 'MONTHLY']] },
+      validate: { isIn: [['WEEKLY', 'MONTHLY', 'YEARLY']] },
     },
     interval: DataTypes.INTEGER,
     byday: DataTypes.TEXT,
@@ -26,14 +29,56 @@ module.exports = (sequelize, DataTypes) => {
     valid_from: DataTypes.DATEONLY,
     valid_to: DataTypes.DATEONLY,
     description: DataTypes.TEXT,
+    // Dates a series skips, like deleting one occurrence in Google Calendar. Not in HSDS.
+    exdates: DataTypes.ARRAY(DataTypes.DATEONLY),
+    // RFC 5545 BYMONTH, e.g. "12" or "6,7,8": the months a rule applies in. Not in HSDS.
+    bymonth: DataTypes.TEXT,
   }, {
     underscored: true,
     underscoredAll: true,
+    hooks: {
+      /* eslint-disable no-param-reassign */
+      beforeValidate(schedule) {
+        if (schedule.freq) return;
+        const isOpenWeekday = !schedule.closed && schedule.weekday != null;
+        if (isOpenWeekday && !schedule.valid_from && !schedule.valid_to) {
+          // An open row with only a weekday repeats every week on it, as rows did before HSDS
+          // recurrence; freq says so. Dated weekday rows are left as they are: readers already
+          // take them as that weekday every week between the dates (see the README).
+          schedule.freq = 'WEEKLY';
+          schedule.byday = schedule.byday || BYDAY_CODES[(schedule.weekday + 6) % 7];
+        } else if (!isOpenWeekday && schedule.valid_from && !schedule.valid_to) {
+          // A one-off without an end date is that one day, in the legacy column too.
+          schedule.valid_to = schedule.valid_from;
+          schedule.end_date = schedule.end_date || schedule.valid_from;
+        }
+      },
+      /* eslint-enable no-param-reassign */
+    },
     validate: {
-      // RFC 5545: a numbered BYDAY ("2FR") and BYMONTHDAY only apply within a month.
+      // RFC 5545: a numbered BYDAY ("2FR") and BYMONTHDAY only apply within a month or year.
       monthlyOnlyRecurrence() {
-        if (this.freq !== 'MONTHLY' && ((this.byday && /\d/.test(this.byday)) || this.bymonthday)) {
-          throw new Error('A numbered byday or a bymonthday needs freq MONTHLY');
+        if (!['MONTHLY', 'YEARLY'].includes(this.freq) &&
+          ((this.byday && /\d/.test(this.byday)) || this.bymonthday)) {
+          throw new Error('A numbered byday or a bymonthday needs freq MONTHLY or YEARLY');
+        }
+      },
+      // A yearly row names its months and the days in them, so "4TH" is the 4th Thursday of
+      // the month rather than of the year.
+      yearlyNamesMonthAndDays() {
+        if (this.freq === 'YEARLY' && (!this.bymonth || (!this.byday && !this.bymonthday))) {
+          throw new Error('A yearly row needs a bymonth and a byday or bymonthday');
+        }
+      },
+      // valid_from is the first occurrence, and "every 2 weeks" counts from it.
+      intervalNeedsStart() {
+        if (this.interval > 1 && !this.valid_from) {
+          throw new Error('An interval above 1 needs a valid_from to count from');
+        }
+      },
+      exdatesOnlyOnSeries() {
+        if (this.exdates && this.exdates.length && !this.freq) {
+          throw new Error('Only a repeating row (with freq) can skip dates');
         }
       },
     },
