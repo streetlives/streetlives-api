@@ -17,25 +17,35 @@ const normalizeLimit = (value, fallback, max) => {
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 };
 
-// Rows become visible at commit, which can be after their timestamp. Holding back the newest
-// few minutes means a cursor never moves past a row that hasn't committed yet.
-const settledBeforeSql = () =>
-  `now() - make_interval(secs => ${Number(config.changeFeed.settleSeconds) || 0})`;
+// Rows become visible at commit, which can be after their timestamp. Only rows older than
+// every still-open transaction that has written something are served: anything such a
+// transaction writes is stamped at or after its start, so a cursor can never move past it,
+// however long it stays open. pg_stat_activity shows the start of other sessions only for
+// this role (or with pg_read_all_stats); the settle interval also covers short clock skew.
+const settledBeforeSql = () => `LEAST(
+  now() - make_interval(secs => ${Number(config.changeFeed.settleSeconds) || 0}),
+  COALESCE((SELECT min(a.xact_start) FROM pg_stat_activity a
+    WHERE a.backend_xid IS NOT NULL AND a.pid <> pg_backend_pid()), 'infinity'::timestamptz))`;
 
 // Holiday schedule rows drop out of GET /locations/:id the day after `valid_to` (New York
 // time) without anything being written, so their expiry counts as a change on its own.
 const LOCATION_CHANGES_SQL = () => `
-  WITH expiring AS (
+  WITH horizon AS (
+    SELECT ${settledBeforeSql()} AS settled_before
+  ),
+  expiring AS (
     SELECT hs.location_id, hs.service_id, hs.service_at_location_id,
       ((hs.valid_to + 1)::timestamp AT TIME ZONE 'America/New_York') AS changed_at
     FROM holiday_schedules hs
     WHERE hs.valid_to >= ($1::timestamptz AT TIME ZONE 'America/New_York')::date - 1
-      AND hs.valid_to < ((${settledBeforeSql()}) AT TIME ZONE 'America/New_York')::date
+      AND hs.valid_to <
+        ((SELECT settled_before FROM horizon) AT TIME ZONE 'America/New_York')::date
   ),
   candidates AS (
     SELECT lc.location_id, lc.changed_at
     FROM location_changes lc
-    WHERE lc.changed_at >= $1::timestamptz AND lc.changed_at <= ${settledBeforeSql()}
+    WHERE lc.changed_at >= $1::timestamptz
+      AND lc.changed_at < (SELECT settled_before FROM horizon)
     UNION ALL
     SELECT e.location_id, e.changed_at FROM expiring e WHERE e.location_id IS NOT NULL
     UNION ALL
@@ -48,7 +58,8 @@ const LOCATION_CHANGES_SQL = () => `
   latest AS (
     SELECT c.location_id, max(c.changed_at) AS changed_at
     FROM candidates c
-    WHERE c.changed_at >= $1::timestamptz AND c.changed_at <= ${settledBeforeSql()}
+    WHERE c.changed_at >= $1::timestamptz
+      AND c.changed_at < (SELECT settled_before FROM horizon)
     GROUP BY c.location_id
   )
   SELECT latest.location_id::text AS location_id,
@@ -62,11 +73,14 @@ const LOCATION_CHANGES_SQL = () => `
 `;
 
 const LOCATION_EDITS_SQL = () => `
-  WITH page AS (
+  WITH horizon AS (
+    SELECT ${settledBeforeSql()} AS settled_before
+  ),
+  page AS (
     SELECT m.*
     FROM metadata m
     WHERE (m.created_at, m.id) > ($1::timestamptz, $2::uuid)
-      AND m.created_at <= ${settledBeforeSql()}
+      AND m.created_at < (SELECT settled_before FROM horizon)
     ORDER BY m.created_at, m.id
     LIMIT $3
   )

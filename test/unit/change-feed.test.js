@@ -69,6 +69,13 @@ describe('change feed cursor', () => {
     }))).toThrow(ValidationError);
   });
 
+  it('rejects a well-formed timestamp that is not a real date', () => {
+    ['2026-99-99T99:99:99Z', '2026-02-30T00:00:00Z', '2026-11-01T24:00:00Z'].forEach((at) => {
+      expect(() => decodeChangeFeedCursor(encodeChangeFeedCursor({ at, id })))
+        .toThrow(ValidationError);
+    });
+  });
+
   it('starts at `since` inclusive when there is no cursor', () => {
     expect(resolveChangeFeedPosition({ since: '2026-11-01T12:00:00.000Z' }))
       .toEqual({ at: '2026-11-01T12:00:00.000Z', id: EMPTY_UUID });

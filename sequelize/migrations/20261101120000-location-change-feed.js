@@ -47,6 +47,7 @@ const TRACKED_TABLES = {
 // Attributable to a location for GET /location-edits, but not part of its detail response.
 const ATTRIBUTION_ONLY_TABLES = {
   comments: { links: ['location_id', 'service_at_location_id'] },
+  error_reports: { links: ['location_id'] },
 };
 
 const RESOLVABLE_TABLES = { ...TRACKED_TABLES, ...ATTRIBUTION_ONLY_TABLES };
@@ -131,6 +132,26 @@ const createTrackFunctionSql = (table, spec) => `
     RETURN NULL;
   END
   $$;
+`;
+
+// Attribution-only tables don't change a location's detail, but their deleted rows still need
+// a location for the metadata row recording the delete.
+const mapDeletedFunction = table => `location_changes_map_deleted_${table}`;
+const createMapDeletedSql = (table, spec) => `
+  CREATE OR REPLACE FUNCTION ${mapDeletedFunction(table)}() RETURNS trigger
+  LANGUAGE plpgsql AS $$
+  BEGIN
+    INSERT INTO ${DELETED} (resource_table, resource_id, location_id, service_id)
+    SELECT DISTINCT TG_TABLE_NAME, x.resource_id, x.location_id, x.service_id
+    FROM (${resolverSql(spec, 'old_rows')}) x
+    WHERE x.location_id IS NOT NULL OR x.service_id IS NOT NULL;
+    RETURN NULL;
+  END
+  $$;
+  DROP TRIGGER IF EXISTS ${triggerName(table, 'delete')} ON ${table};
+  CREATE TRIGGER ${triggerName(table, 'delete')} AFTER DELETE ON ${table}
+    REFERENCING OLD TABLE AS old_rows
+    FOR EACH STATEMENT EXECUTE PROCEDURE ${mapDeletedFunction(table)}();
 `;
 
 const resolveBranchesSql = () => Object.entries(RESOLVABLE_TABLES)
@@ -260,6 +281,9 @@ export default {
         await query(dropTriggersSql(table));
         await query(createTriggersSql(table));
       }
+      for (const [table, spec] of Object.entries(ATTRIBUTION_ONLY_TABLES)) {
+        await query(createMapDeletedSql(table, spec));
+      }
       await query('DROP TRIGGER IF EXISTS location_changes_metadata_insert ON metadata');
       await query(`CREATE TRIGGER location_changes_metadata_insert AFTER INSERT ON metadata
         REFERENCING NEW TABLE AS new_rows
@@ -271,6 +295,9 @@ export default {
         // Only `id`: some tables have generated columns, which reject an explicit value.
         await query(`INSERT INTO ${table} (id) SELECT id FROM ${table} WHERE false`);
         await query(`UPDATE ${table} SET id = id WHERE false`);
+        await query(`DELETE FROM ${table} WHERE false`);
+      }
+      for (const table of Object.keys(ATTRIBUTION_ONLY_TABLES)) {
         await query(`DELETE FROM ${table} WHERE false`);
       }
       for (const table of Object.keys(RESOLVABLE_TABLES)) {
@@ -292,6 +319,10 @@ export default {
       for (const table of Object.keys(TRACKED_TABLES)) {
         await query(dropTriggersSql(table));
         await query(`DROP FUNCTION IF EXISTS ${trackFunction(table)}()`);
+      }
+      for (const table of Object.keys(ATTRIBUTION_ONLY_TABLES)) {
+        await query(`DROP TRIGGER IF EXISTS ${triggerName(table, 'delete')} ON ${table}`);
+        await query(`DROP FUNCTION IF EXISTS ${mapDeletedFunction(table)}()`);
       }
       await query('DROP TRIGGER IF EXISTS location_changes_metadata_insert ON metadata');
       await query('DROP FUNCTION IF EXISTS location_changes_track_metadata()');

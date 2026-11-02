@@ -215,6 +215,26 @@ describe('location change feed', () => {
       expect(await changedIds(since)).toEqual([organization.Locations[0].id]);
     });
 
+    it('never moves past a change still uncommitted in a long transaction', async () => {
+      const slow = await createOrganization('Slow Org');
+      const fast = await createOrganization('Fast Org');
+      const since = await dbNow();
+      const transaction = await sequelize.transaction();
+      try {
+        await updateInstance(EDITOR, slow.Locations[0], { name: 'Edited slowly' }, { transaction });
+        await updateInstance(EDITOR, fast.Locations[0], { name: 'Edited quickly' });
+        // The quick edit committed, but it is newer than the open writer, so both wait.
+        expect(await changedIds(since)).toEqual([]);
+        expect(await editsSince(since)).toEqual([]);
+      } finally {
+        await transaction.commit();
+      }
+      expect((await changedIds(since)).sort())
+        .toEqual([slow.Locations[0].id, fast.Locations[0].id].sort());
+      expect((await editsSince(since)).map(edit => edit.replacement_value).sort())
+        .toEqual(['Edited quickly', 'Edited slowly']);
+    });
+
     it('hands back a cursor that resumes after an empty page', async () => {
       const since = await dbNow();
       const { body: empty } = await request(feedApp)
@@ -300,6 +320,26 @@ describe('location change feed', () => {
       expect(await changedIds(since)).toEqual([location.id]);
     });
 
+    it('attributes error reports, filed and deleted, to their location', async () => {
+      const organization = await createOrganization('Reported Org');
+      const [location] = organization.Locations;
+      const since = await dbNow();
+
+      const report = await createInstance(
+        EDITOR,
+        models.ErrorReport.create.bind(models.ErrorReport),
+        { location_id: location.id, content: 'Closed on Mondays now' },
+      );
+      await destroyInstance(EDITOR, report);
+
+      const edits = (await editsSince(since)).filter(row => row.resource_table === 'error_reports');
+      expect(edits.map(edit => edit.last_action_type))
+        .toEqual(expect.arrayContaining(['create', 'delete']));
+      edits.forEach(edit => expect(edit.location_ids).toEqual([location.id]));
+      // A report is not part of the location's detail.
+      expect(await changedIds(since)).toEqual([]);
+    });
+
     it('attributes an edit to a service-level row to the service and its locations', async () => {
       const organization = await createOrganization('Eligibility Org', 2);
       const [first, second] = organization.Locations;
@@ -349,6 +389,10 @@ describe('location change feed', () => {
       await request(feedApp).get('/location-changes').expect(400);
       await request(feedApp).get('/location-changes').query({ cursor: 'not-a-cursor' })
         .expect(400);
+      const impossibleDate = Buffer
+        .from('2026-99-99T99:99:99Z|00000000-0000-0000-0000-000000000000')
+        .toString('base64');
+      await request(feedApp).get('/location-edits').query({ cursor: impossibleDate }).expect(400);
       await request(feedApp).get('/location-edits')
         .query({ since: new Date().toISOString(), limit: 251 }).expect(400);
     });

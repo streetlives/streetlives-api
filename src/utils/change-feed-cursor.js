@@ -23,7 +23,11 @@ export const decodeChangeFeedCursor = (cursor) => {
     'base64',
   ).toString('utf8');
   const [at, id, ...rest] = text.split('|');
-  if (rest.length || !TIMESTAMP_PATTERN.test(at || '') || !UUID_PATTERN.test(id || '')) {
+  // A JS Date rolls 02-30 over to 03-02 where Postgres refuses it, so the date must survive
+  // a round trip unchanged, not merely parse.
+  const parsed = TIMESTAMP_PATTERN.test(at || '') ? new Date(at) : null;
+  if (rest.length || !parsed || Number.isNaN(parsed.getTime())
+    || parsed.toISOString().slice(0, 19) !== at.slice(0, 19) || !UUID_PATTERN.test(id || '')) {
     throw new ValidationError('Invalid cursor');
   }
   return { at, id };
