@@ -23,7 +23,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1 (tag v5)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.1 (tag v5)
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           # Optional but often helps: ensures history exists locally
@@ -248,7 +248,7 @@ jobs:
 
       - name: Run Codex (structured decision using protected prompt)
         id: run_codex
-        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1.12 (tag v1)
+        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.12 (tag v1)
         with:
           model: gpt-5.6-luna
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -272,7 +272,7 @@ jobs:
           steps.parse.outputs.decision == 'APPROVE' &&
           steps.allow.outputs.trusted == 'true' &&
           steps.linked_issue.outputs.has_linked_issue == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v7.1.0 (tag v7)
         env:
           SUMMARY: ${{ steps.parse.outputs.summary }}
         with:
@@ -291,7 +291,7 @@ jobs:
         if: >
           steps.parse.outputs.decision == 'APPROVE' &&
           steps.linked_issue.outputs.has_linked_issue == 'false'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v7.1.0 (tag v7)
         with:
           github-token: ${{ github.token }}
           script: |
@@ -311,7 +311,7 @@ jobs:
 
       - name: Request changes if Codex says REQUEST_CHANGES
         if: steps.parse.outputs.decision == 'REQUEST_CHANGES'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0 (tag v7)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v7.1.0 (tag v7)
         env:
           SUMMARY: ${{ steps.parse.outputs.summary }}
           BLOCKING_ISSUES_JSON: ${{ steps.parse.outputs.blocking_issues_json }}
