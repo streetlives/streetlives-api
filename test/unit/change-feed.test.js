@@ -11,14 +11,31 @@ describe('changeFeedAuth', () => {
   const previous = process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS;
   afterEach(() => { process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS = previous || ''; });
 
-  const run = (claims) => {
-    const req = claims
-      ? { apiGateway: { event: { requestContext: { authorizer: { claims } } } } }
+  const runWithAuthorizer = (authorizer) => {
+    const req = authorizer
+      ? { apiGateway: { event: { requestContext: { authorizer } } } }
       : {};
     let result;
     changeFeedAuth(req, {}, (err) => { result = err; });
     return result;
   };
+  const run = claims => runWithAuthorizer(claims && { claims });
+
+  // InternalApiAuthorizer returns { principalId, context: { clientId, scope } }; API Gateway
+  // flattens the context into requestContext.authorizer.
+  it('lets a listed client through the internal API\'s Lambda authorizer', () => {
+    process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS = 'mirror-client';
+    expect(runWithAuthorizer({
+      principalId: 'mirror-client', clientId: 'mirror-client', scope: 'internal/access',
+    })).toBeUndefined();
+    expect(runWithAuthorizer({ principalId: 'other', clientId: 'other', scope: 'internal/access' }))
+      .toBeInstanceOf(ForbiddenError);
+  });
+
+  it('rejects an authorizer result that names no client', () => {
+    process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS = 'mirror-client';
+    expect(runWithAuthorizer({ principalId: 'mirror-client' })).toBeInstanceOf(AuthError);
+  });
 
   it('lets a listed client through', () => {
     process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS = 'first, mirror-client';

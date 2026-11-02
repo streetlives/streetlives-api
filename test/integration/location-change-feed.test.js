@@ -32,10 +32,14 @@ const appWithClaims = (claims) => {
 const feedApp = appWithClaims({ client_id: CLIENT_ID, token_use: 'access' });
 
 const select = (sql, bind) => sequelize.query(sql, { bind, type: Sequelize.QueryTypes.SELECT });
-// Database time, floored to the millisecond a client would send as `since`.
+// A `since` after every earlier write and before every later one. Postgres stamps changes in
+// microseconds and `since` has milliseconds, so a write in the same millisecond as this read
+// would otherwise count as "since": step to the next millisecond and let the clock pass it.
 const dbNow = async () => {
   const [{ now }] = await select('SELECT clock_timestamp() AS now');
-  return new Date(now).toISOString();
+  const since = new Date(new Date(now).getTime() + 1);
+  await new Promise(resolve => setTimeout(resolve, 2));
+  return since.toISOString();
 };
 
 const readAll = async (path, since, limit) => {

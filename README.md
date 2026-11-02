@@ -200,11 +200,13 @@ params, `openAt`).
 
 Two read-only endpoints let a cache that mirrors this directory stay current
 without re-reading every location. Neither is part of HSDS, and both are for
-machine clients only: they answer `401` unless API Gateway's Cognito
-authorizer verified the request, and `403` unless the token's `client_id` is in
-`CHANGE_FEED_ALLOWED_CLIENT_IDS` (unset allows nobody). They live at the top
-level rather than under `/locations/{id}` because that path is served without
-the authorizer.
+machine clients only. They answer `401` unless an API Gateway authorizer
+verified the request's Cognito access token. That is either a Cognito user pool
+authorizer (the token's `client_id` claim) or the internal API's
+`InternalApiAuthorizer` Lambda (its `clientId` context). They answer `403`
+unless that app client is listed in `CHANGE_FEED_ALLOWED_CLIENT_IDS` (unset
+allows nobody). On the public API they live at the top level rather than under
+`/locations/{id}`, because that path is served without an authorizer there.
 
 Both take `since` (an ISO timestamp, inclusive) or `cursor` (the `nextCursor`
 of a previous page), plus an optional `limit`. Keep requesting with
