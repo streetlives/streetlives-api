@@ -62,4 +62,16 @@ export default {
     },
     get driver() { return process.env.LOCATION_PHOTO_STORAGE_DRIVER; },
   },
+  // GET /location-changes and /location-edits (see the README's "Change feed" section).
+  changeFeed: {
+    get allowedClientIds() {
+      return String(process.env.CHANGE_FEED_ALLOWED_CLIENT_IDS || '')
+        .split(',')
+        .map(clientId => clientId.trim())
+        .filter(Boolean);
+    },
+    get settleSeconds() {
+      return Math.max(0, parseNumber(process.env.CHANGE_FEED_SETTLE_SECONDS, 120));
+    },
+  },
 };
