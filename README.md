@@ -209,9 +209,15 @@ the authorizer.
 Both take `since` (an ISO timestamp, inclusive) or `cursor` (the `nextCursor`
 of a previous page), plus an optional `limit`. Keep requesting with
 `nextCursor` while `hasMore` is true; store the last `nextCursor` and resume
-from it next time — an empty page hands back the position it was given. The
-newest `CHANGE_FEED_SETTLE_SECONDS` (default 120) are held back, so a cursor
-never moves past a row whose transaction hasn't committed yet.
+from it next time — an empty page hands back the position it was given.
+
+A cursor never moves past a row whose transaction hasn't committed yet. Both
+feeds stop short of the start of the oldest open transaction that has written
+anything, however long it runs, and also hold back the newest
+`CHANGE_FEED_SETTLE_SECONDS` (default 120) against clock skew. Open
+transactions are read from `pg_stat_activity`, which shows other roles'
+sessions only to a member of `pg_read_all_stats`. Grant that to the API's
+database role if anything else writes these tables under a different role.
 
 `GET /location-changes` (`limit` up to 1000, default 500) lists the locations
 whose `GET /locations/:id` response may have changed, oldest first:
