@@ -255,3 +255,5 @@ user in that group silently narrows what they can edit.
 | `LOCATION_PHOTO_KEY_PREFIX` | `location-photos` | |
 | `LOCATION_PHOTO_MAX_BYTES` | 4MiB | Decoded size cap, **lowers only** — 4MiB is the maximum, since Lambda's 6MB sync invoke payload bounds the base64 |
 | `LOCATION_PHOTO_STORAGE_DRIVER` | inferred | `s3` when a bucket is set, or `memory` for the test suite |
+| `CHANGE_FEED_ALLOWED_CLIENT_IDS` | — | Cognito app client ids allowed to read `/location-changes` and `/location-edits`. Unset ⇒ nobody (403) |
+| `CHANGE_FEED_SETTLE_SECONDS` | 120 | Newest seconds the change feed holds back so a cursor can't pass an uncommitted row |
