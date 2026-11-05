@@ -102,3 +102,31 @@ export const destroyInstance = (user, instance, options = {}) =>
       source: metadata.source,
     }, { transaction: t });
   }, options);
+
+// The bulk counterpart of destroyInstance, for the delete-then-recreate updates: unlike
+// Model.destroy({ where }), it leaves a delete record for every row it removes, so clearing a
+// field shows up in the audit trail. `linkField` names the column tying the rows to their parent
+// (e.g. 'service_id'); it is recorded as field_name, with the parent id as previous_value, so a
+// lookup by parent still finds the delete once the row is gone.
+export const destroyAllInstances = (user, model, where, options = {}) =>
+  startTransactionOrUseExisting(async (t) => {
+    const { metadata = {}, linkField } = options;
+
+    const instances = await model.findAll({ where, transaction: t });
+    if (!instances.length) {
+      return;
+    }
+
+    // By id rather than `where`, so a row added after the lookup is neither deleted nor missed.
+    await model.destroy({ where: { id: instances.map(({ id }) => id) }, transaction: t });
+
+    await Promise.all(instances.map(instance => instance.createMetadatum({
+      resource_id: instance.id,
+      last_action_date: metadata.lastUpdated || new Date(),
+      last_action_type: actionTypes.delete,
+      field_name: linkField,
+      previous_value: linkField && stringifyFieldValue(instance[linkField]),
+      updated_by: user,
+      source: metadata.source,
+    }, { transaction: t })));
+  }, options);

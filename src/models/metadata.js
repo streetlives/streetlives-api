@@ -69,6 +69,23 @@ module.exports = (sequelize, DataTypes, Op) => {
 
   Metadata.getLatestUpdateDateForQuery = where => Metadata.max('last_action_date', { where });
 
+  // Latest change to the `resourceTable` rows linked to `value` through `fieldName`, such as a
+  // service's schedules through service_id. A delete records the link it removed as
+  // previous_value (destroyAllInstances), so clearing every row still counts as an update.
+  Metadata.getLatestUpdateDateForLinkedResources = (resourceTable, fieldName, value) =>
+    Metadata.getLatestUpdateDateForQuery({
+      resource_table: resourceTable,
+      field_name: fieldName,
+      [Op.and]: sequelize.where(
+        sequelize.fn(
+          'COALESCE',
+          sequelize.col('replacement_value'),
+          sequelize.col('previous_value'),
+        ),
+        value,
+      ),
+    });
+
   Metadata.getLatestUpdateDateForResource = resourceId => Metadata.getLatestUpdateDateForQuery({
     resource_id: resourceId,
   });
