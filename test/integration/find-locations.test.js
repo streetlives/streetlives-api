@@ -321,6 +321,21 @@ describe('find locations', () => {
       makeRequestWithSearchString('center')
         .expect(200)
         .then(expectMatchNearbyLocations));
+
+    it('should not error on search strings containing regex or LIKE metacharacters', async () => {
+      const metacharacterQueries = [
+        '(', ')', '(unclosed', 'a[b', 'a*b+c', '\\', 'a|b', '%', '_', 'foo\\', 'test org (main)',
+      ];
+      await Promise.all(metacharacterQueries.map(input =>
+        makeRequestWithSearchString(input).expect(200)));
+    });
+
+    it('should treat regex metacharacters literally rather than as a pattern', () =>
+      // "cent.r" would match "center" if the "." were an unescaped regex
+      // wildcard; escaped, it is literal and matches nothing.
+      makeRequestWithSearchString('cent.r')
+        .expect(200)
+        .then(expectNoMatchingLocations));
   });
 
   describe('when an organization name is specified', () => {
@@ -970,6 +985,195 @@ describe('find locations', () => {
               occasion: 'COVID-19',
             }))
           .then(expectMatchPrimaryLocation));
+
+      it('should ignore expired occasion hours when filtering by occasion alone', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2020-03-01',
+          valid_to: '2020-03-31',
+        });
+        await request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            occasion: 'COVID-19',
+          })
+          .then(expectNoMatchingLocations);
+      });
+
+      it('should ignore occasion hours outside their valid_from..valid_to range', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2000-01-01',
+          valid_to: '2000-12-31',
+        });
+
+        return request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+            occasion: 'COVID-19',
+          })
+          .then(expectNoMatchingLocations);
+      });
+
+      it('should keep occasion hours valid on the searched date but expired now', async () => {
+        await setupBaseSchedule();
+        await aSpecificOffering1.createHolidaySchedule({
+          weekday: 6,
+          opens_at: '8:00',
+          closes_at: '10:00',
+          occasion: 'COVID-19',
+          closed: false,
+          valid_from: '2019-06-01',
+          valid_to: '2019-06-30',
+        });
+
+        return request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${someSaturday}T09:00`),
+            occasion: 'COVID-19',
+          })
+          .then(expectMatchPrimaryLocation);
+      });
+
+      describe('with HSDS recurrence', () => {
+        // June 2019: Saturdays fall on the 1st, 8th, 15th, 22nd and 29th.
+        const createRecurringSchedule = async (recurrence) => {
+          await setupBaseSchedule();
+          await aSpecificOffering1.createHolidaySchedule({
+            weekday: 6,
+            opens_at: '8:00',
+            closes_at: '10:00',
+            occasion: 'COVID-19',
+            closed: false,
+            ...recurrence,
+          });
+        };
+        const searchOpenAt = date => request(app)
+          .get('/locations')
+          .query({
+            latitude: originLatitude,
+            longitude: originLongitude,
+            radius,
+            openAt: getDateFromNyTime(`${date}T09:00`),
+            occasion: 'COVID-19',
+          });
+
+        it('matches an ordinal weekday only in its week of the month', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '2SA' });
+
+          await searchOpenAt('2019-06-08').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-01').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-06-15').then(expectNoMatchingLocations);
+        });
+
+        it('matches the last weekday of the month only in the last week', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '-1SA' });
+
+          await searchOpenAt('2019-06-29').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-22').then(expectNoMatchingLocations);
+        });
+
+        it('matches any of several ordinal weekdays', async () => {
+          await createRecurringSchedule({ freq: 'MONTHLY', byday: '1SA,3SA' });
+
+          await searchOpenAt('2019-06-01').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+        });
+
+        it('matches a day of the month only on that day', async () => {
+          await createRecurringSchedule({ weekday: null, freq: 'MONTHLY', bymonthday: '15' });
+
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+        });
+
+        it('counts a monthly interval from valid_from', async () => {
+          await createRecurringSchedule({
+            freq: 'MONTHLY',
+            interval: 2,
+            byday: '2SA',
+            valid_from: '2019-05-01',
+          });
+
+          await searchOpenAt('2019-05-11').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-07-13').then(expectMatchPrimaryLocation);
+        });
+
+        it('counts a weekly interval from valid_from', async () => {
+          await createRecurringSchedule({ freq: 'WEEKLY', interval: 2, valid_from: '2019-06-01' });
+
+          await searchOpenAt('2019-06-01').then(expectMatchPrimaryLocation);
+          await searchOpenAt('2019-06-08').then(expectNoMatchingLocations);
+          await searchOpenAt('2019-06-15').then(expectMatchPrimaryLocation);
+        });
+
+        it('refuses an interval without a valid_from to count from', async () => {
+          await expect(createRecurringSchedule({ freq: 'WEEKLY', interval: 2 })).rejects.toThrow();
+        });
+      });
+
+      describe('shared schedule cases', () => {
+        // The cases gogetta and yourpeer.nyc test their schedule rules against.
+        // eslint-disable-next-line global-require
+        const { cases } = require('../fixtures/schedule-cases.json');
+
+        // A New York local time like 2026-11-07T10:00, as an instant in the right DST offset.
+        const fromNyTime = (localTime) => {
+          const guess = new Date(`${localTime}:00Z`);
+          const asNy = new Date(guess.toLocaleString('en-US', { timeZone }));
+          const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
+          return new Date(guess.getTime() + (asUtc.getTime() - asNy.getTime()));
+        };
+
+        cases.forEach(({ name, rows, checks }) => {
+          it(name, async () => {
+            await Promise.all(rows.map(row => aSpecificOffering1.createHolidaySchedule({
+              closed: false,
+              occasion: 'COVID-19',
+              ...row,
+            })));
+
+            // eslint-disable-next-line no-restricted-syntax
+            for (const { at, open } of checks) {
+              // eslint-disable-next-line no-await-in-loop
+              const { body } = await request(app)
+                .get('/locations')
+                .query({
+                  latitude: originLatitude,
+                  longitude: originLongitude,
+                  radius,
+                  openAt: fromNyTime(at),
+                  occasion: 'COVID-19',
+                });
+              expect({ at, names: body.map(location => location.name) })
+                .toEqual({ at, names: open ? [primaryLocation.name] : [] });
+            }
+          });
+        });
+      });
     });
   });
 
@@ -1092,5 +1296,246 @@ describe('find locations', () => {
         .get('/locations')
         .query(qs.stringify({ zipcodes: [] }))
         .then(res => expect(res.body.length).toBeGreaterThan(0)));
+  });
+
+  describe('closed flag in list response', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    it('should return closed: false for locations without a CLOSURE event', () =>
+      request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200)
+        .then((res) => {
+          const primary = res.body.find(l => l.name === primaryLocation.name);
+          expect(primary).toBeDefined();
+          expect(primary.closed).toBe(false);
+        }));
+
+    it('should return closed: true for a location with a CLOSURE event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+
+      const other = res.body.find(l => l.name === otherServiceLocation.name);
+      expect(other).toBeDefined();
+      expect(other.closed).toBe(false);
+    });
+
+    it('should return closed: false when location only has a COVID19 event', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'COVID19',
+        information: 'COVID-19 related information',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(false);
+    });
+
+    it('should include closed flag in paginated responses', async () => {
+      await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: primaryLocation.id,
+      });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
+  });
+
+  describe('closed locations in search results', () => {
+    afterEach(() => models.EventRelatedInfo.destroy({ where: {} }));
+
+    const markClosed = async (location, { closedAgoMs = 0 } = {}) => {
+      const closure = await models.EventRelatedInfo.create({
+        event: 'CLOSURE',
+        information: 'Location is closed',
+        location_id: location.id,
+      });
+
+      if (closedAgoMs) {
+        await models.sequelize.query(
+          'UPDATE event_related_info SET created_at = :createdAt WHERE id = :id',
+          { replacements: { createdAt: new Date(Date.now() - closedAgoMs), id: closure.id } },
+        );
+      }
+
+      return closure;
+    };
+
+    const FOUR_MONTHS_MS = 4 * 30 * 24 * 60 * 60 * 1000;
+    const FIVE_MONTHS_MS = 5 * 30 * 24 * 60 * 60 * 1000;
+
+    const expectClosedLastForTextSearch = (res, closedLocation) => {
+      const closed = res.body.find(l => l.name === closedLocation.name);
+      expect(closed).toBeDefined();
+      expect(closed.closed).toBe(true);
+
+      // The closed location must come after every open (non-closed) location.
+      const lastOpenIndex = res.body.reduce(
+        (acc, location, index) => (location.closed ? acc : index),
+        -1,
+      );
+      const closedIndex = res.body.findIndex(l => l.name === closedLocation.name);
+      expect(closedIndex).toBeGreaterThan(lastOpenIndex);
+    };
+
+    it('should exclude long-closed locations from a text search', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should keep a location whose latest closure is recent despite an older one', async () => {
+      // An old closure plus a newer one: the location was re-closed recently, so it must be
+      // treated as recently closed (kept, sorted last) rather than long-closed (excluded).
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should exclude a location when every closure is older than 3 months', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+      await markClosed(primaryLocation, { closedAgoMs: FIVE_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expect(res.body).not.toContainEqual(expect.objectContaining({ name: primaryLocation.name }));
+      expect(res.body).toContainEqual(expect.objectContaining({ name: otherServiceLocation.name }));
+    });
+
+    it('should sort recently closed locations to the bottom for a text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should sort closed locations to the bottom for a paginated text search', async () => {
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 10 })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should move recently closed locations to a later page than open matches', async () => {
+      // 'center' matches three locations (primary, other, far). Closing one leaves two open,
+      // so with a page size of 2 the closed location can only appear on the first page if it
+      // is partitioned *after* pagination. It should instead be pushed to the second page.
+      await markClosed(primaryLocation);
+
+      const firstPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 0, pageSize: 2 })
+        .expect(200);
+
+      expect(firstPage.headers['total-count']).toBe('3');
+      expect(firstPage.body).toHaveLength(2);
+      expect(firstPage.body.some(l => l.closed)).toBe(false);
+      expect(firstPage.body.map(l => l.name)).not.toContain(primaryLocation.name);
+
+      const secondPage = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', pageNumber: 1, pageSize: 2 })
+        .expect(200);
+
+      const closedOnSecondPage = secondPage.body.find(l => l.name === primaryLocation.name);
+      expect(closedOnSecondPage).toBeDefined();
+      expect(closedOnSecondPage.closed).toBe(true);
+    });
+
+    it('should keep closed locations last for a nearby-sorted text search', async () => {
+      // primaryLocation is the closest to the origin, so a nearby sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({
+          searchString: 'center',
+          sortBy: 'nearby',
+          latitude: originLatitude,
+          longitude: originLongitude,
+        })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should keep closed locations last for a most-services-sorted text search', async () => {
+      // Give primaryLocation the most services so a mostServices sort would normally rank it
+      // first; closing it must instead push it to the bottom of the results.
+      await primaryLocation.addServices([aSpecificOffering2, aDifferentKindOfService]);
+      await markClosed(primaryLocation);
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ searchString: 'center', sortBy: 'mostServices' })
+        .expect(200);
+
+      expectClosedLastForTextSearch(res, primaryLocation);
+    });
+
+    it('should NOT exclude or reorder closed locations when not text searching', async () => {
+      await markClosed(primaryLocation, { closedAgoMs: FOUR_MONTHS_MS });
+
+      const res = await request(app)
+        .get('/locations')
+        .query({ organizationName: 'test org' })
+        .expect(200);
+
+      // Browsing (no searchString) is unaffected: the long-closed location is still returned.
+      const primary = res.body.find(l => l.name === primaryLocation.name);
+      expect(primary).toBeDefined();
+      expect(primary.closed).toBe(true);
+    });
   });
 });

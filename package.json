@@ -15,7 +15,7 @@
     "start": "NODE_ENV=production node dist",
     "prestart": "npm run build",
     "lint": "eslint .",
-    "test": "NODE_ENV=test jest --runInBand --coverage",
+    "test": "NODE_ENV=test jest --runInBand --coverage --forceExit",
     "test:watch": "NODE_ENV=test jest --watch --runInBand",
     "build-zip": "npm run build && (cd dist; zip -r ../`date +%Y-%m-%d`-streetlives-api-`git rev-parse --short HEAD`.zip *)",
     "config": "node ./scripts/configure.js",
@@ -26,8 +26,8 @@
     "delete-bucket": "aws s3 rb s3://$npm_package_config_s3BucketName --region $npm_package_config_region",
     "package": "cp -r node_modules dist/; cd dist && zip -r ../dist.zip *",
     "clean": "rm -rf dist/ dist.zip",
-    "deploy:dev": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName && aws lambda update-function-code --function-name $npm_package_config_functionName --s3-bucket $npm_package_config_s3BucketName --s3-key dist.zip --publish && aws s3 rm s3://$npm_package_config_s3BucketName/dist.zip",
-    "deploy:prod": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName && aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --s3-bucket $npm_package_config_s3BucketName --s3-key dist.zip --publish && aws s3 rm s3://$npm_package_config_s3BucketName/dist.zip",
+    "deploy:dev": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName/${DEPLOY_S3_KEY:-dist.zip} && aws lambda update-function-code --function-name $npm_package_config_functionName --s3-bucket $npm_package_config_s3BucketName --s3-key ${DEPLOY_S3_KEY:-dist.zip} --publish --query FunctionArn --output text && aws lambda wait function-updated-v2 --function-name $npm_package_config_functionName && aws s3 rm s3://$npm_package_config_s3BucketName/${DEPLOY_S3_KEY:-dist.zip}",
+    "deploy:prod": "aws s3 cp dist.zip s3://$npm_package_config_s3BucketName/${DEPLOY_S3_KEY:-dist.zip} && aws lambda update-function-code --function-name $npm_package_config_prodFunctionName --s3-bucket $npm_package_config_s3BucketName --s3-key ${DEPLOY_S3_KEY:-dist.zip} --publish --query FunctionArn --output text && aws lambda wait function-updated-v2 --function-name $npm_package_config_prodFunctionName && aws s3 rm s3://$npm_package_config_s3BucketName/${DEPLOY_S3_KEY:-dist.zip}",
     "package-deploy:dev": "npm run clean && npm run build && npm run package && npm run deploy:dev",
     "package-deploy:prod": "npm run clean && npm run build && npm run package && npm run deploy:prod",
     "setup": "npm install && (aws s3api get-bucket-location --bucket $npm_package_config_s3BucketName --region $npm_package_config_region || npm run create-bucket) && npm run package-deploy",
@@ -45,6 +45,7 @@
   ],
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.812.0",
+    "@aws-sdk/client-s3": "3.812.0",
     "@aws-sdk/credential-provider-ini": "^3.812.0",
     "aws-serverless-express": "^3.1.3",
     "axios": "^0.21.2",
@@ -70,6 +71,7 @@
     "eslint-config-airbnb-base": "^12.1.0",
     "eslint-plugin-import": "^2.8.0",
     "jest": "^24.8.0",
+    "js-yaml": "^3.13.1",
     "nodemon": "^1.18.7",
     "pre-commit": "^1.2.2",
     "qs": "^6.9.4",
@@ -83,8 +85,49 @@
     "test"
   ],
   "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "testMatch": [
+          "<rootDir>/test/unit/**/*.test.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:(.+)$": "<rootDir>/test/support/node-builtins/$1.js"
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ],
+        "resolver": "<rootDir>/test/support/jest-resolver.js"
+      },
+      {
+        "displayName": "integration",
+        "testMatch": [
+          "<rootDir>/test/integration/**/*.test.js"
+        ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/test/setup.js"
+        ],
+        "moduleNameMapper": {
+          "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+          "^node:(.+)$": "<rootDir>/test/support/node-builtins/$1.js"
+        },
+        "setupFiles": [
+          "<rootDir>/test/env.js"
+        ],
+        "resolver": "<rootDir>/test/support/jest-resolver.js"
+      }
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/test/setup.js"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^openai$": "<rootDir>/test/__mocks__/openai-stub.js",
+      "^node:(.+)$": "<rootDir>/test/support/node-builtins/$1.js"
+    },
+    "setupFiles": [
+      "<rootDir>/test/env.js"
+    ],
+    "resolver": "<rootDir>/test/support/jest-resolver.js"
   }
 }

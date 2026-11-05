@@ -5,8 +5,10 @@ import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from '../services/data-changes';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { regenerateHighlightsForLocation } from './comment-highlights';
-import commentEmail from '../services/comment-email';
+import commentEmail, { replyEmail } from '../services/comment-email';
+import { requireOrganizationScope } from '../services/organization-scope';
 import { extractCommentContent } from '../utils/helpers';
+import { getClientIp } from '../utils/request';
 
 import {
   CognitoIdentityProviderClient,
@@ -35,17 +37,6 @@ const getAllUsers = async (userPoolId) => {
 
   return users;
 };
-
-function getClientIp(req) {
-  const forwardedIp = req.headers['x-forwarded-for']
-    ? req.headers['x-forwarded-for'].split(',')[0]
-    : null;
-
-  const ip = forwardedIp || req.ip || req.connection.remoteAddress;
-
-  // Remove IPv6 prefix (if present)
-  return ip.replace(/^::ffff:/, '');
-}
 
 export default {
   get: async (req, res, next) => {
@@ -89,7 +80,6 @@ export default {
         locationId,
         content,
         postedBy,
-        contactInfo,
       } = req.body;
 
       const location = await models.Location.findByPk(locationId, { include: models.Organization });
@@ -100,7 +90,6 @@ export default {
       const postedComment = await createInstance(req.user, location.createComment.bind(location), {
         content,
         posted_by: postedBy,
-        contact_info: contactInfo,
       });
       const extractedContent = extractCommentContent(postedComment.content);
 
@@ -123,7 +112,7 @@ export default {
               whatWentWell: extractedContent.whatWentWell,
               providersEmail: emails.join(','),
               locationSlug: location.slug,
-            }).catch(console.error);
+            }).catch(err => console.error('Error sending comment email:', err.message));
           }
         })
         .catch((err) => {
@@ -185,10 +174,11 @@ export default {
         throw new NotFoundError('Original comment not found');
       }
 
-      const organizationId = originalComment.Location.organization_id;
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      }
+      requireOrganizationScope(
+        req,
+        originalComment.Location.organization_id,
+        'Not authorized to reply on behalf of this organization',
+      );
 
       const postedReply = await createInstance(
         req.user,
@@ -201,8 +191,24 @@ export default {
         },
       );
 
+      const location = originalComment.Location;
+
+      const contactEmail = originalComment.contact_info && originalComment.contact_info.trim();
+      const isValidEmail = contactEmail && /^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}$/.test(contactEmail);
+      if (isValidEmail && location) {
+        replyEmail({
+          // A whitespace-only location name counts as missing, so the org name is used.
+          locationName: (location.name || '').trim()
+            || (location.Organization ? location.Organization.name : ''),
+          toEmail: contactEmail,
+          locationSlug: location.slug,
+          replyContent: content,
+        }).catch(err => console.error('Error sending reply email:', err.message));
+      }
+
       res.status(201)
         .send(postedReply);
+      
     } catch (err) {
       next(err);
     }
@@ -226,10 +232,11 @@ export default {
         throw new NotFoundError('Reply not found');
       }
 
-      const organizationId = reply.Location.organization_id;
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to reply on behalf of this organization');
-      }
+      requireOrganizationScope(
+        req,
+        reply.Location.organization_id,
+        'Not authorized to reply on behalf of this organization',
+      );
 
       await updateInstance(req.user, reply, { content });
       res.sendStatus(204);
@@ -249,14 +256,14 @@ export default {
         throw new NotFoundError('Comment not found');
       }
 
-      const organizationId = comment.Location.organization_id;
-
       if (!comment.reply_to_id) {
         throw new ForbiddenError('Only allowed to delete replies');
       }
-      if (!req.userOrganizationIds || !req.userOrganizationIds.includes(organizationId)) {
-        throw new ForbiddenError('Not authorized to delete replies for this organization');
-      }
+      requireOrganizationScope(
+        req,
+        comment.Location.organization_id,
+        'Not authorized to delete replies for this organization',
+      );
 
       await destroyInstance(req.user, comment);
       res.sendStatus(204);

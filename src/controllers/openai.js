@@ -1,6 +1,7 @@
 /* eslint-disable max-len, no-console */
 
 import OpenAI from 'openai';
+import * as nlLimiter from './nl-limiter';
 
 const openai = new OpenAI();
 
@@ -1963,6 +1964,306 @@ const getCommentsHighlights = async (comments) => {
   } catch (err) {
     console.log(err);
     return null;
+  }
+};
+
+const nlQuerySchema = {
+  type: 'json_schema',
+  json_schema: {
+    strict: true,
+    name: 'NaturalLanguageQueryParams',
+    schema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        searchString: { type: ['string', 'null'] },
+        streetAddress: { type: ['string', 'null'] },
+        neighborhood: { type: ['string', 'null'] },
+        openAt: { type: ['string', 'null'] },
+        gender: { type: ['string', 'null'] },
+        membership: { type: ['boolean', 'null'] },
+        ageMin: { type: ['integer', 'null'] },
+        ageMax: { type: ['integer', 'null'] },
+        referralRequired: { type: ['boolean', 'null'] },
+        photoIdRequired: { type: ['boolean', 'null'] },
+        zipcodes: {
+          type: ['array', 'null'],
+          items: { type: 'string' },
+        },
+        taxonomyNames: {
+          type: ['array', 'null'],
+          items: { type: 'string' },
+        },
+      },
+      required: [
+        'searchString',
+        'streetAddress',
+        'neighborhood',
+        'openAt',
+        'gender',
+        'membership',
+        'ageMin',
+        'ageMax',
+        'referralRequired',
+        'photoIdRequired',
+        'zipcodes',
+        'taxonomyNames',
+      ],
+      additionalProperties: false,
+    },
+  },
+};
+
+const VALID_NL_GENDERS = new Set(['male', 'female']);
+const ZIPCODE_RE = /^\d{5}$/;
+const NL_MAX_AGE = 120;
+const NL_MAX_ZIPCODES = 20;
+const NL_MAX_TAXONOMY_NAMES = 10;
+const NL_MAX_STRING_LEN = 200;
+
+function sanitizeNlParams(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const str = (v) => (typeof v === 'string' ? v.slice(0, NL_MAX_STRING_LEN).trim() || null : null);
+  const bool = (v) => (typeof v === 'boolean' ? v : null);
+
+  const ageMin = (Number.isInteger(raw.ageMin) && raw.ageMin >= 0 && raw.ageMin <= NL_MAX_AGE)
+    ? raw.ageMin : null;
+  const ageMax = (Number.isInteger(raw.ageMax) && raw.ageMax >= 0 && raw.ageMax <= NL_MAX_AGE)
+    ? raw.ageMax : null;
+
+  let openAt = null;
+  if (typeof raw.openAt === 'string') {
+    const d = new Date(raw.openAt);
+    // Require an explicit UTC offset (or Z): a naive datetime string would be
+    // interpreted in the server's timezone, shifting the intended NY time.
+    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw.openAt.trim());
+    if (!Number.isNaN(d.getTime()) && hasOffset) openAt = raw.openAt;
+  }
+
+  let gender = null;
+  if (typeof raw.gender === 'string') {
+    const g = raw.gender.toLowerCase();
+    if (VALID_NL_GENDERS.has(g)) gender = g;
+  }
+
+  let zipcodes = null;
+  if (Array.isArray(raw.zipcodes)) {
+    const valid = raw.zipcodes
+      .filter(z => typeof z === 'string' && ZIPCODE_RE.test(z))
+      .slice(0, NL_MAX_ZIPCODES);
+    if (valid.length > 0) zipcodes = valid;
+  }
+
+  let taxonomyNames = null;
+  if (Array.isArray(raw.taxonomyNames)) {
+    const valid = raw.taxonomyNames
+      .filter(n => typeof n === 'string' && n.trim().length > 0)
+      .map(n => n.trim().slice(0, 100))
+      .slice(0, NL_MAX_TAXONOMY_NAMES);
+    if (valid.length > 0) taxonomyNames = valid;
+  }
+
+  const result = {
+    searchString: str(raw.searchString),
+    streetAddress: str(raw.streetAddress),
+    neighborhood: str(raw.neighborhood),
+    openAt,
+    gender,
+    membership: bool(raw.membership),
+    ageMin: (ageMin != null && ageMax != null && ageMin > ageMax) ? null : ageMin,
+    ageMax: (ageMin != null && ageMax != null && ageMin > ageMax) ? null : ageMax,
+    referralRequired: bool(raw.referralRequired),
+    photoIdRequired: bool(raw.photoIdRequired),
+    zipcodes,
+    taxonomyNames,
+  };
+
+  // A result where every field is null carries no filters at all; if we
+  // returned it, the caller would skip its raw-query fallback and run an
+  // unfiltered search. Treat it like a parser failure instead. (An explicit
+  // false — e.g. membership — is a real filter and must not collapse.)
+  if (Object.values(result).every(v => v === null)) return null;
+
+  return result;
+}
+
+const nlQueryCache = new Map();
+const NL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const NL_CACHE_MAX_ENTRIES = 1000; // bound memory: this endpoint is public
+
+// Insert into the (insertion-ordered) cache, evicting the oldest entries once
+// the cap is reached so a flood of unique queries can't grow the map unbounded.
+function nlCacheSet(key, value) {
+  nlQueryCache.delete(key);
+  nlQueryCache.set(key, value);
+  while (nlQueryCache.size > NL_CACHE_MAX_ENTRIES) {
+    const oldestKey = nlQueryCache.keys().next().value;
+    nlQueryCache.delete(oldestKey);
+  }
+}
+
+// ---- Abuse / availability controls around the (paid) OpenAI call ----
+// This endpoint is public and each uncached query costs money + latency, so we
+// guard the upstream call with a timeout, a rate cap, a concurrency cap, a
+// per-client cap and a circuit breaker. When any guard trips we return null,
+// which the caller treats as "no structured params" and falls back to a plain
+// keyword search.
+//
+// The in-memory guards below are per-instance: in Lambda each concurrent
+// instance has its own process, so on their own they don't bound total cost,
+// upstream abuse, or a single caller's share of it. They act as a cheap first
+// line before the shared-store round-trip; the authoritative cross-instance
+// rate limit, per-client limit and circuit breaker live in Postgres via
+// ./nl-limiter, and — unlike these in-memory guards — fail CLOSED (deny) if
+// that shared store is unavailable, rather than letting Lambda concurrency
+// amplify unmetered OpenAI calls during an outage.
+
+const NL_REQUEST_TIMEOUT_MS = 8000; // hard per-call timeout (overrides SDK default)
+const NL_MAX_RETRIES = 1; // bound retry amplification of the upstream cost
+
+// Fixed-window global rate limit (cost control across all callers).
+const NL_RATE_WINDOW_MS = 60 * 1000;
+const NL_RATE_MAX_REQUESTS = 60; // max uncached OpenAI calls per window
+let nlWindowStart = Date.now();
+let nlWindowCount = 0;
+
+// Concurrency cap: prevents a burst from piling up in-flight upstream requests.
+const NL_MAX_CONCURRENT = 10;
+let nlInFlight = 0;
+
+// Circuit breaker: stop hammering OpenAI while it is failing.
+const NL_CB_FAILURE_THRESHOLD = 5;
+const NL_CB_OPEN_MS = 60 * 1000;
+let nlCbFailures = 0;
+let nlCbOpenedAt = 0;
+
+const nlCircuitOpen = () => nlCbOpenedAt > 0 && (Date.now() - nlCbOpenedAt) < NL_CB_OPEN_MS;
+
+const nlRecordSuccess = () => {
+  nlCbFailures = 0;
+  nlCbOpenedAt = 0;
+};
+
+const nlRecordFailure = () => {
+  nlCbFailures += 1;
+  if (nlCbFailures >= NL_CB_FAILURE_THRESHOLD) {
+    nlCbOpenedAt = Date.now();
+    console.warn(`NL query: circuit breaker opened after ${nlCbFailures} consecutive failures`);
+  }
+};
+
+const nlAllowInWindow = () => {
+  const now = Date.now();
+  if (now - nlWindowStart >= NL_RATE_WINDOW_MS) {
+    nlWindowStart = now;
+    nlWindowCount = 0;
+  }
+  if (nlWindowCount >= NL_RATE_MAX_REQUESTS) return false;
+  nlWindowCount += 1;
+  return true;
+};
+
+// `query` is expected to already have gone through `redactPii`
+// (src/utils/redact-pii.js) at the call site in controllers/locations.js
+// before it reaches here — see PRIVACY.md for what that does and doesn't
+// cover. `clientId` identifies the caller (e.g. their IP, via
+// utils/request.getClientIp) for the per-client rate limit below; callers
+// that can't identify a client share the 'unknown' bucket.
+export const parseNaturalLanguageQuery = async (query, currentDatetime, clientId = 'unknown') => {
+  // Relative time expressions ("open now", "tonight") resolve against
+  // currentDatetime, so a cached result is only valid for queries made around
+  // the same time. Bucket the datetime at the cache TTL and include it in the
+  // key so an entry can never be reused across a time-bucket boundary.
+  const datetimeBucket = Math.floor(new Date(currentDatetime).getTime() / NL_CACHE_TTL_MS);
+  const cacheKey = `${datetimeBucket}:${query.toLowerCase().trim()}`;
+  const cached = nlQueryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < NL_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  // Cheap per-instance guards first (avoid a DB round-trip on a hot instance
+  // that is already over its own limits). Skip the upstream call — the caller
+  // falls back to keyword search — when any guard trips.
+  if (nlCircuitOpen()) {
+    console.warn('NL query: circuit breaker open, skipping OpenAI call');
+    return null;
+  }
+  if (nlInFlight >= NL_MAX_CONCURRENT) {
+    console.warn('NL query: concurrency cap reached, skipping OpenAI call');
+    return null;
+  }
+  if (!nlAllowInWindow()) {
+    console.warn('NL query: rate limit reached, skipping OpenAI call');
+    return null;
+  }
+
+  // Reserve the in-flight slot before any awaits so the concurrency cap stays
+  // precise across the shared-store round-trips below; the finally releases it.
+  nlInFlight += 1;
+  try {
+    // Authoritative cross-instance guards backed by Postgres. The per-client
+    // check runs BEFORE the global one: both charge their window as part of
+    // the admission check, and if the global counter were charged first, a
+    // single client could spend the whole global budget on requests that the
+    // per-client limit then rejects, starving every other caller. In this
+    // order a rejected client only burns their own allowance, which caps how
+    // much global capacity any one client can consume.
+    if (await nlLimiter.isCircuitOpen()) {
+      console.warn('NL query: global circuit breaker open, skipping OpenAI call');
+      return null;
+    }
+    if (!(await nlLimiter.allowClientInWindow(clientId))) {
+      console.warn('NL query: per-client rate limit reached, skipping OpenAI call');
+      return null;
+    }
+    if (!(await nlLimiter.allowInWindow())) {
+      console.warn('NL query: global rate limit reached, skipping OpenAI call');
+      return null;
+    }
+
+    const systemPrompt = `You are a search query parser for a NYC social services directory. Parse the user's natural language search query into structured filter parameters.
+
+The current datetime in America/New_York timezone is: ${currentDatetime}
+
+Extract the following fields if present in the query (return null for fields not mentioned):
+- searchString: additional keyword(s) NOT already captured by any other field (taxonomyNames, openAt, gender, membership, age, referralRequired, photoIdRequired, zipcodes, streetAddress). If the entire query is covered by other fields, set searchString to null. Only include words that add meaning beyond what other fields capture (e.g. "free clothes near me" -> taxonomyNames: ["Clothing"], searchString: null; "halal food pantry" -> taxonomyNames: ["Food"], searchString: "halal"; "shelter open tonight for women" -> taxonomyNames: ["Shelter"], openAt: ..., gender: "female", searchString: null)
+- streetAddress: a NYC street address if mentioned in the query (e.g. "123 Broadway", "456 W 42nd St", "250 Joralemon Street Brooklyn"). Extract only the street number and street name, omitting borough/city/state/zip if present. Return null if no street address is mentioned. Examples: "food near 123 Main St" -> streetAddress: "123 Main St"; "shelter at 250 Joralemon Street Brooklyn" -> streetAddress: "250 Joralemon Street"
+- neighborhood: a NYC neighborhood or borough name if mentioned in the query (e.g. "Harlem", "Bushwick", "Upper West Side", "Brooklyn", "Bronx", "Queens", "Staten Island", "Manhattan"). Return null if no neighborhood or borough is mentioned. Examples: "food pantry in Harlem" -> neighborhood: "Harlem"; "shelters in the Bronx" -> neighborhood: "Bronx"; "clothing near me" -> neighborhood: null
+- openAt: an ISO 8601 datetime string in America/New_York time including its UTC offset (e.g. "2026-07-13T20:00:00-04:00"), resolved from relative time expressions ("tonight" = today at 8pm, "now" = current time, "tomorrow morning" = tomorrow at 9am), or null
+- gender: "male" or "female" if the query specifies gender, otherwise null
+- membership: true if membership is required/mentioned, false if explicitly not required, null if not mentioned
+- ageMin: minimum age as integer if mentioned, otherwise null
+- ageMax: maximum age as integer if mentioned, otherwise null
+- referralRequired: true/false/null based on whether a referral is mentioned
+- photoIdRequired: true/false/null based on whether photo ID is mentioned
+- zipcodes: a 5-digit NYC zip code string if mentioned, otherwise null
+- taxonomyNames: an array of taxonomy names that match the user's query, or null if not applicable. Available top-level taxonomies: Food, Clothing, Personal Care, Shelter, Health, Other service. Available sub-taxonomies: Mental Health, Substance Use Treatment, General Health, Support Groups (under Health); Pets, Education, Employment, Legal Services, Immigration Services, Internship (under Other service); Interview-Ready Clothing, Baby Supplies, Thrift Shop, Coat Drive, Professional Clothing (under Clothing); Food Benefits, Food Delivery / Meals on Wheels, Appliances (under Food); Gym, Baby, Hygiene, Community Services, Activities (under Personal Care); Drop-in Center, Intake, Senior, Transitional Independent Living (TIL), Housing Lottery, Supportive Housing, Residential Recovery, Cooling Center, Referral, Youth, Warming Center, Veterans (under Shelter). Use the most specific matching taxonomy. For example "food" -> ["Food"], "men's shelter" -> ["Shelter"], "mental health support" -> ["Mental Health", "Support Groups"], "drug rehab" -> ["Substance Use Treatment"]`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query },
+      ],
+      response_format: nlQuerySchema,
+    }, {
+      timeout: NL_REQUEST_TIMEOUT_MS,
+      maxRetries: NL_MAX_RETRIES,
+    });
+
+    const rawResult = JSON.parse(completion.choices[0].message.content);
+    const result = sanitizeNlParams(rawResult);
+    nlCacheSet(cacheKey, { result, timestamp: Date.now() });
+    nlRecordSuccess();
+    await nlLimiter.recordSuccess();
+    return result;
+  } catch (err) {
+    nlRecordFailure();
+    await nlLimiter.recordFailure();
+    throw err;
+  } finally {
+    nlInFlight -= 1;
   }
 };
 

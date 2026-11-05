@@ -75,18 +75,32 @@ export const getLastValidatedDateForLocation = async locationId => models.sequel
 export const getMetadataForLocation = async (location, address) => {
   const phoneIds = location.Phones.map(({ id }) => id);
   const eventRelatedInfoIds = location.EventRelatedInfos.map(({ id }) => id);
+  // Streetview lives in its own table, so its metadata is keyed to the streetview
+  // row rather than the location and never turns up in locationMetadata. Roll it
+  // up into a single `streetview` field the way phones and event info are. Like
+  // those two, this covers live rows only: clearing an override deletes the row,
+  // and the field goes back to reading as unset.
+  const streetviewIds = location.Streetview ? [location.Streetview.id] : [];
+  // Same reasoning for the organization-provided photo: its metadata is keyed
+  // to the photo row. Live rows only - removing the photo deletes the row and
+  // the field reads as unset again, as it does for streetview.
+  const photoIds = location.LocationPhoto ? [location.LocationPhoto.id] : [];
   const [
     locationMetadata,
     organizationMetadata,
     addressMetadata,
     phonesLatestUpdate,
     eventInfoLatestUpdate,
+    streetviewLatestUpdate,
+    photoLatestUpdate,
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(location.id),
     models.Metadata.getLastUpdateDatesForResourceFields(location.organization_id),
     models.Metadata.getLastUpdateDatesForResourceFields(address.id),
     models.Metadata.getLatestUpdateDateForResources(phoneIds),
     models.Metadata.getLatestUpdateDateForResources(eventRelatedInfoIds),
+    models.Metadata.getLatestUpdateDateForResources(streetviewIds),
+    models.Metadata.getLatestUpdateDateForResources(photoIds),
   ]);
 
   const sources = [...new Set(await models.Metadata.getSourcesForResources([
@@ -95,6 +109,8 @@ export const getMetadataForLocation = async (location, address) => {
     address.id,
     ...phoneIds,
     ...eventRelatedInfoIds,
+    ...streetviewIds,
+    ...photoIds,
   ]))];
 
   return {
@@ -105,6 +121,12 @@ export const getMetadataForLocation = async (location, address) => {
         []),
       ...(eventInfoLatestUpdate ?
         [{ field_name: 'eventRelatedInfo', last_action_date: eventInfoLatestUpdate }] :
+        []),
+      ...(streetviewLatestUpdate ?
+        [{ field_name: 'streetview', last_action_date: streetviewLatestUpdate }] :
+        []),
+      ...(photoLatestUpdate ?
+        [{ field_name: 'photo', last_action_date: photoLatestUpdate }] :
         []),
     ],
     organization: organizationMetadata,
@@ -165,7 +187,7 @@ export const getMetadataForService = async (service) => {
     }),
     models.Metadata.getLatestUpdateDateForResources(service.EventRelatedInfos.map(info => info.id)),
     models.Metadata
-      .getLastUpdateDatesForResourceFields(service
+      .getLatestUpdateDatePerResource(service
         .ServiceTaxonomySpecificAttributes.map(a => a.id)),
     models.Metadata.getLatestUpdateDateForQuery({
       resource_table: 'eligibility',
@@ -210,9 +232,17 @@ export const getMetadataForService = async (service) => {
 
   const documentsMetadata = await getMetadataForServiceDocuments(service);
 
+  const taxonomyAttrByResourceId = {};
+  service.ServiceTaxonomySpecificAttributes.forEach((a) => {
+    if (a.attribute && a.attribute.name) {
+      taxonomyAttrByResourceId[a.id] = a.attribute.name;
+    }
+  });
   taxonomySpecificAttributesUpdates.forEach((m) => {
+    const fieldName = taxonomyAttrByResourceId[m.resource_id];
+    if (!fieldName) return;
     serviceWithAdditionalMetadata.push({
-      field_name: m.field_name,
+      field_name: fieldName,
       last_action_date: m.last_action_date,
     });
   });

@@ -3,6 +3,8 @@ import serviceSchemas from './validation/services';
 import models, {sequelize} from '../models';
 import { createService, updateService, deleteService } from '../services/services';
 import { NotFoundError } from '../utils/errors';
+import { formatDateOnly } from '../utils/times';
+import assertNoScheduleConflicts from '../services/schedule-conflicts';
 
 export default {
   create: async (req, res, next) => {
@@ -41,6 +43,12 @@ export default {
   update: async (req, res, next) => {
     try {
       await Joi.validate(req, serviceSchemas.update, { allowUnknown: true });
+      if (req.body.irregularHours) {
+        assertNoScheduleConflicts(
+          req.body.irregularHours,
+          formatDateOnly(new Date(), 'America/New_York'),
+        );
+      }
 
       const { serviceId } = req.params;
       const { metadata, taxonomyId, ...otherProps } = req.body;

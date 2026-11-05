@@ -77,6 +77,15 @@ module.exports = (sequelize, DataTypes, Op) => {
     resource_id: { [Op.in]: resourceIds },
   });
 
+  Metadata.getLatestUpdateDatePerResource = resourceIds => Metadata.findAll({
+    attributes: [
+      'resource_id',
+      [sequelize.fn('MAX', sequelize.col('last_action_date')), 'last_action_date'],
+    ],
+    where: { resource_id: { [Op.in]: resourceIds } },
+    group: 'resource_id',
+  });
+
   Metadata.getSourcesForResources = async (resourceIds) => {
     const rows = await Metadata.findAll({
       attributes: [

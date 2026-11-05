@@ -1,0 +1,71 @@
+name: Security Audit
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Mondays 13:00 UTC
+    - cron: "0 13 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  # Blocking: fails a PR only if it *introduces* a high/critical vulnerability
+  # through a package.json / package-lock.json change. Existing findings on the
+  # default branch do not fail PRs.
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          comment-summary-in-pr: on-failure
+
+  # Advisory: reports known vulnerabilities in production dependencies to the
+  # job summary. Never fails the workflow.
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # npm audit only needs package-lock.json, so no install step.
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          const audit = require("./audit.json");
+          const counts = audit.metadata?.vulnerabilities ?? {};
+          const order = ["critical", "high", "moderate", "low"];
+          console.log("## npm audit (production dependencies)\n");
+          console.log("| Severity | Count |\n|---|---|");
+          for (const s of order) console.log(`| ${s} | ${counts[s] ?? 0} |`);
+          const rows = Object.values(audit.vulnerabilities ?? {})
+            .filter((v) => v.severity === "critical" || v.severity === "high")
+            .sort((a, b) =>
+              order.indexOf(a.severity) - order.indexOf(b.severity) ||
+              Number(b.isDirect) - Number(a.isDirect) ||
+              a.name.localeCompare(b.name));
+          const LIMIT = 30;
+          if (rows.length) {
+            console.log("\n### High and critical\n");
+            console.log("| Package | Severity | Direct | Fix available |\n|---|---|---|---|");
+            for (const v of rows.slice(0, LIMIT)) {
+              const fix = typeof v.fixAvailable === "object"
+                ? `${v.fixAvailable.name}@${v.fixAvailable.version}${v.fixAvailable.isSemVerMajor ? " (major)" : ""}`
+                : v.fixAvailable ? "yes" : "no";
+              console.log(`| ${v.name} | ${v.severity} | ${v.isDirect ? "yes" : ""} | ${fix} |`);
+            }
+            if (rows.length > LIMIT) console.log(`\n_${rows.length - LIMIT} more high/critical packages not shown._`);
+          }
+          console.log("\nAdvisory only. Run `npm audit --omit=dev` locally for details.");
+          EOF
+          npm audit --omit=dev --audit-level=high || echo "::warning::npm audit found high or critical vulnerabilities in production dependencies (advisory)"

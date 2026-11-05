@@ -1,0 +1,271 @@
+name: Run database migrations
+description: >-
+  Opens the RDS security group to this runner's IP, applies pending Sequelize
+  migrations, and always closes the hole again.
+
+inputs:
+  security-group-id:
+    description: Security group fronting the target RDS instance.
+    required: true
+  database-host:
+    description: RDS endpoint hostname.
+    required: true
+  database-port:
+    description: RDS port.
+    required: false
+    default: '5432'
+  database-name:
+    description: Database name.
+    required: true
+  database-user:
+    description: Database user.
+    required: true
+  database-password:
+    description: Database password.
+    required: true
+  config-path:
+    description: >-
+      Sequelize CLI config to connect with. Defaults to the checked-out tree's
+      own. deploy-prod.yml overrides it so a rollback to a revision predating
+      the verified-TLS settings still connects - the migrations come from the
+      deployed ref, the connection settings from the workflow's own revision.
+    required: false
+    default: sequelize/config/database.js
+
+runs:
+  using: composite
+  steps:
+    # Composite-action inputs are not secrets, so mask the password explicitly
+    # before it can reach any log line. Every step below passes inputs through
+    # `env:` rather than interpolating them into the script: Actions substitutes
+    # expressions as literal text before bash parses the line, so a value
+    # containing a backtick or $(...) would otherwise break the step or execute
+    # under the deployment job's credentials.
+    - name: Mask credentials
+      shell: bash
+      env:
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+      run: printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
+
+    # The CLI's own connection is configured from `config-path`, which callers
+    # pin to a current revision. A migration that imports src/models opens a
+    # second connection from the *deployed* tree's src/config.js, and that one
+    # cannot be pinned from outside - so refuse to run it rather than put the
+    # production credentials on an unverified connection. Rolling back that far
+    # almost never has pending migrations anyway: db:migrate only applies ones
+    # the database has not seen, and an older tree has none.
+    - name: Require verified TLS on every connection a migration opens
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f src/utils/ssl.js ]; then
+          echo "Deployed tree verifies the RDS server certificate on every connection."
+          exit 0
+        fi
+
+        model_backed="$(grep -rl 'src/models' sequelize/migrations 2>/dev/null || true)"
+        if [ -z "$model_backed" ]; then
+          echo "Revision predates verified TLS, but no migration opens a connection of its own."
+          exit 0
+        fi
+
+        echo "::error::This revision predates verified TLS in src/config.js, and these migrations \
+        open their own connection through it: $(echo "$model_backed" | tr '\n' ' ')Running them \
+        would send the production database credentials over an unverified connection. Re-run this \
+        deploy with run_migrations: false - a revision this old has no pending migrations to apply."
+        exit 1
+
+    - name: Resolve runner egress IP
+      id: runner-ip
+      shell: bash
+      run: |
+        set -euo pipefail
+        ip="$(curl -fsS --retry 3 --retry-delay 2 https://checkip.amazonaws.com | tr -d '[:space:]')"
+        if [[ ! "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+          echo "Could not determine runner IP (got: '$ip')" >&2
+          exit 1
+        fi
+        echo "ip=$ip" >> "$GITHUB_OUTPUT"
+        echo "Runner egress IP resolved."
+
+    - name: Open RDS security group to this runner
+      id: open-sg
+      shell: bash
+      env:
+        SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        RUNNER_IP: ${{ steps.runner-ip.outputs.ip }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        rule_id="$(aws ec2 authorize-security-group-ingress \
+          --group-id "$SECURITY_GROUP_ID" \
+          --ip-permissions "IpProtocol=tcp,FromPort=$DATABASE_PORT,ToPort=$DATABASE_PORT,IpRanges=[{CidrIp=$RUNNER_IP/32,Description='gha run $RUN_ID'}]" \
+          --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
+          --output text)"
+        if [[ -z "$rule_id" || "$rule_id" == "None" ]]; then
+          echo "Failed to create a security group rule." >&2
+          exit 1
+        fi
+        # Recorded so the revoke step targets this exact rule and can never
+        # clobber an unrelated one that happens to share the CIDR.
+        echo "rule-id=$rule_id" >> "$GITHUB_OUTPUT"
+        echo "Opened port $DATABASE_PORT via rule $rule_id"
+
+    - name: Pending migrations (before)
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate:status --config "$CONFIG_PATH"
+
+    - name: Apply migrations
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate --config "$CONFIG_PATH"
+
+    - name: Migration status (after)
+      if: always() && steps.open-sg.outcome == 'success'
+      shell: bash
+      env:
+        NODE_ENV: production
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_PORT: ${{ inputs.database-port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASSWORD: ${{ inputs.database-password }}
+        DATABASE_LOGGING: 'false'
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: npx sequelize-cli db:migrate:status --config "$CONFIG_PATH"
+
+    # always(), and deliberately not conditioned on the recorded rule id: if the
+    # authorize call created the rule but its response never came back - a
+    # dropped connection, a killed runner - there is nothing recorded to revoke
+    # and the database would stay open to that address. So the id is treated as
+    # a hint and the group is swept as well. The description carries this run's
+    # id, so the sweep can only ever match rules this run created.
+    #
+    # This step does not get to exit green on a guess. Every lookup is retried,
+    # an unfinished lookup fails the step, and the revoke is confirmed by
+    # looking again. A failed cleanup blocks the deploy, which is the right
+    # trade against leaving the database reachable.
+    - name: Close RDS security group
+      if: always()
+      shell: bash
+      env:
+        SECURITY_GROUP_ID: ${{ inputs.security-group-id }}
+        RULE_ID: ${{ steps.open-sg.outputs.rule-id }}
+        OPEN_OUTCOME: ${{ steps.open-sg.outcome }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        lookup() {
+          aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$SECURITY_GROUP_ID" \
+            --query "SecurityGroupRules[?Description=='gha run $RUN_ID'].SecurityGroupRuleId" \
+            --output text
+        }
+
+        # --output text returns a tab-separated list and prints "None" when
+        # empty; keep only the things that are actually rule ids.
+        rule_ids_in() {
+          printf '%s\n' "$@" | tr '\t' '\n' | grep -E '^sgr-[0-9a-f]+$' | sort -u || true
+        }
+
+        # Sets FOUND_IDS; returns non-zero if no attempt ever completed.
+        # retry_empty keeps going when the call succeeds but finds nothing:
+        # describe-security-group-rules is eventually consistent, so a rule that
+        # was just created can be briefly invisible - and "briefly invisible" and
+        # "never created" look identical from here.
+        lookup_rules() {
+          retry_empty="$1"
+          completed=false
+          FOUND_IDS=""
+          for attempt in 1 2 3 4; do
+            if out="$(lookup 2>&1)"; then
+              completed=true
+              FOUND_IDS="$(rule_ids_in "$out")"
+              if [ -n "$FOUND_IDS" ] || [ "$retry_empty" != true ]; then
+                return 0
+              fi
+              echo "Lookup $attempt found nothing yet; EC2 may not have caught up."
+            else
+              completed=false
+              echo "Lookup attempt $attempt failed: $out"
+            fi
+            if [ "$attempt" -lt 4 ]; then
+              sleep 5
+            fi
+          done
+          [ "$completed" = true ]
+        }
+
+        # Authorization is uncertain when the step ran but left no id behind:
+        # AWS may have created the rule and lost the response on the way back.
+        uncertain=false
+        if [ -z "${RULE_ID:-}" ] && [ "${OPEN_OUTCOME:-skipped}" != "skipped" ]; then
+          uncertain=true
+        fi
+
+        swept=true
+        lookup_rules "$uncertain" || swept=false
+
+        # Revoke whatever is known first, so a failing lookup never costs the
+        # revoke we can already do.
+        rule_ids="$(rule_ids_in "${RULE_ID:-}" "$FOUND_IDS")"
+        if [ -n "$rule_ids" ]; then
+          # By rule id, never by CIDR: matching on --ip-permissions could revoke
+          # an unrelated rule that happens to share the address.
+          # shellcheck disable=SC2086
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SECURITY_GROUP_ID" \
+            --security-group-rule-ids $rule_ids \
+            --query 'Return' --output text
+          echo "Revoked: $(echo $rule_ids | tr '\n' ' ')"
+        fi
+
+        if [ "$swept" != true ]; then
+          echo "::error::Could not list the rules on $SECURITY_GROUP_ID, so this run cannot show \
+        it left no ingress open. If a rule was created but its id never came back, it is still \
+        there: look for one described 'gha run $RUN_ID' and remove it."
+          exit 1
+        fi
+
+        # Confirm the revoke instead of trusting the API's answer - and a
+        # confirmation that cannot be obtained is not a confirmation.
+        if [ -n "$rule_ids" ]; then
+          if ! lookup_rules false; then
+            echo "::error::Revoked $(echo $rule_ids | tr '\n' ' ')on $SECURITY_GROUP_ID but could \
+        not confirm it: the rule lookup never completed. Check the group for rules described \
+        'gha run $RUN_ID'."
+            exit 1
+          fi
+          if [ -n "$FOUND_IDS" ]; then
+            echo "::error::Ingress described 'gha run $RUN_ID' is still on $SECURITY_GROUP_ID \
+        after the revoke: $(echo $FOUND_IDS | tr '\n' ' '). Remove it manually."
+            exit 1
+          fi
+        fi
+
+        if [ "$uncertain" = true ] && [ -z "$rule_ids" ]; then
+          echo "::warning::The authorize step left no rule id and none became visible after four \
+        lookups, so most likely none was created - but confirm there is no rule described \
+        'gha run $RUN_ID' on $SECURITY_GROUP_ID."
+        fi
+
+        echo "No ingress from this run remains on $SECURITY_GROUP_ID."

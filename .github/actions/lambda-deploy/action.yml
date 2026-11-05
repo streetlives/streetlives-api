@@ -1,0 +1,74 @@
+name: Deploy the packaged Lambda
+description: >-
+  Uploads dist.zip under a per-run S3 key, points the function at it, waits for
+  the update to settle, and removes the artifact again.
+
+# This lives in the workflow's own revision rather than in the deployed tree's
+# npm scripts on purpose. The rollback path checks out revisions that predate
+# this pipeline, and their `deploy:prod` uploaded nothing, ignored
+# DEPLOY_S3_KEY and never waited for the update - so a rollback would have
+# smoke-tested the code it was replacing and deleted the wrong S3 object.
+# Only the *build* comes from the deployed tree.
+
+inputs:
+  function-name:
+    description: Lambda function to update.
+    required: true
+  s3-bucket:
+    description: Bucket the artifact is staged in.
+    required: true
+  s3-key:
+    description: >-
+      Per-run object key. Stage and production deploys can overlap, and a shared
+      key lets one run overwrite or delete the other's artifact between the
+      upload and update-function-code.
+    required: true
+  artifact:
+    description: Path to the packaged zip.
+    required: false
+    default: dist.zip
+
+runs:
+  using: composite
+  steps:
+    - name: Upload the artifact
+      shell: bash
+      env:
+        ARTIFACT: ${{ inputs.artifact }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_KEY: ${{ inputs.s3-key }}
+      run: |
+        set -euo pipefail
+        aws s3 cp "$ARTIFACT" "s3://$S3_BUCKET/$S3_KEY"
+
+    - name: Update the function and wait for it to settle
+      shell: bash
+      env:
+        FUNCTION_NAME: ${{ inputs.function-name }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_KEY: ${{ inputs.s3-key }}
+      run: |
+        set -euo pipefail
+        # --query/--output keep the function's configuration, environment
+        # variables included, out of the log. See #216.
+        aws lambda update-function-code \
+          --function-name "$FUNCTION_NAME" \
+          --s3-bucket "$S3_BUCKET" \
+          --s3-key "$S3_KEY" \
+          --publish --query FunctionArn --output text
+        # update-function-code returns as soon as the request is accepted, and
+        # Lambda keeps serving the previous code until the update settles. The
+        # waiter polls GetFunction and fails on LastUpdateStatus=Failed, so a
+        # smoke check downstream cannot pass against what we just replaced.
+        aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+
+    # always(): a failed deploy must not leave the artifact in the bucket.
+    - name: Remove the artifact
+      if: always()
+      shell: bash
+      env:
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_KEY: ${{ inputs.s3-key }}
+      run: |
+        set -uo pipefail
+        aws s3 rm "s3://$S3_BUCKET/$S3_KEY" || echo "Could not remove s3://$S3_BUCKET/$S3_KEY"

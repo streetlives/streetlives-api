@@ -26,9 +26,17 @@ export class ValidationError extends Error {
   }
 }
 
+export class ServiceUnavailableError extends Error {
+  constructor(...args) {
+    super(...args);
+    Error.captureStackTrace(this, ServiceUnavailableError);
+  }
+}
+
 export default {
   NotFoundError,
   AuthError,
   ForbiddenError,
   ValidationError,
+  ServiceUnavailableError,
 };

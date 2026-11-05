@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, master, main]
+  pull_request:
+  # Lets the deploy workflows gate on the real test job instead of duplicating
+  # the postgis service container. See deploy-test-on-develop-merge.yml.
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Commit to test. Callers that deploy a ref other than the triggering
+          commit (deploy-prod.yml's rollback path) must pass it, or the tests
+          would green-light a different revision than the one deployed.
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: streetlives
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U streetlives -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: test
+      DATABASE_USER: streetlives
+      DATABASE_PASSWORD: password
+      DATABASE_LOGGING: 'false'
+      OPENAI_API_KEY: test-key-placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Empty on push/pull_request, where checkout's default is correct.
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Ensure required Postgres extensions
+        run: psql -h localhost -U streetlives -d test -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;"
+        env:
+          PGPASSWORD: password
+      - run: npm test

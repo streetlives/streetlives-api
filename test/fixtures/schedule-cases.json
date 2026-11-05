@@ -1,0 +1,842 @@
+{
+  "about": "Schedule cases shared by streetlives-api (openAt search), streetlives-web (gogetta) and yourpeer.nyc. Keep the three copies identical. Rows are holiday_schedules rows; checks are New York local times.",
+  "cases": [
+    {
+      "name": "every Saturday",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-07T08:59",
+          "open": false
+        },
+        {
+          "at": "2026-11-07T17:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-08T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a weekday row saved before freq existed repeats every week",
+      "rows": [
+        {
+          "weekday": 6,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-08T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a weekday row with dates but no freq repeats every week between its dates",
+      "rows": [
+        {
+          "weekday": 6,
+          "valid_from": "2026-11-01",
+          "valid_to": "2026-11-30",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "freq": "WEEKLY",
+          "byday": "SU",
+          "weekday": 7,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-14T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-08T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-05T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "1st and 3rd Saturday of the month",
+      "rows": [
+        {
+          "freq": "MONTHLY",
+          "byday": "1SA,3SA",
+          "weekday": 6,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-14T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-21T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-28T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-12-05T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "last Friday of the month",
+      "rows": [
+        {
+          "freq": "MONTHLY",
+          "byday": "-1FR",
+          "weekday": 5,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-10-30T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-20T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-27T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "every 2 weeks on Sunday, anchored on Oct 31, 2021",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "interval": 2,
+          "byday": "SU",
+          "weekday": 7,
+          "valid_from": "2021-10-31",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2021-10-31T10:00",
+          "open": true
+        },
+        {
+          "at": "2021-11-07T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-01T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-08T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-15T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-22T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "the 2nd Saturday of every other month",
+      "rows": [
+        {
+          "freq": "MONTHLY",
+          "interval": 2,
+          "byday": "2SA",
+          "weekday": 6,
+          "valid_from": "2026-11-01",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-14T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-12T10:00",
+          "open": false
+        },
+        {
+          "at": "2027-01-09T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "the 15th of the month",
+      "rows": [
+        {
+          "freq": "MONTHLY",
+          "bymonthday": "15",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-15T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-16T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "weekdays in one row",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-02T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-06T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-07T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a series that stops repeating",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "valid_to": "2026-11-14",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-14T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-21T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "new hours from a later date (this and following)",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "valid_to": "2026-11-30",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "valid_from": "2026-12-01",
+          "opens_at": "10:00",
+          "closes_at": "14:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-28T09:30",
+          "open": true
+        },
+        {
+          "at": "2026-12-05T09:30",
+          "open": false
+        },
+        {
+          "at": "2026-12-05T10:30",
+          "open": true
+        },
+        {
+          "at": "2026-12-05T15:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a skipped date only removes that series",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "exdates": ["2026-11-14"],
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "opens_at": "18:00",
+          "closes_at": "20:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-14T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-14T19:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-21T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "a closed one-off closes every series that day",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "valid_from": "2026-12-26",
+          "valid_to": "2026-12-26",
+          "description": "Holiday"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-19T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-26T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "one-off hours replace the day's hours",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "TH",
+          "weekday": 4,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "valid_from": "2026-11-26",
+          "opens_at": "10:00",
+          "closes_at": "14:00",
+          "description": "Thanksgiving"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-19T15:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-26T09:30",
+          "open": false
+        },
+        {
+          "at": "2026-11-26T11:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-26T15:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a closed one-off over a range of dates",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "valid_from": "2026-12-24",
+          "valid_to": "2027-01-01"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-23T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-28T10:00",
+          "open": false
+        },
+        {
+          "at": "2027-01-04T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "a legacy closed one-off limited to one weekday",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "freq": "WEEKLY",
+          "byday": "SU",
+          "weekday": 7,
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "weekday": 6,
+          "valid_from": "2026-12-01",
+          "valid_to": "2026-12-31"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-05T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-12-06T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "overnight hours run into the next day",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "FR",
+          "weekday": 5,
+          "opens_at": "22:00",
+          "closes_at": "02:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-06T21:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-06T23:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-07T01:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-07T02:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-08T01:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a one-off rules the occurrences that start on its dates, not the night before's",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "FR",
+          "weekday": 5,
+          "opens_at": "22:00",
+          "closes_at": "02:00"
+        },
+        {
+          "closed": true,
+          "valid_from": "2026-11-07",
+          "valid_to": "2026-11-07"
+        },
+        {
+          "closed": true,
+          "valid_from": "2026-11-13",
+          "valid_to": "2026-11-13"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-07T01:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-13T23:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-14T01:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "the last occurrence's overnight hours outlast the series",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "FR",
+          "weekday": 5,
+          "valid_to": "2026-11-13",
+          "opens_at": "22:00",
+          "closes_at": "02:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-14T01:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-21T01:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "closed every December 25",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "12",
+          "bymonthday": "25",
+          "description": "Christmas Day"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-24T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-25T10:00",
+          "open": false
+        },
+        {
+          "at": "2028-12-25T10:00",
+          "open": false
+        },
+        {
+          "at": "2028-12-26T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "closed every 4th Thursday of November",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "11",
+          "byday": "4TH",
+          "description": "Thanksgiving"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-11-19T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-11-26T10:00",
+          "open": false
+        },
+        {
+          "at": "2027-11-18T10:00",
+          "open": true
+        },
+        {
+          "at": "2027-11-25T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "closed all of August every year",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "8",
+          "bymonthday": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2027-07-30T10:00",
+          "open": true
+        },
+        {
+          "at": "2027-08-03T10:00",
+          "open": false
+        },
+        {
+          "at": "2027-09-01T10:00",
+          "open": true
+        }
+      ]
+    },
+    {
+      "name": "closed the last Friday of every month",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "MONTHLY",
+          "byday": "-1FR",
+          "description": "Staff training"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-10-23T10:00",
+          "open": true
+        },
+        {
+          "at": "2026-10-30T10:00",
+          "open": false
+        },
+        {
+          "at": "2026-11-27T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a one-off beats a yearly closure",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "12",
+          "bymonthday": "25"
+        },
+        {
+          "valid_from": "2026-12-25",
+          "valid_to": "2026-12-25",
+          "opens_at": "10:00",
+          "closes_at": "14:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-25T11:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-25T15:00",
+          "open": false
+        },
+        {
+          "at": "2028-12-25T11:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a yearly closure can skip a year",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "MO,TU,WE,TH,FR",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "12",
+          "bymonthday": "25",
+          "exdates": ["2026-12-25"]
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-25T10:00",
+          "open": true
+        },
+        {
+          "at": "2028-12-25T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "Saturdays in June to August only",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "SA",
+          "weekday": 6,
+          "bymonth": "6,7,8",
+          "opens_at": "09:00",
+          "closes_at": "17:00"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2027-05-29T10:00",
+          "open": false
+        },
+        {
+          "at": "2027-06-05T10:00",
+          "open": true
+        },
+        {
+          "at": "2027-09-04T10:00",
+          "open": false
+        }
+      ]
+    },
+    {
+      "name": "a yearly closure doesn't cut the night before short",
+      "rows": [
+        {
+          "freq": "WEEKLY",
+          "byday": "FR",
+          "weekday": 5,
+          "opens_at": "22:00",
+          "closes_at": "02:00"
+        },
+        {
+          "closed": true,
+          "freq": "YEARLY",
+          "bymonth": "12",
+          "bymonthday": "26"
+        }
+      ],
+      "checks": [
+        {
+          "at": "2026-12-26T01:00",
+          "open": true
+        },
+        {
+          "at": "2026-12-25T23:00",
+          "open": true
+        }
+      ]
+    }
+  ]
+}
