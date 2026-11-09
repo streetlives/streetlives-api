@@ -100,10 +100,28 @@ const assertServicesAreExclusiveToLocation = (location) => {
   }
 };
 
-const createServiceSnapshot = (service, locationId) => {
+const createServiceSnapshot = async (service, locationId, transaction) => {
   const plainService = service.get({ plain: true });
   const locationLink =
     plainService.Locations.find(serviceLocation => serviceLocation.id === locationId);
+  const linkId = locationLink && locationLink.ServiceAtLocation &&
+    locationLink.ServiceAtLocation.id;
+  const linkedIds = async (model) => {
+    if (!linkId) return [];
+    const rows = await model.findAll({
+      attributes: ['id', ...(model === models.Comment ? [] : ['service_id'])],
+      where: { service_at_location_id: linkId },
+      transaction,
+    });
+    return rows.filter(row => model === models.Comment || !row.service_id)
+      .map(row => row.id);
+  };
+  const [phoneIds, regularScheduleIds, holidayScheduleIds, commentIds] = await Promise.all([
+    linkedIds(models.Phone),
+    linkedIds(models.RegularSchedule),
+    linkedIds(models.HolidaySchedule),
+    linkedIds(models.Comment),
+  ]);
 
   return {
     service: {
@@ -120,6 +138,10 @@ const createServiceSnapshot = (service, locationId) => {
     serviceAtLocation: locationLink && locationLink.ServiceAtLocation
       ? {
         description: locationLink.ServiceAtLocation.description,
+        phoneIds,
+        regularScheduleIds,
+        holidayScheduleIds,
+        commentIds,
       }
       : null,
     taxonomies: plainService.Taxonomies.map(({ id }) => ({ taxonomy_id: id })),
@@ -145,6 +167,7 @@ const createServiceSnapshot = (service, locationId) => {
       weekday: schedule.weekday,
       opens_at: schedule.opens_at,
       closes_at: schedule.closes_at,
+      atLocation: schedule.service_at_location_id === linkId,
     })),
     holidaySchedules: plainService.HolidaySchedules.map(schedule => ({
       closed: schedule.closed,
@@ -163,6 +186,7 @@ const createServiceSnapshot = (service, locationId) => {
       valid_to: schedule.valid_to,
       description: schedule.description,
       exdates: schedule.exdates,
+      atLocation: schedule.service_at_location_id === linkId,
     })),
     phones: plainService.Phones.map(phone => ({
       number: phone.number,
@@ -170,6 +194,7 @@ const createServiceSnapshot = (service, locationId) => {
       type: phone.type,
       language: phone.language,
       description: phone.description,
+      atLocation: phone.service_at_location_id === linkId,
     })),
     paymentsAccepted: plainService.PaymentAccepteds.map(({ payment }) => ({ payment })),
     eventRelatedInfos: plainService.EventRelatedInfos.map(info => ({
@@ -194,7 +219,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
     { transaction },
   );
 
-  await createInstance(
+  const restoredLink = await createInstance(
     user,
     models.ServiceAtLocation.create.bind(models.ServiceAtLocation),
     {
@@ -284,6 +309,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         weekday: schedule.weekday,
         opens_at: schedule.opens_at,
         closes_at: schedule.closes_at,
+        service_at_location_id: schedule.atLocation ? restoredLink.id : null,
       },
       { transaction },
     )));
@@ -310,6 +336,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         valid_to: schedule.valid_to,
         description: schedule.description,
         exdates: schedule.exdates,
+        service_at_location_id: schedule.atLocation ? restoredLink.id : null,
       },
       { transaction },
     )));
@@ -325,6 +352,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         type: phone.type,
         language: phone.language,
         description: phone.description,
+        service_at_location_id: phone.atLocation ? restoredLink.id : null,
       },
       { transaction },
     )));
@@ -360,6 +388,24 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
       },
       { transaction },
     )));
+
+  const reattach = async (model, ids = []) => {
+    if (!ids.length) return;
+    const rows = await model.findAll({ where: { id: ids }, transaction });
+    await Promise.all(rows.map(row => updateInstance(
+      user,
+      row,
+      { service_at_location_id: restoredLink.id },
+      { transaction },
+    )));
+  };
+  const linked = serviceSnapshot.serviceAtLocation || {};
+  await Promise.all([
+    reattach(models.Phone, linked.phoneIds),
+    reattach(models.RegularSchedule, linked.regularScheduleIds),
+    reattach(models.HolidaySchedule, linked.holidayScheduleIds),
+    reattach(models.Comment, linked.commentIds),
+  ]);
 };
 
 export const scheduleLocationDeletion = (locationId, note, user) =>
@@ -378,8 +424,8 @@ export const scheduleLocationDeletion = (locationId, note, user) =>
 
     const deletedServiceCount = location.Services.length;
     const wasHiddenFromSearch = Boolean(location.hidden_from_search);
-    const serviceSnapshots = location.Services
-      .map(service => createServiceSnapshot(service, location.id));
+    const serviceSnapshots = await Promise.all(location.Services
+      .map(service => createServiceSnapshot(service, location.id, transaction)));
 
     await Promise.all(location.Services.map(service =>
       deleteService(service.id, user, { transaction })));

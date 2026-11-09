@@ -128,11 +128,15 @@ describe('location deletion schedules', () => {
     const [location, secondLocation] = organization.Locations;
 
     await location.addService(service);
+    const serviceAtLocation = await models.ServiceAtLocation.findOne({
+      where: { service_id: service.id, location_id: location.id },
+    });
     if (shareServiceAcrossLocations && secondLocation) {
       await secondLocation.addService(service);
     }
 
-    await Promise.all([
+    const [, , , , , , , , locationPhone, locationRegularSchedule,
+      locationHolidaySchedule, locationComment] = await Promise.all([
       models.DocumentsInfo.create({
         service_id: service.id,
         recertification_time: '30 days',
@@ -145,6 +149,7 @@ describe('location deletion schedules', () => {
       }),
       models.Phone.create({
         service_id: service.id,
+        service_at_location_id: serviceAtLocation.id,
         number: '212-555-1212',
         type: 'voice',
         description: 'Main service line',
@@ -155,12 +160,14 @@ describe('location deletion schedules', () => {
       }),
       models.RegularSchedule.create({
         service_id: service.id,
+        service_at_location_id: serviceAtLocation.id,
         weekday: 1,
         opens_at: '09:00',
         closes_at: '17:00',
       }),
       models.HolidaySchedule.create({
         service_id: service.id,
+        service_at_location_id: serviceAtLocation.id,
         closed: false,
         opens_at: '10:00',
         closes_at: '14:00',
@@ -186,6 +193,29 @@ describe('location deletion schedules', () => {
         event: 'COVID19',
         information: 'Masks required',
       }),
+      models.Phone.create({
+        service_at_location_id: serviceAtLocation.id,
+        number: '212-555-3434',
+      }),
+      models.RegularSchedule.create({
+        service_at_location_id: serviceAtLocation.id,
+        weekday: 2,
+        opens_at: '10:00',
+        closes_at: '16:00',
+      }),
+      models.HolidaySchedule.create({
+        service_at_location_id: serviceAtLocation.id,
+        closed: true,
+        start_date: '2026-12-25',
+        end_date: '2026-12-25',
+        occasion: 'Christmas',
+      }),
+      models.Comment.create({
+        location_id: location.id,
+        service_at_location_id: serviceAtLocation.id,
+        content: 'Location-specific feedback',
+        posted_by: 'Visitor',
+      }),
     ]);
 
     return {
@@ -193,6 +223,12 @@ describe('location deletion schedules', () => {
       location,
       secondLocation,
       service,
+      locationSpecific: {
+        phoneId: locationPhone.id,
+        regularScheduleId: locationRegularSchedule.id,
+        holidayScheduleId: locationHolidaySchedule.id,
+        commentId: locationComment.id,
+      },
     };
   };
 
@@ -257,7 +293,7 @@ describe('location deletion schedules', () => {
   });
 
   it('restores a scheduled location to its original hidden state', async () => {
-    const { location } = await createLocationFixture();
+    const { location, locationSpecific } = await createLocationFixture();
 
     await request(app)
       .post(`/locations/${location.id}/deletion-schedule`)
@@ -308,6 +344,20 @@ describe('location deletion schedules', () => {
     });
     expect(restoredService.ServiceAreas[0].postal_codes).toEqual(['10001', '10002']);
     expect(restoredService.EventRelatedInfos[0].information).toBe('Masks required');
+
+    const restoredLink = await models.ServiceAtLocation.findOne({
+      where: { service_id: restoredService.id, location_id: location.id },
+    });
+    expect(restoredService.Phones[0].service_at_location_id).toBe(restoredLink.id);
+    expect(restoredService.RegularSchedules[0].service_at_location_id).toBe(restoredLink.id);
+    expect(restoredService.HolidaySchedules[0].service_at_location_id).toBe(restoredLink.id);
+    const linkedRows = await Promise.all([
+      models.Phone.findByPk(locationSpecific.phoneId),
+      models.RegularSchedule.findByPk(locationSpecific.regularScheduleId),
+      models.HolidaySchedule.findByPk(locationSpecific.holidayScheduleId),
+      models.Comment.findByPk(locationSpecific.commentId),
+    ]);
+    linkedRows.forEach(row => expect(row.service_at_location_id).toBe(restoredLink.id));
   });
 
   it('keeps an already-hidden location hidden after cancellation', async () => {
