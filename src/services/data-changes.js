@@ -69,8 +69,21 @@ export const updateInstance = async (user, instance, values, options = {}) =>
     const { metadata, ...updateOptions } = options;
 
     const previousValues = { ...instance.get({ plain: true }) };
+    const metadataValues = { ...values };
+    const updateValues = { ...values };
+    const isCopyedit = Boolean(metadata && metadata.copyedit);
 
-    const newInstance = await instance.update(values, {
+    if (isCopyedit) {
+      updateOptions.silent = true;
+      const rawAttributes = instance &&
+        instance.constructor &&
+        instance.constructor.rawAttributes;
+      if (rawAttributes && rawAttributes.script_updated_at) {
+        updateValues.script_updated_at = new Date();
+      }
+    }
+
+    const newInstance = await instance.update(updateValues, {
       ...updateOptions,
       transaction: t,
     });
@@ -78,7 +91,7 @@ export const updateInstance = async (user, instance, values, options = {}) =>
     await createMetadataForFields({
       user,
       actionType: actionTypes.update,
-      values,
+      values: metadataValues,
       previousValues,
       newInstance,
       customMetadata: metadata,
