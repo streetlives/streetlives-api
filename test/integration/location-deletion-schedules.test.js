@@ -78,6 +78,8 @@ describe('location deletion schedules', () => {
         description: 'Organization for location deletion schedule tests.',
         Services: [{
           name: 'Case management',
+          ages_served: { min: 18, max: 65 },
+          who_does_it_serve: { adults: true },
           Taxonomies: [{
             name: `Taxonomy ${Date.now()}`,
           }],
@@ -165,6 +167,14 @@ describe('location deletion schedules', () => {
         start_date: '2026-01-01',
         end_date: '2026-01-01',
         occasion: 'HolidayHours',
+        freq: 'YEARLY',
+        interval: 1,
+        bymonthday: '1',
+        bymonth: '1',
+        valid_from: '2026-01-01',
+        valid_to: '2028-01-01',
+        description: 'New Year hours',
+        exdates: ['2027-01-01'],
       }),
       models.ServiceArea.create({
         service_id: service.id,
@@ -277,6 +287,8 @@ describe('location deletion schedules', () => {
     });
     expect(restoredService.name).toBe('Case management');
     expect(restoredService.additional_info).toBeNull();
+    expect(restoredService.ages_served).toEqual({ min: 18, max: 65 });
+    expect(restoredService.who_does_it_serve).toEqual({ adults: true });
     expect(restoredService.Taxonomies).toHaveLength(1);
     expect(restoredService.DocumentsInfo.recertification_time).toBe('30 days');
     expect(restoredService.RequiredDocuments[0].document).toBe('Photo ID');
@@ -284,6 +296,16 @@ describe('location deletion schedules', () => {
     expect(restoredService.PaymentAccepteds[0].payment).toBe('Medicaid');
     expect(restoredService.RegularSchedules[0].opens_at).toBe('09:00:00');
     expect(restoredService.HolidaySchedules[0].occasion).toBe('HolidayHours');
+    expect(restoredService.HolidaySchedules[0]).toMatchObject({
+      freq: 'YEARLY',
+      interval: 1,
+      bymonthday: '1',
+      bymonth: '1',
+      valid_from: '2026-01-01',
+      valid_to: '2028-01-01',
+      description: 'New Year hours',
+      exdates: ['2027-01-01'],
+    });
     expect(restoredService.ServiceAreas[0].postal_codes).toEqual(['10001', '10002']);
     expect(restoredService.EventRelatedInfos[0].information).toBe('Masks required');
   });
