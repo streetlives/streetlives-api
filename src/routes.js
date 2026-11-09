@@ -34,10 +34,19 @@ export default (app) => {
   app.get('/location-edits', changeFeedAuth, locationChanges.getEdits);
 
   app.post('/locations/suggestions', locations.suggestNew);
+  app.get('/locations/deletion-schedules', getUser, locations.getDeletionSchedules);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);
   app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
+  app.post(
+    '/locations/:locationId/deletion-schedule',
+    getUser, dataEntryAuth(), locations.scheduleDeletion,
+  );
+  app.delete(
+    '/locations/:locationId/deletion-schedule',
+    getUser, dataEntryAuth(), locations.restoreDeletion,
+  );
   app.post('/locations', getUser, dataEntryAuth(['organizationId']), locations.create);
   app.patch('/locations/:locationId', getUser, dataEntryAuth(['organizationId']), locations.update);
 
@@ -78,7 +87,6 @@ export default (app) => {
   app.get('/comment-highlights', commentHighlights.getHighlights);
   app.post('/generate-highlights', commentHighlights.generateHighlights);
   app.post('/regenerate-highlights', commentHighlights.regenerateHighlights);
-
 
   app.get('/errorreports', getUser, errorReports.get);
   app.post('/errorreports', errorReports.create);

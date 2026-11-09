@@ -44,6 +44,35 @@ const notifyErrorReport = async ({
   return axios.post(config.slackWebhookUrl, { text });
 };
 
+const notifyLocationDeletionScheduled = async ({
+  location,
+  note,
+  requestedBy,
+  deletedServiceCount,
+  scheduledForPermanentDeletionAt,
+}) => {
+  const { slackWebhookUrl } = config;
+
+  if (!slackWebhookUrl) {
+    return Promise.resolve();
+  }
+
+  const organizationName = location.Organization
+    ? location.Organization.name
+    : 'Unknown organization';
+  const locationName = location.name || 'Unknown location';
+  const scheduledDate = new Date(scheduledForPermanentDeletionAt).toISOString();
+  const text = [
+    `Location scheduled for deletion: *${organizationName}* / *${locationName}*`,
+    `Requested by: ${requestedBy}`,
+    `Deleted services immediately: ${deletedServiceCount}`,
+    `Scheduled for permanent deletion: ${scheduledDate}`,
+    `Reason: "_${note}_"`,
+  ].join('\n');
+
+  return axios.post(config.slackWebhookUrl, { text });
+};
+
 export default {
   notifyNewComment: async commentParams => notifyComment('New comment', commentParams),
 
@@ -53,4 +82,5 @@ export default {
   }) => notifyComment(`New reply to comment "${originalComment.content}"`, commentParams),
 
   notifyErrorReport,
+  notifyLocationDeletionScheduled,
 };
