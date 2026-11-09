@@ -2,6 +2,9 @@ const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
 jest.setTimeout(10000);
+// Rebuilding the schema spawns the migration CLI three times; on a slower machine that alone
+// passes the 10s limit, and the tests then run against a half-built schema.
+const SCHEMA_SETUP_TIMEOUT_MS = 120000;
 
 require('./env');
 
@@ -84,7 +87,7 @@ beforeAll(async () => {
     ' --name 20240510171256-fix-location-slug-update-trigger');
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
-});
+}, SCHEMA_SETUP_TIMEOUT_MS);
 afterAll(async () => {
   await models.sequelize.close();
 });

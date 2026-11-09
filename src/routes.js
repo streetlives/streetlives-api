@@ -7,8 +7,10 @@ import geocode from './controllers/geocode';
 import comments from './controllers/comments';
 import commentHighlights from './controllers/comment-highlights';
 import errorReports from './controllers/error-reports';
+import locationChanges from './controllers/location-changes';
 import getUser from './middleware/get-user';
 import dataEntryAuth from './middleware/data-entry-auth';
+import changeFeedAuth from './middleware/change-feed-auth';
 import { LOCATION_PHOTO_ROUTE } from './utils/photo-upload-path';
 import {
   NotFoundError,
@@ -25,6 +27,11 @@ export default (app) => {
   app.get('/organizations/:organizationId/locations', organizations.getLocations);
 
   app.get('/locations', locations.find);
+
+  // Top-level, not under /locations/{id}: API Gateway serves that path without the Cognito
+  // authorizer, and these feeds need its verified client claims.
+  app.get('/location-changes', changeFeedAuth, locationChanges.getChanges);
+  app.get('/location-edits', changeFeedAuth, locationChanges.getEdits);
 
   app.post('/locations/suggestions', locations.suggestNew);
   app.get('/locations-by-slug/:slug', locations.getInfoBySlug);

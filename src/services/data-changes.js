@@ -88,9 +88,15 @@ export const updateInstance = async (user, instance, values, options = {}) =>
     return newInstance;
   }, options);
 
+// The columns that tie a row to the location or service it belongs to, most specific first.
+const LINK_FIELDS = ['location_id', 'service_id', 'service_at_location_id', 'organization_id'];
+
 export const destroyInstance = (user, instance, options = {}) =>
   startTransactionOrUseExisting(async (t) => {
     const { metadata = {} } = options;
+    // Recorded like destroyAllInstances' linkField, so the change feed can still place the
+    // delete once the row, and with it the link, is gone.
+    const linkField = LINK_FIELDS.find(fieldName => instance[fieldName]);
 
     await instance.destroy({ transaction: t });
 
@@ -98,6 +104,8 @@ export const destroyInstance = (user, instance, options = {}) =>
       resource_id: instance.id,
       last_action_date: metadata.lastUpdated || new Date(),
       last_action_type: actionTypes.delete,
+      field_name: linkField,
+      previous_value: linkField && stringifyFieldValue(instance[linkField]),
       updated_by: user,
       source: metadata.source,
     }, { transaction: t });
