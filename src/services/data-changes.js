@@ -88,9 +88,15 @@ export const updateInstance = async (user, instance, values, options = {}) =>
     return newInstance;
   }, options);
 
+// The columns that tie a row to the location or service it belongs to, most specific first.
+const LINK_FIELDS = ['location_id', 'service_id', 'service_at_location_id', 'organization_id'];
+
 export const destroyInstance = (user, instance, options = {}) =>
   startTransactionOrUseExisting(async (t) => {
     const { metadata = {} } = options;
+    // Recorded like destroyAllInstances' linkField, so the change feed can still place the
+    // delete once the row, and with it the link, is gone.
+    const linkField = LINK_FIELDS.find(fieldName => instance[fieldName]);
 
     await instance.destroy({ transaction: t });
 
@@ -98,7 +104,37 @@ export const destroyInstance = (user, instance, options = {}) =>
       resource_id: instance.id,
       last_action_date: metadata.lastUpdated || new Date(),
       last_action_type: actionTypes.delete,
+      field_name: linkField,
+      previous_value: linkField && stringifyFieldValue(instance[linkField]),
       updated_by: user,
       source: metadata.source,
     }, { transaction: t });
+  }, options);
+
+// The bulk counterpart of destroyInstance, for the delete-then-recreate updates: unlike
+// Model.destroy({ where }), it leaves a delete record for every row it removes, so clearing a
+// field shows up in the audit trail. `linkField` names the column tying the rows to their parent
+// (e.g. 'service_id'); it is recorded as field_name, with the parent id as previous_value, so a
+// lookup by parent still finds the delete once the row is gone.
+export const destroyAllInstances = (user, model, where, options = {}) =>
+  startTransactionOrUseExisting(async (t) => {
+    const { metadata = {}, linkField } = options;
+
+    const instances = await model.findAll({ where, transaction: t });
+    if (!instances.length) {
+      return;
+    }
+
+    // By id rather than `where`, so a row added after the lookup is neither deleted nor missed.
+    await model.destroy({ where: { id: instances.map(({ id }) => id) }, transaction: t });
+
+    await Promise.all(instances.map(instance => instance.createMetadatum({
+      resource_id: instance.id,
+      last_action_date: metadata.lastUpdated || new Date(),
+      last_action_type: actionTypes.delete,
+      field_name: linkField,
+      previous_value: linkField && stringifyFieldValue(instance[linkField]),
+      updated_by: user,
+      source: metadata.source,
+    }, { transaction: t })));
   }, options);

@@ -60,6 +60,8 @@ All configuration options can be passed to the server using environment variable
 * `DATABASE_PASSWORD` - The password used to connect to the database
 * `DATABASE_CLIENT_MIN_MESSAGES` - Postgres `client_min_messages` level. Keep as `ignore` with RDS Proxy to avoid connection pinning from session-level `SET` commands (Default: `ignore`)
 * `DATABASE_KEEP_DEFAULT_TIMEZONE` - When `true`, sequelize will not issue `SET TIME ZONE ...` per connection, which avoids RDS Proxy session pinning (Default: `true`)
+* `CHANGE_FEED_ALLOWED_CLIENT_IDS` - Comma-separated Cognito app client ids allowed to read the [change feed](#change-feed--what-changed-and-who-changed-it). Unset allows nobody
+* `CHANGE_FEED_SETTLE_SECONDS` - How many of the newest seconds the change feed holds back for transactions still committing (Default: 120)
 
 Organization-provided location photos (`PUT`/`DELETE /locations/:locationId/photo`) need an S3
 bucket fronted by a CDN. With these unset the endpoints answer `503` and `LocationPhoto.url` is
@@ -193,6 +195,99 @@ falls back to a keyword search rather than filtering results by address
 string. Explicit query params always win over their extracted counterparts
 (`searchString`, `taxonomyId`, `zipcodes`, `gender`, `membership`, age
 params, `openAt`).
+
+### Change feed — what changed, and who changed it
+
+Two read-only endpoints let a cache that mirrors this directory stay current
+without re-reading every location. Neither is part of HSDS, and both are for
+machine clients only. They answer `401` unless an API Gateway authorizer
+verified the request's Cognito access token. That is either a Cognito user pool
+authorizer (the token's `client_id` claim) or the internal API's
+`InternalApiAuthorizer` Lambda (its `clientId` context). They answer `403`
+unless that app client is listed in `CHANGE_FEED_ALLOWED_CLIENT_IDS` (unset
+allows nobody). On the public API they live at the top level rather than under
+`/locations/{id}`, because that path is served without an authorizer there.
+
+Both take `since` (an ISO timestamp, inclusive) or `cursor` (the `nextCursor`
+of a previous page), plus an optional `limit`. Keep requesting with
+`nextCursor` while `hasMore` is true; store the last `nextCursor` and resume
+from it next time — an empty page hands back the position it was given.
+
+A cursor never moves past a row whose transaction hasn't committed yet. Both
+feeds stop short of the start of the oldest open transaction that has written
+anything, however long it runs, and also hold back the newest
+`CHANGE_FEED_SETTLE_SECONDS` (default 120) against clock skew. Open
+transactions are read from `pg_stat_activity`, which shows other roles'
+sessions only to a member of `pg_read_all_stats`. Grant that to the API's
+database role if anything else writes these tables under a different role.
+
+Both are read from the `metadata` audit log, so they see every write made
+through `src/services/data-changes.js` (which is every write the API makes)
+and nothing else: SQL run directly against the database, or a model call that
+bypasses those helpers, does not appear.
+
+`GET /location-changes` (`limit` up to 1000, default 500) lists the locations
+whose `GET /locations/:id` response may have changed, oldest first:
+
+```jsonc
+{
+  "changes": [
+    { "location_id": "…", "changed_at": "2026-11-01T14:03:12.481Z", "deleted": false }
+  ],
+  "nextCursor": "…",
+  "hasMore": false,
+  "serverTime": "…"
+}
+```
+
+Each `metadata` row written for a table the detail is built from is a change,
+attributed to the locations its row belongs to. A holiday schedule passing its
+`valid_to` counts as a change too, because the row then drops out of the
+detail. `limit` counts changes, not locations: an organization edit lists all
+of the organization's locations on one page, and within a page a location
+appears once, at its latest change, but a location changed again later appears
+again on a later page. `deleted: true` means the location no longer exists.
+Changes to the shared lookup tables (taxonomies, languages, eligibility
+parameters) are not reported per location.
+
+A row that still exists is attributed through the tables as they are now. A
+deleted one is attributed through the link column its delete recorded
+(`field_name` and `previous_value`, such as `service_id` and the service's
+id), or the one recorded when it was created; a deleted service through the
+`service_at_locations` links recorded when it was deleted.
+
+`GET /location-edits` (`limit` up to 250, default 100) pages through the
+`metadata` audit log in the order it was written, each row resolved to the
+locations (and service) it belongs to in the same way — including rows whose
+resource has since been deleted:
+
+```jsonc
+{
+  "edits": [
+    {
+      "id": "…",
+      "resource_table": "phones",
+      "resource_id": "…",
+      "field_name": "number",
+      "last_action_type": "update",
+      "last_action_date": "…",
+      "created_at": "…",
+      "updated_by": "…",
+      "source": null,
+      "previous_value": "212-555-0100",
+      "replacement_value": "212-555-0199",
+      "location_ids": ["…"],
+      "service_id": null
+    }
+  ],
+  "nextCursor": "…",
+  "hasMore": false,
+  "serverTime": "…"
+}
+```
+
+Paging is by when the row was written (`created_at`), not `last_action_date`,
+which an admin may backdate.
 
 ## Running the tests
 

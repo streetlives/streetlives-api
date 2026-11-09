@@ -160,6 +160,9 @@ const getMetadataForServiceDocuments = async (service) => {
 };
 
 export const getMetadataForService = async (service) => {
+  const latestUpdateForServiceRows = table =>
+    models.Metadata.getLatestUpdateDateForLinkedResources(table, 'service_id', service.id);
+
   const [
     serviceMetadata,
     hoursLatestUpdate,
@@ -170,30 +173,14 @@ export const getMetadataForService = async (service) => {
     eligibilityMetaDataUpdate
   ] = await Promise.all([
     models.Metadata.getLastUpdateDatesForResourceFields(service.id),
-    models.Metadata.getLatestUpdateDateForQuery({
-      resource_table: 'regular_schedules',
-      field_name: 'service_id',
-      replacement_value: service.id,
-    }),
-    models.Metadata.getLatestUpdateDateForQuery({
-      resource_table: 'holiday_schedules',
-      field_name: 'service_id',
-      replacement_value: service.id,
-    }),
-    models.Metadata.getLatestUpdateDateForQuery({
-      resource_table: 'service_languages',
-      field_name: 'service_id',
-      replacement_value: service.id,
-    }),
+    latestUpdateForServiceRows('regular_schedules'),
+    latestUpdateForServiceRows('holiday_schedules'),
+    latestUpdateForServiceRows('service_languages'),
     models.Metadata.getLatestUpdateDateForResources(service.EventRelatedInfos.map(info => info.id)),
     models.Metadata
       .getLatestUpdateDatePerResource(service
         .ServiceTaxonomySpecificAttributes.map(a => a.id)),
-    models.Metadata.getLatestUpdateDateForQuery({
-      resource_table: 'eligibility',
-      field_name: 'service_id',
-      replacement_value: service.id,
-    }),
+    latestUpdateForServiceRows('eligibility'),
   ]);
 
   const serviceWithAdditionalMetadata = [...serviceMetadata];
