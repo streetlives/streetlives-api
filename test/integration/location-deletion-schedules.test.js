@@ -10,25 +10,29 @@ import setupRoutes from '../../src/routes';
 import models from '../../src/models';
 import { processDueLocationDeletions } from '../../src/services/location-deletions';
 
-const providerApp = express();
-providerApp.use(bodyParser.json());
-providerApp.use((req, res, next) => {
-  req.apiGateway = {
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: {
-            sub: 'provider-from-other-organization',
-            'cognito:groups': ['Providers'],
-            'custom:orgs': '00000000-0000-4000-8000-000000000001',
+const appForProvider = (organizationId) => {
+  const providerApp = express();
+  providerApp.use(bodyParser.json());
+  providerApp.use((req, res, next) => {
+    req.apiGateway = {
+      event: {
+        requestContext: {
+          authorizer: {
+            claims: {
+              sub: 'provider',
+              'cognito:groups': ['Providers'],
+              'custom:orgs': organizationId,
+            },
           },
         },
       },
-    },
-  };
-  next();
-});
-setupRoutes(providerApp);
+    };
+    next();
+  });
+  setupRoutes(providerApp);
+  return providerApp;
+};
+const providerApp = appForProvider('00000000-0000-4000-8000-000000000001');
 
 describe('location deletion schedules', () => {
   const sharedServiceError =
@@ -269,7 +273,7 @@ describe('location deletion schedules', () => {
   });
 
   it('lists locations scheduled for deletion with the note and requester', async () => {
-    const { location } = await createLocationFixture();
+    const { location, organization } = await createLocationFixture();
 
     await request(app)
       .post(`/locations/${location.id}/deletion-schedule`)
@@ -290,6 +294,16 @@ describe('location deletion schedules', () => {
         name: 'Primary location',
       },
     });
+
+    const providerResponse = await request(providerApp)
+      .get('/locations/deletion-schedules')
+      .expect(200);
+    expect(providerResponse.body).toEqual([]);
+
+    const ownOrganizationResponse = await request(appForProvider(organization.id))
+      .get('/locations/deletion-schedules')
+      .expect(200);
+    expect(ownOrganizationResponse.body).toHaveLength(1);
   });
 
   it('restores a scheduled location to its original hidden state', async () => {

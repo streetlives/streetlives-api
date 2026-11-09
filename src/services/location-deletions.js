@@ -458,13 +458,16 @@ export const scheduleLocationDeletion = (locationId, note, user) =>
     return getScheduleWithLocation(locationId, transaction);
   });
 
-export const listScheduledLocationDeletions = () => models.LocationDeletionSchedule.findAll({
-  include: [{
-    model: models.Location,
-    include: [models.Organization],
-  }],
-  order: [['scheduled_for_permanent_deletion_at', 'ASC']],
-});
+export const listScheduledLocationDeletions = (organizationIds = null) =>
+  models.LocationDeletionSchedule.findAll({
+    include: [{
+      model: models.Location.unscoped(),
+      required: true,
+      ...(organizationIds ? { where: { organization_id: { [Op.in]: organizationIds } } } : {}),
+      include: [models.Organization],
+    }],
+    order: [['scheduled_for_permanent_deletion_at', 'ASC']],
+  });
 
 // Run from the scheduled Lambda invocation. Lock each schedule so a concurrent restore or
 // second invocation cannot delete a location after its schedule has been cancelled.

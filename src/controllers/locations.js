@@ -571,7 +571,9 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getDeletionSchedules, { allowUnknown: true });
 
-      const schedules = await listScheduledLocationDeletions();
+      const organizationIds = req.userIsProvider && !req.userIsAdmin
+        ? (req.userOrganizationIds || []) : null;
+      const schedules = await listScheduledLocationDeletions(organizationIds);
       res.send(schedules.map(serializeLocationDeletionSchedule));
     } catch (err) {
       next(err);
