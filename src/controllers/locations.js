@@ -116,12 +116,13 @@ const serviceAssociations = {
 
 // Location info still returns `neighborhood`, but as a top-level field derived
 // from location geometry rather than as address.neighborhood.
+// Overlapping polygons need one stable label for the scalar detail field.
 const getNeighborhoodAttributeSubquery = {
   attributes: {
     include: [
       [
         models.sequelize.literal(`(
-            SELECT neighborhood
+            SELECT MIN(neighborhood)
             FROM nyc_neighborhood_geometries
             WHERE ST_Contains(
               nyc_neighborhood_geometries.geometry,

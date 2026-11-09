@@ -8,6 +8,13 @@ module.exports = {
     // eslint-disable-next-line max-len,no-undef
     // lightly modified from: https://data.dathere.com/dataset/acbbee9e-4e37-4439-8e69-ca906f476ae3/resource/d6db2e12-fc58-4e41-bc58-5bdfb5078131/download/d085e2f8d0b54d4590b1e7d1f35594c1pediacitiesnycneighborhoods.geojson
     const geojson = JSON.parse(fs.readFileSync(`${__dirname}/map.geojson`, 'utf8'));
+    // Correct misspellings in the source GeoJSON before seeding the lookup table.
+    const neighborhoodNameCorrections = {
+      'Mrrisania': 'Morrisania',
+      'Scarrett City': 'Starrett City',
+      'Tomkinsville': 'Tompkinsville',
+      'Waterleigh': 'Westerleigh',
+    };
     // create the table
     await queryInterface.createTable('nyc_neighborhood_geometries', {
       neighborhood: {
@@ -30,7 +37,8 @@ module.exports = {
           'insert into nyc_neighborhood_geometries values ($1, $2, ST_GeomFromGeoJSON($3))',
           {
             bind: [
-              feature.properties.neighborhood,
+              neighborhoodNameCorrections[feature.properties.neighborhood] ||
+                feature.properties.neighborhood,
               feature.properties.borough,
               feature.geometry,
             ],
