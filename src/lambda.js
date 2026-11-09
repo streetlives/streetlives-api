@@ -1,5 +1,6 @@
 import awsServerlessExpress from 'aws-serverless-express';
 import app from './app';
+import { drainMetadataEvents } from './services/change-feed-events';
 
 const binaryMimeTypes = [
   'application/javascript',
@@ -22,4 +23,10 @@ const binaryMimeTypes = [
 ];
 const server = awsServerlessExpress.createServer(app, null, binaryMimeTypes);
 
-exports.handler = (event, context) => awsServerlessExpress.proxy(server, event, context);
+exports.handler = (event, context) => {
+  if (event && event.source === 'streetlives.change-feed-retry'
+    && event['detail-type'] === 'Retry metadata event delivery') {
+    return drainMetadataEvents();
+  }
+  return awsServerlessExpress.proxy(server, event, context);
+};
