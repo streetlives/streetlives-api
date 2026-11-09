@@ -2,9 +2,33 @@
  * @jest-environment node
  */
 
+import express from 'express';
+import bodyParser from 'body-parser';
 import request from 'supertest';
 import app from '../../src/app';
+import setupRoutes from '../../src/routes';
 import models from '../../src/models';
+import { processDueLocationDeletions } from '../../src/services/location-deletions';
+
+const providerApp = express();
+providerApp.use(bodyParser.json());
+providerApp.use((req, res, next) => {
+  req.apiGateway = {
+    event: {
+      requestContext: {
+        authorizer: {
+          claims: {
+            sub: 'provider-from-other-organization',
+            'cognito:groups': ['Providers'],
+            'custom:orgs': '00000000-0000-4000-8000-000000000001',
+          },
+        },
+      },
+    },
+  };
+  next();
+});
+setupRoutes(providerApp);
 
 describe('location deletion schedules', () => {
   const sharedServiceError =
@@ -18,6 +42,7 @@ describe('location deletion schedules', () => {
       models.Comment.destroy({ where: {} }),
       models.ErrorReport.destroy({ where: {} }),
       models.Phone.destroy({ where: {} }),
+      models.PaymentAccepted.destroy({ where: {} }),
       models.EventRelatedInfo.destroy({ where: {} }),
       models.AccessibilityForDisabilities.destroy({ where: {} }),
       models.RegularSchedule.destroy({ where: {} }),
@@ -122,6 +147,10 @@ describe('location deletion schedules', () => {
         type: 'voice',
         description: 'Main service line',
       }),
+      models.PaymentAccepted.create({
+        service_id: service.id,
+        payment: 'Medicaid',
+      }),
       models.RegularSchedule.create({
         service_id: service.id,
         weekday: 1,
@@ -176,7 +205,7 @@ describe('location deletion schedules', () => {
     const scheduledAt = new Date(response.body.scheduledForPermanentDeletionAt).getTime();
     expect(scheduledAt).toBeGreaterThan(Date.now() + (25 * 24 * 60 * 60 * 1000));
 
-    const dbLocation = await models.Location.findByPk(location.id);
+    const dbLocation = await models.Location.unscoped().findByPk(location.id);
     expect(dbLocation.hidden_from_search).toBe(true);
 
     expect(await models.Service.findByPk(service.id)).toBeNull();
@@ -185,6 +214,7 @@ describe('location deletion schedules', () => {
     expect(schedule.service_snapshots).toHaveLength(1);
     expect(schedule.service_snapshots[0].service.name).toBe('Case management');
     expect(schedule.service_snapshots[0].phones).toHaveLength(1);
+    expect(schedule.service_snapshots[0].paymentsAccepted).toEqual([{ payment: 'Medicaid' }]);
 
     const locationInfo = await request(app)
       .get(`/locations/${location.id}`)
@@ -228,7 +258,7 @@ describe('location deletion schedules', () => {
       .delete(`/locations/${location.id}/deletion-schedule`)
       .expect(204);
 
-    const dbLocation = await models.Location.findByPk(location.id);
+    const dbLocation = await models.Location.unscoped().findByPk(location.id);
     expect(dbLocation.hidden_from_search).toBe(false);
     expect(await models.LocationDeletionSchedule.count()).toBe(0);
 
@@ -238,6 +268,7 @@ describe('location deletion schedules', () => {
         models.DocumentsInfo,
         models.RequiredDocument,
         models.Phone,
+        models.PaymentAccepted,
         models.RegularSchedule,
         models.HolidaySchedule,
         models.ServiceArea,
@@ -250,10 +281,68 @@ describe('location deletion schedules', () => {
     expect(restoredService.DocumentsInfo.recertification_time).toBe('30 days');
     expect(restoredService.RequiredDocuments[0].document).toBe('Photo ID');
     expect(restoredService.Phones[0].number).toBe('212-555-1212');
+    expect(restoredService.PaymentAccepteds[0].payment).toBe('Medicaid');
     expect(restoredService.RegularSchedules[0].opens_at).toBe('09:00:00');
     expect(restoredService.HolidaySchedules[0].occasion).toBe('HolidayHours');
     expect(restoredService.ServiceAreas[0].postal_codes).toEqual(['10001', '10002']);
     expect(restoredService.EventRelatedInfos[0].information).toBe('Masks required');
+  });
+
+  it('keeps an already-hidden location hidden after cancellation', async () => {
+    const { location } = await createLocationFixture({ hiddenFromSearch: true });
+
+    await request(app)
+      .post(`/locations/${location.id}/deletion-schedule`)
+      .send({ note: 'Review hidden location' })
+      .expect(201);
+
+    const schedule = await models.LocationDeletionSchedule.findOne();
+    expect(schedule.was_hidden_from_search).toBe(true);
+
+    await request(app)
+      .delete(`/locations/${location.id}/deletion-schedule`)
+      .expect(204);
+
+    const restoredLocation = await models.Location.unscoped().findByPk(location.id);
+    expect(restoredLocation.hidden_from_search).toBe(true);
+  });
+
+  it('permanently removes due locations but leaves future schedules alone', async () => {
+    const { location } = await createLocationFixture();
+
+    await request(app)
+      .post(`/locations/${location.id}/deletion-schedule`)
+      .send({ note: 'Duplicate' })
+      .expect(201);
+
+    const schedule = await models.LocationDeletionSchedule.findOne();
+    const due = new Date(schedule.scheduled_for_permanent_deletion_at.getTime() + 1000);
+    expect(await processDueLocationDeletions(new Date())).toBe(0);
+    expect(await models.Location.unscoped().findByPk(location.id)).not.toBeNull();
+
+    expect(await processDueLocationDeletions(due)).toBe(1);
+    expect(await models.Location.unscoped().findByPk(location.id)).toBeNull();
+    expect(await models.LocationDeletionSchedule.count()).toBe(0);
+    expect(await processDueLocationDeletions(due)).toBe(0);
+  });
+
+  it('rejects a provider outside the location organization on both write routes', async () => {
+    const { location, service } = await createLocationFixture();
+
+    await request(providerApp)
+      .post(`/locations/${location.id}/deletion-schedule`)
+      .send({ note: 'Unauthorized' })
+      .expect(403);
+    expect(await models.Service.findByPk(service.id)).not.toBeNull();
+
+    await request(app)
+      .post(`/locations/${location.id}/deletion-schedule`)
+      .send({ note: 'Staff decision' })
+      .expect(201);
+    await request(providerApp)
+      .delete(`/locations/${location.id}/deletion-schedule`)
+      .expect(403);
+    expect(await models.LocationDeletionSchedule.count()).toBe(1);
   });
 
   it('requires a note when scheduling a deletion', async () => {
@@ -278,7 +367,7 @@ describe('location deletion schedules', () => {
 
     expect(response.body.error).toContain(sharedServiceError);
 
-    const dbLocation = await models.Location.findByPk(location.id);
+    const dbLocation = await models.Location.unscoped().findByPk(location.id);
     expect(dbLocation.hidden_from_search).toBe(false);
     expect(await models.Service.findByPk(service.id)).not.toBeNull();
     expect(await models.LocationDeletionSchedule.count()).toBe(0);

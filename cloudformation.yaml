@@ -72,6 +72,13 @@ Resources:
             RestApiId: !Ref ApiGatewayApi
             Path: /{proxy+}
             Method: ANY
+        ProcessDueLocationDeletions:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: rate(1 hour)
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            Input: '{"type":"streetlives.location-deletions.process-due"}'
 
 Outputs:
   LambdaFunctionConsoleUrl:

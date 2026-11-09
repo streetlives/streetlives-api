@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import models from '../models';
 import { createInstance, destroyInstance, updateInstance } from './data-changes';
 import { deleteService } from './services';
@@ -29,6 +30,7 @@ const snapshotServiceIncludes = [
   models.RegularSchedule,
   models.HolidaySchedule,
   models.Phone,
+  models.PaymentAccepted,
   models.EventRelatedInfo,
   models.ServiceArea,
 ];
@@ -65,16 +67,19 @@ export const serializeLocationDeletionSchedule = (scheduleInstance) => {
   };
 };
 
-const getLocationForDeletion = (locationId, transaction) => models.Location.findByPk(locationId, {
-  include: [
-    models.Organization,
-    {
-      model: models.Service,
-      include: snapshotServiceIncludes,
-    },
-  ],
-  transaction,
-});
+const getLocationForDeletion = (locationId, transaction) => models.Location.unscoped().findByPk(
+  locationId,
+  {
+    include: [
+      models.Organization,
+      {
+        model: models.Service,
+        include: snapshotServiceIncludes,
+      },
+    ],
+    transaction,
+  },
+);
 
 const getScheduleWithLocation = (locationId, transaction) =>
   models.LocationDeletionSchedule.findOne({
@@ -155,6 +160,7 @@ const createServiceSnapshot = (service, locationId) => {
       language: phone.language,
       description: phone.description,
     })),
+    paymentsAccepted: plainService.PaymentAccepteds.map(({ payment }) => ({ payment })),
     eventRelatedInfos: plainService.EventRelatedInfos.map(info => ({
       event: info.event,
       information: info.information,
@@ -303,6 +309,14 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
       { transaction },
     )));
 
+  await Promise.all((serviceSnapshot.paymentsAccepted || []).map(({ payment }) =>
+    createInstance(
+      user,
+      models.PaymentAccepted.create.bind(models.PaymentAccepted),
+      { service_id: restoredService.id, payment },
+      { transaction },
+    )));
+
   await Promise.all(serviceSnapshot.eventRelatedInfos.map(info =>
     createInstance(
       user,
@@ -386,12 +400,64 @@ export const listScheduledLocationDeletions = () => models.LocationDeletionSched
   order: [['scheduled_for_permanent_deletion_at', 'ASC']],
 });
 
+// Run from the scheduled Lambda invocation. Lock each schedule so a concurrent restore or
+// second invocation cannot delete a location after its schedule has been cancelled.
+export const processDueLocationDeletions = async (now = new Date()) => {
+  const dueSchedules = await models.LocationDeletionSchedule.findAll({
+    attributes: ['id'],
+    where: { scheduled_for_permanent_deletion_at: { [Op.lte]: now } },
+    order: [['scheduled_for_permanent_deletion_at', 'ASC']],
+    limit: 25,
+  });
+
+  let deletedCount = 0;
+  const failures = [];
+  for (const { id } of dueSchedules) {
+    try {
+      const deleted = await sequelize.transaction(async (transaction) => {
+        const schedule = await models.LocationDeletionSchedule.findByPk(id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!schedule || schedule.scheduled_for_permanent_deletion_at > now) return false;
+
+        const location = await models.Location.unscoped().findByPk(schedule.location_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!location) {
+          await schedule.destroy({ transaction });
+          return false;
+        }
+
+        await destroyInstance('scheduled-location-deletion', location, { transaction });
+        return true;
+      });
+      if (deleted) deletedCount += 1;
+    } catch (err) {
+      failures.push({ id, error: err });
+      // eslint-disable-next-line no-console
+      console.error(`Failed to process location deletion schedule ${id}`, err);
+    }
+  }
+
+  if (failures.length) {
+    throw new Error(`${failures.length} location deletion schedule(s) failed to process`);
+  }
+  return deletedCount;
+};
+
 export const restoreLocationDeletion = (locationId, user) =>
   sequelize.transaction(async (transaction) => {
-    const schedule = await getScheduleWithLocation(locationId, transaction);
-    if (!schedule) {
+    const lockedSchedule = await models.LocationDeletionSchedule.findOne({
+      where: { location_id: locationId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!lockedSchedule) {
       throw new NotFoundError('Location is not scheduled for deletion');
     }
+    const schedule = await getScheduleWithLocation(locationId, transaction);
 
     await Promise.all((schedule.service_snapshots || []).map(serviceSnapshot =>
       restoreServiceSnapshot(schedule.Location, serviceSnapshot, user, transaction)));
@@ -413,5 +479,6 @@ export default {
   scheduleLocationDeletion,
   listScheduledLocationDeletions,
   restoreLocationDeletion,
+  processDueLocationDeletions,
   serializeLocationDeletionSchedule,
 };

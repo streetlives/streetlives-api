@@ -39,8 +39,14 @@ export default (app) => {
   app.get('/location-slug-redirects/:slug', locations.getRedirectBySlug);
 
   app.get('/locations/:locationId', locations.getInfo);
-  app.post('/locations/:locationId/deletion-schedule', getUser, locations.scheduleDeletion);
-  app.delete('/locations/:locationId/deletion-schedule', getUser, locations.restoreDeletion);
+  app.post(
+    '/locations/:locationId/deletion-schedule',
+    getUser, dataEntryAuth(), locations.scheduleDeletion,
+  );
+  app.delete(
+    '/locations/:locationId/deletion-schedule',
+    getUser, dataEntryAuth(), locations.restoreDeletion,
+  );
   app.post('/locations', getUser, dataEntryAuth(['organizationId']), locations.create);
   app.patch('/locations/:locationId', getUser, dataEntryAuth(['organizationId']), locations.update);
 
