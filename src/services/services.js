@@ -2,7 +2,12 @@ import { Op } from 'sequelize';
 
 import { getDayOfWeekInteger } from '../utils/times';
 import models from '../models';
-import { updateInstance, createInstance, destroyInstance } from './data-changes';
+import {
+  updateInstance,
+  createInstance,
+  destroyInstance,
+  destroyAllInstances,
+} from './data-changes';
 
 const { sequelize } = models;
 
@@ -23,8 +28,16 @@ const serviceTaxonomySpecificAttributeNames = [
   'wearerAge',
 ];
 
+// Removes a service's rows of `model` matching `where`, recording each delete against the service.
+const destroyServiceRows = (model, where, { t, user, metadata }) =>
+  destroyAllInstances(user, model, where, { transaction: t, metadata, linkField: 'service_id' });
+
 const updateHours = async (service, hours, { t, user, metadata }) => {
-  await models.RegularSchedule.destroy({ where: { service_id: service.id }, transaction: t });
+  await destroyServiceRows(
+    models.RegularSchedule,
+    { service_id: service.id },
+    { t, user, metadata },
+  );
 
   const modelCreateFunction = models.RegularSchedule.create.bind(models.RegularSchedule);
   await Promise.all(hours.map(hoursPart => createInstance(user, modelCreateFunction, {
@@ -48,10 +61,7 @@ const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
       : { [Op.in]: occasions };
   }
 
-  await models.HolidaySchedule.destroy({
-    where: whereClause,
-    transaction: t,
-  });
+  await destroyServiceRows(models.HolidaySchedule, whereClause, { t, user, metadata });
 
   if (hours.length === 0) return;
 
@@ -81,7 +91,11 @@ const updateIrregularHours = async (service, hours, { t, user, metadata }) => {
 // TODO: This is far less efficient than "service.setLanguages(languageIds, { transaction: t })".
 // Need to track metadata without having to explicitly insert (/delete) every instance.
 const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
-  await models.ServiceLanguages.destroy({ where: { service_id: service.id }, transaction: t });
+  await destroyServiceRows(
+    models.ServiceLanguages,
+    { service_id: service.id },
+    { t, user, metadata },
+  );
 
   const modelCreateFunction = models.ServiceLanguages.create.bind(models.ServiceLanguages);
   await Promise.all(languageIds.map(languageId => createInstance(user, modelCreateFunction, {
@@ -93,7 +107,7 @@ const updateLanguages = async (service, languageIds, { t, user, metadata }) => {
 const updateServiceAreas = async (service, area, { t, user, metadata }) => {
   const { postal_codes: postalCodes } = area;
 
-  await models.ServiceArea.destroy({ where: { service_id: service.id }, transaction: t });
+  await destroyServiceRows(models.ServiceArea, { service_id: service.id }, { t, user, metadata });
 
   await createInstance(user, models.ServiceArea.create.bind(models.ServiceArea), {
     service_id: service.id,
@@ -193,7 +207,11 @@ const updateDocuments = async (service, documents, { t, user, metadata }) => {
   } = documents;
 
   if (proofs != null) {
-    await models.RequiredDocument.destroy({ where: { service_id: service.id }, transaction: t });
+    await destroyServiceRows(
+      models.RequiredDocument,
+      { service_id: service.id },
+      { t, user, metadata },
+    );
     await Promise.all(proofs.map(proof =>
       createInstance(user, models.RequiredDocument.create.bind(models.RequiredDocument), {
         service_id: service.id,
@@ -216,14 +234,30 @@ const updateDocuments = async (service, documents, { t, user, metadata }) => {
   );
 };
 
-const updateEventRelatedInfo = async (service, eventRelatedInfo, { t, user, metadata }) => {
-  await models.EventRelatedInfo.destroy({
-    where: {
-      service_id: service.id,
-      event: eventRelatedInfo.event,
-    },
+// What service.setTaxonomies([taxonomy]) did, but through the audited helpers.
+const updateTaxonomy = async (service, taxonomy, { t, user, metadata }) => {
+  await destroyServiceRows(models.ServiceTaxonomy, {
+    service_id: service.id,
+    taxonomy_id: { [Op.ne]: taxonomy.id },
+  }, { t, user, metadata });
+
+  const existing = await models.ServiceTaxonomy.findOne({
+    where: { service_id: service.id, taxonomy_id: taxonomy.id },
     transaction: t,
   });
+  if (existing) return;
+
+  await createInstance(user, models.ServiceTaxonomy.create.bind(models.ServiceTaxonomy), {
+    service_id: service.id,
+    taxonomy_id: taxonomy.id,
+  }, { transaction: t, metadata });
+};
+
+const updateEventRelatedInfo = async (service, eventRelatedInfo, { t, user, metadata }) => {
+  await destroyServiceRows(models.EventRelatedInfo, {
+    service_id: service.id,
+    event: eventRelatedInfo.event,
+  }, { t, user, metadata });
 
   if (eventRelatedInfo.information) {
     const modelCreateFunction = models.EventRelatedInfo.create.bind(models.EventRelatedInfo);
@@ -257,7 +291,7 @@ export const updateService = (
   const updatePromises = [];
 
   if (taxonomy) {
-    updatePromises.push(service.setTaxonomies([taxonomy], { transaction: t }));
+    updatePromises.push(updateTaxonomy(service, taxonomy, { t, user, metadata }));
   }
 
   if (hours) {
@@ -388,7 +422,7 @@ export const deleteService = (serviceId, user) => sequelize.transaction(async (t
   if (!service) return;
 
   const destroyAssociation = model =>
-    model.destroy({ where: { service_id: serviceId }, transaction: t });
+    destroyServiceRows(model, { service_id: serviceId }, { t, user });
   await Promise.all([
     destroyAssociation(models.DocumentsInfo),
     destroyAssociation(models.Eligibility),
@@ -398,6 +432,12 @@ export const deleteService = (serviceId, user) => sequelize.transaction(async (t
     destroyAssociation(models.ServiceArea),
     destroyAssociation(models.Phone),
     destroyAssociation(models.ServiceTaxonomySpecificAttribute),
+    // These would otherwise go by cascade (languages, taxonomy) or be orphaned by SET NULL
+    // (event info, payments), either way without a metadata row.
+    destroyAssociation(models.ServiceLanguages),
+    destroyAssociation(models.ServiceTaxonomy),
+    destroyAssociation(models.EventRelatedInfo),
+    destroyAssociation(models.PaymentAccepted),
   ]);
 
   const recordLocationOfDeletedService = async () => {
