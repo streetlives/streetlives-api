@@ -221,6 +221,11 @@ transactions are read from `pg_stat_activity`, which shows other roles'
 sessions only to a member of `pg_read_all_stats`. Grant that to the API's
 database role if anything else writes these tables under a different role.
 
+Both are read from the `metadata` audit log, so they see every write made
+through `src/services/data-changes.js` (which is every write the API makes)
+and nothing else: SQL run directly against the database, or a model call that
+bypasses those helpers, does not appear.
+
 `GET /location-changes` (`limit` up to 1000, default 500) lists the locations
 whose `GET /locations/:id` response may have changed, oldest first:
 
@@ -235,18 +240,26 @@ whose `GET /locations/:id` response may have changed, oldest first:
 }
 ```
 
-A location appears once, at its latest change. It is recorded by triggers on
-every table its detail is built from, so it includes bulk deletes and SQL run
-outside the API, which write no metadata; a holiday schedule passing its
+Each `metadata` row written for a table the detail is built from is a change,
+attributed to the locations its row belongs to. A holiday schedule passing its
 `valid_to` counts as a change too, because the row then drops out of the
-detail. `deleted: true` means the location no longer exists. Changes to the
-shared lookup tables (taxonomies, languages, eligibility parameters) are not
-reported per location.
+detail. `limit` counts changes, not locations: an organization edit lists all
+of the organization's locations on one page, and within a page a location
+appears once, at its latest change, but a location changed again later appears
+again on a later page. `deleted: true` means the location no longer exists.
+Changes to the shared lookup tables (taxonomies, languages, eligibility
+parameters) are not reported per location.
+
+A row that still exists is attributed through the tables as they are now. A
+deleted one is attributed through the link column its delete recorded
+(`field_name` and `previous_value`, such as `service_id` and the service's
+id), or the one recorded when it was created; a deleted service through the
+`service_at_locations` links recorded when it was deleted.
 
 `GET /location-edits` (`limit` up to 250, default 100) pages through the
 `metadata` audit log in the order it was written, each row resolved to the
-locations (and service) it belongs to — including rows whose resource has since
-been deleted:
+locations (and service) it belongs to in the same way — including rows whose
+resource has since been deleted:
 
 ```jsonc
 {

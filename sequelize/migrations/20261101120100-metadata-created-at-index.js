@@ -1,6 +1,7 @@
-// GET /location-edits pages through metadata by (created_at, id). Without this index every
-// page is a full scan and sort of the audit log. CONCURRENTLY keeps writes flowing while it
-// builds, which is also why this migration is separate: it can't run inside a transaction.
+// GET /location-changes and /location-edits page through metadata by (created_at, id). Without
+// this index every page is a full scan and sort of the audit log. CONCURRENTLY keeps writes
+// flowing while it builds, which is also why this migration is separate: it can't run inside a
+// transaction.
 const INDEX = 'metadata_created_at_id';
 
 export default {

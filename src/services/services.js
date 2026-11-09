@@ -434,23 +434,24 @@ export const deleteService = (serviceId, user) => sequelize.transaction(async (t
     destroyAssociation(models.ServiceTaxonomySpecificAttribute),
   ]);
 
-  const recordLocationOfDeletedService = async () => {
-    const location = service.Locations[0];
-    await models.Metadata.create({
-      resource_table: models.ServiceAtLocation.tableName,
-      resource_id: location.ServiceAtLocation.id,
-      last_action_date: new Date(),
-      last_action_type: models.Metadata.actionTypes.delete,
-      field_name: 'location_id',
-      previous_value: location.id,
-      updated_by: user,
-      source: `${service.id} service deletion`,
-    }, { transaction: t });
-  };
+  // The service_at_locations rows go with the service by cascade, so record both ends of each
+  // link: that is what ties the deleted service to its locations in the change feed.
+  const recordLocationsOfDeletedService = () => Promise.all(service.Locations
+    .flatMap(location => [['location_id', location.id], ['service_id', service.id]]
+      .map(([fieldName, value]) => models.Metadata.create({
+        resource_table: models.ServiceAtLocation.tableName,
+        resource_id: location.ServiceAtLocation.id,
+        last_action_date: new Date(),
+        last_action_type: models.Metadata.actionTypes.delete,
+        field_name: fieldName,
+        previous_value: value,
+        updated_by: user,
+        source: `${service.id} service deletion`,
+      }, { transaction: t }))));
 
   await Promise.all([
     destroyInstance(user, service, { transaction: t }),
-    recordLocationOfDeletedService(),
+    recordLocationsOfDeletedService(),
   ]);
 });
 

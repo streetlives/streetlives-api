@@ -9,10 +9,6 @@ const SCHEMA_SETUP_TIMEOUT_MS = 120000;
 require('./env');
 
 const models = require('../src/models');
-const changeFeedMigration =
-  require('../sequelize/migrations/20261101120000-location-change-feed');
-const metadataIndexMigration =
-  require('../sequelize/migrations/20261101120100-metadata-created-at-index');
 
 async function execScript(script) {
   // run the migrations
@@ -91,10 +87,6 @@ beforeAll(async () => {
     ' --name 20240510171256-fix-location-slug-update-trigger');
   // eslint-disable-next-line no-implied-eval
   await execScript('npx sequelize-cli db:migrate --name 20240607172205-age-filter');
-  // The change-feed triggers run inside every write, so the whole suite runs with them on.
-  const queryInterface = models.sequelize.getQueryInterface();
-  await changeFeedMigration.default.up(queryInterface, models.Sequelize);
-  await metadataIndexMigration.default.up(queryInterface, models.Sequelize);
 }, SCHEMA_SETUP_TIMEOUT_MS);
 afterAll(async () => {
   await models.sequelize.close();

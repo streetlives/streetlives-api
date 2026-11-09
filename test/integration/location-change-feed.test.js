@@ -7,10 +7,13 @@ import bodyParser from 'body-parser';
 import request from 'supertest';
 import setupRoutes from '../../src/routes';
 import models from '../../src/models';
-import { createInstance, updateInstance, destroyInstance } from '../../src/services/data-changes';
+import {
+  createInstance,
+  updateInstance,
+  destroyInstance,
+  destroyAllInstances,
+} from '../../src/services/data-changes';
 import { deleteService } from '../../src/services/services';
-
-const migration = require('../../sequelize/migrations/20261101120000-location-change-feed');
 
 const CLIENT_ID = 'cache-mirror-client';
 const EDITOR = 'editor@example.org';
@@ -100,7 +103,8 @@ describe('location change feed', () => {
       const [location] = organization.Locations;
       const since = await dbNow();
 
-      await location.PhysicalAddresses[0].update({ address_1: '9 West 30th Street' });
+      const [address] = location.PhysicalAddresses;
+      await updateInstance(EDITOR, address, { address_1: '9 West 30th Street' });
 
       expect(await changedIds(since)).toEqual([location.id]);
     });
@@ -111,14 +115,14 @@ describe('location change feed', () => {
       const service = await createServiceAt(location, 'Pantry');
       const since = await dbNow();
 
-      await models.RegularSchedule.create({
+      await createInstance(EDITOR, models.RegularSchedule.create.bind(models.RegularSchedule), {
         service_id: service.id, weekday: 2, opens_at: '09:00', closes_at: '17:00',
       });
 
       expect(await changedIds(since)).toEqual([location.id]);
     });
 
-    it('records bulk deletes, which write no metadata', async () => {
+    it('records bulk deletes', async () => {
       const organization = await createOrganization('Bulk Delete Org');
       const [location] = organization.Locations;
       const service = await createServiceAt(location, 'Clinic');
@@ -127,7 +131,9 @@ describe('location change feed', () => {
       });
       const since = await dbNow();
 
-      await models.RegularSchedule.destroy({ where: { service_id: service.id } });
+      await destroyAllInstances(EDITOR, models.RegularSchedule, { service_id: service.id }, {
+        linkField: 'service_id',
+      });
 
       expect(await changedIds(since)).toEqual([location.id]);
     });
@@ -136,7 +142,7 @@ describe('location change feed', () => {
       const organization = await createOrganization('Renamed Org', 3);
       const since = await dbNow();
 
-      await organization.update({ name: 'Renamed Org, Inc.' });
+      await updateInstance(EDITOR, organization, { name: 'Renamed Org, Inc.' });
 
       expect((await changedIds(since)).sort())
         .toEqual(organization.Locations.map(({ id }) => id).sort());
@@ -157,9 +163,11 @@ describe('location change feed', () => {
       const [location] = organization.Locations;
       const since = await dbNow();
 
-      await models.PhysicalAddress.destroy({ where: { location_id: location.id } });
-      await models.Phone.destroy({ where: { location_id: location.id } });
-      await location.destroy();
+      const where = { location_id: location.id };
+      const byLocation = { linkField: 'location_id' };
+      await destroyAllInstances(EDITOR, models.PhysicalAddress, where, byLocation);
+      await destroyAllInstances(EDITOR, models.Phone, where, byLocation);
+      await destroyInstance(EDITOR, location);
 
       const changes = await readAll('/location-changes', since);
       expect(changes).toEqual([expect.objectContaining({
@@ -175,12 +183,9 @@ describe('location change feed', () => {
         ((now() AT TIME ZONE 'America/New_York')::date - 1)::text AS yesterday,
         ((now() AT TIME ZONE 'America/New_York')::date::timestamp
           AT TIME ZONE 'America/New_York') AS "expiredAt"`);
+      // Written outside the API, so expiring is the only change the feed can see.
       await models.HolidaySchedule.create({
         location_id: location.id, closed: true, valid_from: yesterday, valid_to: yesterday,
-      });
-      // As though the row had been written long before the client's last read.
-      await sequelize.query('DELETE FROM location_changes WHERE location_id = $1', {
-        bind: [location.id],
       });
       const anHour = 60 * 60 * 1000;
       const since = new Date(new Date(expiredAt).getTime() - anHour).toISOString();
@@ -194,10 +199,12 @@ describe('location change feed', () => {
       }]);
     });
 
-    it('pages without losing or repeating locations changed in one statement', async () => {
+    it('pages without losing or repeating changes', async () => {
       const organization = await createOrganization('Paged Org', 5);
       const since = await dbNow();
-      await organization.update({ name: 'Paged Org, renamed' });
+      for (const location of organization.Locations) {
+        await updateInstance(EDITOR, location, { name: `${location.name}, renamed` });
+      }
 
       const changes = await readAll('/location-changes', since, 2);
 
@@ -205,10 +212,31 @@ describe('location change feed', () => {
         .toEqual(organization.Locations.map(({ id }) => id).sort());
     });
 
+    it('lists every location of a change, even past the page limit', async () => {
+      const organization = await createOrganization('Fanned Org', 3);
+      const since = await dbNow();
+      await updateInstance(EDITOR, organization, { name: 'Fanned Org, renamed' });
+
+      const { body } = await request(feedApp)
+        .get('/location-changes').query({ since, limit: 1 }).expect(200);
+
+      expect(body.changes.map(({ location_id: id }) => id).sort())
+        .toEqual(organization.Locations.map(({ id }) => id).sort());
+    });
+
+    it('ignores writes that leave no metadata', async () => {
+      const organization = await createOrganization('Silent Org');
+      const since = await dbNow();
+
+      await organization.update({ name: 'Silent Org, renamed directly' });
+
+      expect(await changedIds(since)).toEqual([]);
+    });
+
     it('holds back changes that may not have committed everywhere yet', async () => {
       const organization = await createOrganization('Settling Org');
       const since = await dbNow();
-      await organization.update({ name: 'Settling Org, renamed' });
+      await updateInstance(EDITOR, organization, { name: 'Settling Org, renamed' });
       process.env.CHANGE_FEED_SETTLE_SECONDS = '3600';
 
       try {
@@ -246,7 +274,7 @@ describe('location change feed', () => {
       expect(empty).toEqual(expect.objectContaining({ changes: [], hasMore: false }));
 
       const organization = await createOrganization('Resumed Org');
-      await organization.update({ name: 'Resumed Org, renamed' });
+      await updateInstance(EDITOR, organization, { name: 'Resumed Org, renamed' });
       const { body } = await request(feedApp)
         .get('/location-changes').query({ cursor: empty.nextCursor }).expect(200);
 
@@ -280,6 +308,7 @@ describe('location change feed', () => {
     });
 
     it('attributes a deleted row to the location it belonged to', async () => {
+      // Created without metadata, as older rows were, so only the delete records the link.
       const organization = await createOrganization('Phone Org');
       const [location] = organization.Locations;
       const [phone] = location.Phones;
@@ -399,21 +428,6 @@ describe('location change feed', () => {
       await request(feedApp).get('/location-edits').query({ cursor: impossibleDate }).expect(400);
       await request(feedApp).get('/location-edits')
         .query({ since: new Date().toISOString(), limit: 251 }).expect(400);
-    });
-  });
-
-  describe('migration', () => {
-    it('stops recording when rolled back and resumes when reapplied', async () => {
-      const organization = await createOrganization('Rollback Org');
-      const queryInterface = sequelize.getQueryInterface();
-
-      await migration.default.down(queryInterface, Sequelize);
-      await organization.update({ name: 'Renamed while rolled back' });
-      await migration.default.up(queryInterface, Sequelize);
-      const since = await dbNow();
-      await organization.update({ name: 'Renamed after reapplying' });
-
-      expect(await changedIds(since)).toEqual([organization.Locations[0].id]);
     });
   });
 });
