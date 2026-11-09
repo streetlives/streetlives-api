@@ -153,6 +153,7 @@ describe('location deletion schedules', () => {
       }),
       models.Phone.create({
         service_id: service.id,
+        location_id: location.id,
         service_at_location_id: serviceAtLocation.id,
         number: '212-555-1212',
         type: 'voice',
@@ -164,6 +165,7 @@ describe('location deletion schedules', () => {
       }),
       models.RegularSchedule.create({
         service_id: service.id,
+        location_id: location.id,
         service_at_location_id: serviceAtLocation.id,
         weekday: 1,
         opens_at: '09:00',
@@ -171,6 +173,7 @@ describe('location deletion schedules', () => {
       }),
       models.HolidaySchedule.create({
         service_id: service.id,
+        location_id: location.id,
         service_at_location_id: serviceAtLocation.id,
         closed: false,
         opens_at: '10:00',
@@ -194,6 +197,7 @@ describe('location deletion schedules', () => {
       }),
       models.EventRelatedInfo.create({
         service_id: service.id,
+        location_id: location.id,
         event: 'COVID19',
         information: 'Masks required',
       }),
@@ -363,8 +367,12 @@ describe('location deletion schedules', () => {
       where: { service_id: restoredService.id, location_id: location.id },
     });
     expect(restoredService.Phones[0].service_at_location_id).toBe(restoredLink.id);
+    expect(restoredService.Phones[0].location_id).toBe(location.id);
     expect(restoredService.RegularSchedules[0].service_at_location_id).toBe(restoredLink.id);
+    expect(restoredService.RegularSchedules[0].location_id).toBe(location.id);
     expect(restoredService.HolidaySchedules[0].service_at_location_id).toBe(restoredLink.id);
+    expect(restoredService.HolidaySchedules[0].location_id).toBe(location.id);
+    expect(restoredService.EventRelatedInfos[0].location_id).toBe(location.id);
     const linkedRows = await Promise.all([
       models.Phone.findByPk(locationSpecific.phoneId),
       models.RegularSchedule.findByPk(locationSpecific.regularScheduleId),

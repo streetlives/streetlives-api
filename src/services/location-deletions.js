@@ -167,6 +167,7 @@ const createServiceSnapshot = async (service, locationId, transaction) => {
       weekday: schedule.weekday,
       opens_at: schedule.opens_at,
       closes_at: schedule.closes_at,
+      location_id: schedule.location_id,
       atLocation: schedule.service_at_location_id === linkId,
     })),
     holidaySchedules: plainService.HolidaySchedules.map(schedule => ({
@@ -186,6 +187,7 @@ const createServiceSnapshot = async (service, locationId, transaction) => {
       valid_to: schedule.valid_to,
       description: schedule.description,
       exdates: schedule.exdates,
+      location_id: schedule.location_id,
       atLocation: schedule.service_at_location_id === linkId,
     })),
     phones: plainService.Phones.map(phone => ({
@@ -194,12 +196,14 @@ const createServiceSnapshot = async (service, locationId, transaction) => {
       type: phone.type,
       language: phone.language,
       description: phone.description,
+      location_id: phone.location_id,
       atLocation: phone.service_at_location_id === linkId,
     })),
     paymentsAccepted: plainService.PaymentAccepteds.map(({ payment }) => ({ payment })),
     eventRelatedInfos: plainService.EventRelatedInfos.map(info => ({
       event: info.event,
       information: info.information,
+      location_id: info.location_id,
     })),
     serviceAreas: plainService.ServiceAreas.map(area => ({
       postal_codes: area.postal_codes,
@@ -309,6 +313,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         weekday: schedule.weekday,
         opens_at: schedule.opens_at,
         closes_at: schedule.closes_at,
+        location_id: schedule.location_id,
         service_at_location_id: schedule.atLocation ? restoredLink.id : null,
       },
       { transaction },
@@ -336,6 +341,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         valid_to: schedule.valid_to,
         description: schedule.description,
         exdates: schedule.exdates,
+        location_id: schedule.location_id,
         service_at_location_id: schedule.atLocation ? restoredLink.id : null,
       },
       { transaction },
@@ -352,6 +358,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         type: phone.type,
         language: phone.language,
         description: phone.description,
+        location_id: phone.location_id,
         service_at_location_id: phone.atLocation ? restoredLink.id : null,
       },
       { transaction },
@@ -373,6 +380,7 @@ const restoreServiceSnapshot = async (location, serviceSnapshot, user, transacti
         service_id: restoredService.id,
         event: info.event,
         information: info.information,
+        location_id: info.location_id,
       },
       { transaction },
     )));
