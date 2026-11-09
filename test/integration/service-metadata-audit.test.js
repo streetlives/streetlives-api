@@ -187,11 +187,34 @@ describe('service metadata audit', () => {
       service_id: doomed.id, weekday: 1, opens_at: '09:00', closes_at: '17:00',
     });
     const phone = await models.Phone.create({ service_id: doomed.id, number: '212.555.0100' });
+    // Cascade-deleted, or left behind with service_id nulled, unless deleted explicitly.
+    const language = await models.ServiceLanguages.create({
+      service_id: doomed.id, language_id: spanish.id,
+    });
+    const category = await models.ServiceTaxonomy.create({
+      service_id: doomed.id, taxonomy_id: otherTaxonomy.id,
+    });
+    const eventInfo = await models.EventRelatedInfo.create({
+      service_id: doomed.id, event: 'COVID19', information: 'Closed',
+    });
+    const payment = await models.PaymentAccepted.create({ service_id: doomed.id, payment: 'cash' });
 
     await request(app).delete(`/services/${doomed.id}`).expect(204);
 
     expect(await deletesFor('regular_schedules', [schedule.id])).toHaveLength(1);
     expect(await deletesFor('phones', [phone.id])).toHaveLength(1);
     expect(await deletesFor('services', [doomed.id])).toHaveLength(1);
+    const unlinkedDeletes = [
+      ['service_languages', language],
+      ['service_taxonomy', category],
+      ['event_related_info', eventInfo],
+      ['payments_accepted', payment],
+    ];
+    for (const [table, row] of unlinkedDeletes) {
+      const [deleted] = await deletesFor(table, [row.id]);
+      expect(deleted).toEqual(expect.objectContaining({ previous_value: doomed.id }));
+    }
+    expect(await models.EventRelatedInfo.count({ where: { id: eventInfo.id } })).toBe(0);
+    expect(await models.PaymentAccepted.count({ where: { id: payment.id } })).toBe(0);
   });
 });

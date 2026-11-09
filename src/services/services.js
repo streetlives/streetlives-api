@@ -432,6 +432,12 @@ export const deleteService = (serviceId, user) => sequelize.transaction(async (t
     destroyAssociation(models.ServiceArea),
     destroyAssociation(models.Phone),
     destroyAssociation(models.ServiceTaxonomySpecificAttribute),
+    // These would otherwise go by cascade (languages, taxonomy) or be orphaned by SET NULL
+    // (event info, payments), either way without a metadata row.
+    destroyAssociation(models.ServiceLanguages),
+    destroyAssociation(models.ServiceTaxonomy),
+    destroyAssociation(models.EventRelatedInfo),
+    destroyAssociation(models.PaymentAccepted),
   ]);
 
   const recordLocationOfDeletedService = async () => {
