@@ -372,6 +372,10 @@ describe('location deletion schedules', () => {
       models.Comment.findByPk(locationSpecific.commentId),
     ]);
     linkedRows.forEach(row => expect(row.service_at_location_id).toBe(restoredLink.id));
+    linkedRows.slice(0, 3).forEach(row => expect(row.service_id).toBeNull());
+    expect(await models.Phone.count({ where: { number: '212-555-3434' } })).toBe(1);
+    expect(await models.RegularSchedule.count({ where: { weekday: 2 } })).toBe(1);
+    expect(await models.HolidaySchedule.count({ where: { occasion: 'Christmas' } })).toBe(1);
   });
 
   it('keeps an already-hidden location hidden after cancellation', async () => {
