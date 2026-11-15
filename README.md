@@ -179,6 +179,25 @@ Provenance is not on the object. Who uploaded a photo and when comes from the
 `metadata` table like every other change in this schema, and surfaces on the
 location's `metadata.location` array as a `photo` entry.
 
+The photo is stored already cropped to the frame the sites show. So that the
+crop can be adjusted after saving, `PUT /locations/:locationId/photo` also
+takes the original it was cropped from and the cropper's framing of it:
+
+```jsonc
+{
+  "contentType": "image/webp", "data": "<base64>", "filename": "front-door.webp",
+  "source": { "contentType": "image/webp", "data": "<base64>" },  // optional
+  "crop": { "x": -12.5, "y": 30, "zoom": 1.4 }                    // kept only with a source
+}
+```
+
+Both images count against `LOCATION_PHOTO_MAX_BYTES` together. A `PUT` without
+`source` clears any original kept for the previous photo. Neither is published:
+the original can show what the crop deliberately left out. Data entry reads
+them from `GET /locations/:locationId/photo/source`, which needs the same
+authorization as the `PUT` and answers `{ "source_url": …, "crop": … }`, or
+nulls for a photo saved without an original.
+
 The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
 text to the OpenAI API. Populating the param is itself the consent signal:
 clients must only send it after showing the user the third-party-AI notice —

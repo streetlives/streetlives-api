@@ -37,12 +37,22 @@ const CLOSURE_EVENT_TYPE = 'CLOSURE';
 // representation of where the photo lives; the bucket, key and digest are how
 // this deployment happens to store it, and data modelled on HSDS should not
 // carry one vendor's object layout.
-const PRIVATE_PHOTO_FIELDS = ['location_id', 's3_bucket', 's3_key', 'sha256'];
+//
+// The original a photo was cropped from, and the framing of that crop, only
+// exist so a specialist can adjust the crop later. They are served to data
+// entry by GET /locations/:locationId/photo/source and never published.
+const PRIVATE_PHOTO_FIELDS = [
+  'location_id', 's3_bucket', 's3_key', 'sha256',
+  'source_s3_key', 'source_content_type', 'source_width', 'source_height', 'crop', 'source_url',
+];
 
 // s3_key cannot be dropped at query level: the virtual `url` declares it as a
 // dependency, so sequelize adds it back to the SELECT and it reappears in the
-// serialized output. Excluding the rest still keeps the join's SQL small.
-const PHOTO_QUERY_EXCLUDE = PRIVATE_PHOTO_FIELDS.filter(field => field !== 's3_key');
+// serialized output. source_s3_key is the same for `source_url`, which as a
+// virtual is not in the SELECT to begin with. Excluding the rest still keeps
+// the join's SQL small.
+const PHOTO_QUERY_KEEP = ['s3_key', 'source_s3_key', 'source_url'];
+const PHOTO_QUERY_EXCLUDE = PRIVATE_PHOTO_FIELDS.filter(field => !PHOTO_QUERY_KEEP.includes(field));
 
 /* eslint-disable no-param-reassign */
 // Mutates in place deliberately: the caller holds the nested object inside an
@@ -56,6 +66,44 @@ const scrubPhoto = (photo) => {
 /* eslint-enable no-param-reassign */
 
 const toPublicPhoto = instance => scrubPhoto(instance.get({ plain: true }));
+
+// Decodes an uploaded image and checks it really is the image it claims to be.
+// `label` names it in errors, since one request can carry two. The size cap is
+// checked by the caller, which knows the whole request's total.
+const decodePhoto = (data, contentType, label) => {
+  if (!isBase64(data)) {
+    throw new ValidationError(`${label} data must be base64 with padding`);
+  }
+
+  const body = Buffer.from(data, 'base64');
+  if (body.length === 0) {
+    throw new ValidationError(`Uploaded ${label.toLowerCase()} is empty`);
+  }
+
+  // The declared type is not trusted: these bytes end up on a public CDN
+  // under whatever type we record, so an `image/png` label on an SVG or an
+  // HTML document would become stored XSS on the CDN domain.
+  const detected = detectImage(body);
+  if (!detected) {
+    throw new ValidationError('Unrecognized image data');
+  }
+  if (detected.contentType !== contentType) {
+    const message = `Declared content type ${contentType} does not match `
+      + `the uploaded ${label.toLowerCase()} (${detected.contentType})`;
+    throw new ValidationError(message);
+  }
+
+  return { body, ...detected, sha256: photoStorage.hashPhoto(body) };
+};
+
+// Writes a decoded image to storage and resolves to its key.
+const storePhoto = async (locationId, { body, contentType, sha256 }) => {
+  const key = photoStorage.buildObjectKey({ locationId, sha256, contentType });
+  await photoStorage.putPhoto({
+    key, body, contentType, locationId, sha256,
+  });
+  return key;
+};
 
 const isLocationClosed = (eventRelatedInfos) => {
   if (!eventRelatedInfos) {
@@ -870,7 +918,7 @@ export default {
 
       const { locationId } = req.params;
       const {
-        contentType, data, filename, metadata,
+        contentType, data, filename, metadata, source, crop,
       } = req.body;
 
       const location = await models.Location.findByPk(locationId);
@@ -878,59 +926,52 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      if (!isBase64(data)) {
-        throw new ValidationError('Image data must be base64 with padding');
-      }
+      const photo = decodePhoto(data, contentType, 'Image');
+      const original = source ? decodePhoto(source.data, source.contentType, 'Source image') : null;
 
-      const body = Buffer.from(data, 'base64');
-      if (body.length === 0) {
-        throw new ValidationError('Uploaded image is empty');
-      }
       // Read per request, not captured at import, so an operator lowering
-      // LOCATION_PHOTO_MAX_BYTES actually takes effect.
+      // LOCATION_PHOTO_MAX_BYTES actually takes effect. The photo and its
+      // original share one budget because they share one request, and the
+      // request is what Lambda's payload limit bounds.
       const { maxBytes } = config.locationPhotos;
-      if (body.length > maxBytes) {
-        throw new ValidationError(`Uploaded image exceeds the ${maxBytes} byte limit`);
-      }
-
-      // The declared type is not trusted: these bytes end up on a public CDN
-      // under whatever type we record, so an `image/png` label on an SVG or an
-      // HTML document would become stored XSS on the CDN domain.
-      const detected = detectImage(body);
-      if (!detected) {
-        throw new ValidationError('Unrecognized image data');
-      }
-      if (detected.contentType !== contentType) {
-        const message = `Declared content type ${contentType} does not match `
-          + `the uploaded image (${detected.contentType})`;
+      const total = photo.body.length + (original ? original.body.length : 0);
+      if (total > maxBytes) {
+        const message = original
+          ? `Uploaded image and source image together exceed the ${maxBytes} byte limit`
+          : `Uploaded image exceeds the ${maxBytes} byte limit`;
         throw new ValidationError(message);
       }
-
-      const sha256 = photoStorage.hashPhoto(body);
-      const key = photoStorage.buildObjectKey({
-        locationId, sha256, contentType: detected.contentType,
-      });
 
       // S3 first, then the database. A rollback after a successful write leaks
       // an unreferenced object, which is invisible and cheap; the other order
       // can commit a row pointing at an object that does not exist, which is a
       // broken image on the public site.
-      await photoStorage.putPhoto({
-        key, body, contentType: detected.contentType, locationId, sha256,
-      });
+      const key = await storePhoto(locationId, photo);
+      // An old photo being re-cropped has itself as its original, so this can
+      // be the key of the photo it replaces. Storing it again is harmless: the
+      // key is a digest, so the bytes are the same.
+      const sourceKey = original ? await storePhoto(locationId, original) : null;
 
       const values = {
         s3_bucket: photoStorage.getBucketName(),
         s3_key: key,
-        content_type: detected.contentType,
-        byte_size: body.length,
-        width: detected.width,
-        height: detected.height,
+        content_type: photo.contentType,
+        byte_size: photo.body.length,
+        width: photo.width,
+        height: photo.height,
         original_filename: filename || null,
-        sha256,
+        sha256: photo.sha256,
+        // A photo uploaded without its original has nothing to re-crop from,
+        // so an original and framing left over from the previous one would
+        // describe some other image.
+        source_s3_key: sourceKey,
+        source_content_type: original ? original.contentType : null,
+        source_width: original ? original.width : null,
+        source_height: original ? original.height : null,
+        crop: original && crop ? crop : null,
       };
 
-      let previousKey = null;
+      let previousKeys = [];
       let saved = null;
 
       await models.sequelize.transaction(async (t) => {
@@ -948,7 +989,7 @@ export default {
         });
 
         if (existing) {
-          previousKey = existing.s3_key;
+          previousKeys = [existing.s3_key, existing.source_s3_key];
           saved = await updateInstance(req.user, existing, values, { metadata, transaction: t });
         } else {
           saved = await createInstance(
@@ -960,18 +1001,48 @@ export default {
         }
       });
 
-      // Only after the commit, and only when the object actually changed:
-      // re-uploading identical bytes produces the same key, and deleting it
-      // here would remove the object the surviving row points at.
-      if (previousKey && previousKey !== key) {
-        await photoStorage.deletePhoto(previousKey);
-      }
+      // Only after the commit, and only objects the new row no longer points
+      // at: re-uploading identical bytes produces the same key, and a re-crop
+      // can keep the original or turn the old photo into the new original.
+      // Deleting any of those would leave the surviving row pointing at nothing.
+      const keptKeys = [key, sourceKey];
+      await Promise.all([...new Set(previousKeys)]
+        .filter(previous => previous && !keptKeys.includes(previous))
+        .map(previous => photoStorage.deletePhoto(previous)));
 
-      const photo = saved || await models.LocationPhoto.findOne({
+      const result = saved || await models.LocationPhoto.findOne({
         where: { location_id: locationId },
       });
 
-      return res.status(200).send(toPublicPhoto(photo));
+      return res.status(200).send(toPublicPhoto(result));
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  // What the cropper needs to reopen a saved photo where it was left. Behind
+  // data-entry auth rather than on the public payload: the original can show
+  // whatever the crop deliberately left out. A photo saved before originals
+  // were kept answers nulls, and the client re-crops the photo itself.
+  getPhotoSource: async (req, res, next) => {
+    try {
+      await Joi.validate(req, locationSchemas.getPhotoSource, { allowUnknown: true });
+
+      const { locationId } = req.params;
+
+      const location = await models.Location.findByPk(locationId);
+      if (!location) {
+        throw new NotFoundError('Location not found');
+      }
+
+      const photo = await models.LocationPhoto.findOne({
+        where: { location_id: locationId },
+      });
+
+      return res.status(200).send({
+        source_url: (photo && photo.source_url) || null,
+        crop: (photo && photo.source_url && photo.crop) || null,
+      });
     } catch (err) {
       return next(err);
     }
@@ -992,7 +1063,7 @@ export default {
         throw new NotFoundError('Location not found');
       }
 
-      let removedKey = null;
+      let removedKeys = [];
 
       await models.sequelize.transaction(async (t) => {
         await models.Location.findByPk(locationId, {
@@ -1009,13 +1080,11 @@ export default {
         // `streetview: null` behaves on a location with no override.
         if (!existing) return;
 
-        removedKey = existing.s3_key;
+        removedKeys = [...new Set([existing.s3_key, existing.source_s3_key])].filter(Boolean);
         await destroyInstance(req.user, existing, { transaction: t });
       });
 
-      if (removedKey) {
-        await photoStorage.deletePhoto(removedKey);
-      }
+      await Promise.all(removedKeys.map(removed => photoStorage.deletePhoto(removed)));
 
       return res.sendStatus(204);
     } catch (err) {

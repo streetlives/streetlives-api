@@ -197,6 +197,193 @@ describe('location photo', () => {
     });
   });
 
+  describe('keeping the original', () => {
+    const CROP = { x: -12.5, y: 30, zoom: 1.4 };
+    const withSource = (overrides = {}) => pngBody({
+      source: { contentType: 'image/jpeg', data: JPEG.toString('base64') },
+      crop: CROP,
+      ...overrides,
+    });
+    const getSource = () => request(app).get(`/locations/${location.id}/photo/source`);
+
+    it('stores the original beside the photo and records its framing', async () => {
+      const res = await putPhoto(withSource());
+
+      expect(res.statusCode).toBe(200);
+      const row = await getPhotoRow();
+      expect(row.source_content_type).toBe('image/jpeg');
+      expect(row.source_width).toBe(640);
+      expect(row.source_height).toBe(480);
+      expect(row.crop).toEqual(CROP);
+      const keyPattern = new RegExp(`^location-photos/${location.id}/[0-9a-f]{64}\\.jpg$`);
+      expect(row.source_s3_key).toMatch(keyPattern);
+      expect(memoryStorage.getPhoto(row.source_s3_key).body.equals(JPEG)).toBe(true);
+    });
+
+    it('serves the original and framing to data entry', async () => {
+      await putPhoto(withSource());
+      const row = await getPhotoRow();
+
+      const res = await getSource();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        source_url: `https://photos.test.invalid/${row.source_s3_key}`,
+        crop: CROP,
+      });
+    });
+
+    it('answers nulls for a photo saved without an original', async () => {
+      await putPhoto(pngBody());
+
+      const res = await getSource();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ source_url: null, crop: null });
+    });
+
+    it('answers nulls when there is no photo', async () => {
+      const res = await getSource();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ source_url: null, crop: null });
+    });
+
+    it('returns 404 for the source of an unknown location', async () => {
+      const res = await request(app)
+        .get('/locations/11111111-1111-1111-1111-111111111111/photo/source');
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('ignores a framing sent without an original', async () => {
+      await putPhoto(pngBody({ crop: CROP }));
+
+      expect((await getPhotoRow()).crop).toBeNull();
+    });
+
+    it('keeps the original when only the crop changes', async () => {
+      await putPhoto(withSource());
+      const first = await getPhotoRow();
+
+      await putPhoto(withSource({
+        data: OTHER_PNG.toString('base64'),
+        crop: { x: 0, y: 0, zoom: 2 },
+      }));
+      const second = await getPhotoRow();
+
+      expect(second.source_s3_key).toBe(first.source_s3_key);
+      expect(second.crop).toEqual({ x: 0, y: 0, zoom: 2 });
+      expect(memoryStorage.getPhoto(first.s3_key)).toBeNull();
+      expect(memoryStorage.getPhoto(second.source_s3_key)).not.toBeNull();
+    });
+
+    it('keeps the old photo when a re-crop makes it the original', async () => {
+      // A photo saved before originals were kept is re-cropped from itself, so
+      // the photo being replaced is the new row's original and must survive.
+      await putPhoto(pngBody());
+      const first = await getPhotoRow();
+
+      await putPhoto({
+        contentType: 'image/png',
+        data: OTHER_PNG.toString('base64'),
+        source: { contentType: 'image/png', data: PNG.toString('base64') },
+        crop: CROP,
+      });
+      const second = await getPhotoRow();
+
+      expect(second.source_s3_key).toBe(first.s3_key);
+      expect(memoryStorage.getPhoto(first.s3_key)).not.toBeNull();
+      expect(memoryStorage.getPhoto(second.s3_key)).not.toBeNull();
+    });
+
+    it('drops the old original when a photo is replaced without one', async () => {
+      await putPhoto(withSource());
+      const first = await getPhotoRow();
+
+      await putPhoto({ contentType: 'image/png', data: OTHER_PNG.toString('base64') });
+      const second = await getPhotoRow();
+
+      expect(second.source_s3_key).toBeNull();
+      expect(second.crop).toBeNull();
+      expect(memoryStorage.getPhoto(first.source_s3_key)).toBeNull();
+    });
+
+    it('deletes the original with the photo', async () => {
+      await putPhoto(withSource());
+      const row = await getPhotoRow();
+
+      await deletePhoto();
+
+      expect(memoryStorage.getPhoto(row.source_s3_key)).toBeNull();
+      expect(memoryStorage.listKeys()).toHaveLength(0);
+    });
+
+    it.each([
+      ['the upload response', async () => (await putPhoto(withSource())).body],
+      ['the detail endpoint', async () => {
+        await putPhoto(withSource());
+        return (await request(app).get(`/locations/${location.id}`)).body.LocationPhoto;
+      }],
+    ])('keeps the original out of %s', async (_label, fetchPhoto) => {
+      const photo = await fetchPhoto();
+
+      expect(photo.url).toEqual(expect.stringContaining('https://photos.test.invalid/'));
+      [
+        'source_s3_key', 'source_url', 'source_content_type', 'source_width', 'source_height',
+        'crop',
+      ].forEach((field) => { expect(photo).not.toHaveProperty(field); });
+    });
+
+    it.each([
+      ['a source that is not an image', withSource({
+        source: {
+          contentType: 'image/png',
+          data: Buffer.from('%PDF-1.7\nxxxx').toString('base64'),
+        },
+      })],
+      ['a source type that does not match its bytes', withSource({
+        source: { contentType: 'image/png', data: JPEG.toString('base64') },
+      })],
+      ['a source with no data', withSource({ source: { contentType: 'image/png' } })],
+      ['a framing with no zoom', withSource({ crop: { x: 0, y: 0 } })],
+      ['a framing with a zero zoom', withSource({ crop: { x: 0, y: 0, zoom: 0 } })],
+      ['a framing with extra keys', withSource({ crop: { ...CROP, rotate: 90 } })],
+    ])('rejects %s without writing anything', async (_label, body) => {
+      const res = await putPhoto(body);
+
+      expect(res.statusCode).toBe(400);
+      expect(await getPhotoRow()).toBeNull();
+      expect(memoryStorage.listKeys()).toHaveLength(0);
+    });
+
+    describe('with a cap that fits the photo but not the photo and original together', () => {
+      let saved;
+
+      beforeEach(() => {
+        saved = process.env.LOCATION_PHOTO_MAX_BYTES;
+        process.env.LOCATION_PHOTO_MAX_BYTES = String((PNG.length + JPEG.length) - 1);
+      });
+
+      afterEach(() => {
+        if (saved === undefined) delete process.env.LOCATION_PHOTO_MAX_BYTES;
+        else process.env.LOCATION_PHOTO_MAX_BYTES = saved;
+      });
+
+      it('rejects the pair', async () => {
+        const res = await putPhoto(withSource());
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body.error).toContain('together');
+        expect(memoryStorage.listKeys()).toHaveLength(0);
+      });
+
+      it('still accepts the photo alone', async () => {
+        expect((await putPhoto(pngBody())).statusCode).toBe(200);
+      });
+    });
+  });
+
   describe('isolation from the streetview override', () => {
     // The whole reason the photo is its own table: streetlives-web collapses an
     // all-null streetview payload to null to delete the override row, so a

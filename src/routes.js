@@ -48,6 +48,8 @@ export default (app) => {
   // the locationId param, and no body field of these routes names an organization.
   app.put(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.setPhoto);
   app.delete(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.deletePhoto);
+  // A read, but of something only data entry may see: the uncropped original.
+  app.get(`${LOCATION_PHOTO_ROUTE}/source`, getUser, dataEntryAuth(), locations.getPhotoSource);
   app.patch('/phones/:phoneId', getUser, dataEntryAuth(), locations.updatePhone);
   app.delete('/phones/:phoneId', getUser, dataEntryAuth(), locations.deletePhone);
 
