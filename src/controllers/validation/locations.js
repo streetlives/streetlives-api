@@ -210,6 +210,18 @@ export default {
       // multi-megabyte value. src/utils/base64.js does that check in linear
       // time, and the controller applies it. See the comment there.
       data: Joi.string().required().max(PHOTO_MAX_BASE64_CHARS),
+      // The original `data` was cropped from, kept so the crop can be adjusted
+      // later, and the cropper's framing of it. The decoded size of both images
+      // together is held to the cap in the controller.
+      source: Joi.object().keys({
+        contentType: Joi.string().valid(PHOTO_CONTENT_TYPES).required(),
+        data: Joi.string().required().max(PHOTO_MAX_BASE64_CHARS),
+      }),
+      crop: Joi.object().keys({
+        x: Joi.number().required(),
+        y: Joi.number().required(),
+        zoom: Joi.number().positive().required(),
+      }).unknown(false),
       filename: Joi.string().max(255),
       metadata: updateMetadataSchema,
       // No .unknown(false) here, unlike the streetview sub-schema. That flag
@@ -217,6 +229,12 @@ export default {
       // controller ignores, creating an all-null row. This schema has required
       // fields and no such hazard, and dataEntryAuth() takes no body fields, so
       // no unknown key can contribute authorization scope either.
+    }).required(),
+  },
+
+  getPhotoSource: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
     }).required(),
   },
 

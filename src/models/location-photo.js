@@ -51,6 +51,32 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    // The original the photo was cropped from, so the crop can be adjusted
+    // after saving. Null on photos saved before it was kept. See
+    // sequelize/migrations/20261115120000-add-source-to-location-photos.js.
+    source_s3_key: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    source_content_type: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    source_width: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: { min: 1 },
+    },
+    source_height: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: { min: 1 },
+    },
+    // The cropper's framing of the original, { x, y, zoom }.
+    crop: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     // Composed at read time from the key plus the environment's CDN domain.
     // Storing the URL instead would break the moment a prod snapshot is
     // restored into Stage - every row would point at the prod CDN - and would
@@ -66,6 +92,15 @@ module.exports = (sequelize, DataTypes) => {
         const { buildPublicUrl } = require('../services/photo-storage');
         /* eslint-enable global-require */
         return buildPublicUrl(this.get('s3_key'));
+      },
+    },
+    source_url: {
+      type: new DataTypes.VIRTUAL(DataTypes.STRING, ['source_s3_key']),
+      get() {
+        /* eslint-disable global-require */
+        const { buildPublicUrl } = require('../services/photo-storage');
+        /* eslint-enable global-require */
+        return buildPublicUrl(this.get('source_s3_key'));
       },
     },
   }, {
