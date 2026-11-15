@@ -49,7 +49,15 @@ export default (app) => {
   app.put(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.setPhoto);
   app.delete(LOCATION_PHOTO_ROUTE, getUser, dataEntryAuth(), locations.deletePhoto);
   // A read, but of something only data entry may see: the uncropped original.
-  app.get(`${LOCATION_PHOTO_ROUTE}/source`, getUser, dataEntryAuth(), locations.getPhotoSource);
+  // Not under /locations/: the public API serves GET /locations/{locationId+}
+  // without an authorizer, and that greedy path would swallow this one, so no
+  // Cognito claims would ever reach getUser. This falls through to /{proxy+}.
+  app.get(
+    '/location-photos/:locationId/source',
+    getUser,
+    dataEntryAuth(),
+    locations.getPhotoSource,
+  );
   app.patch('/phones/:phoneId', getUser, dataEntryAuth(), locations.updatePhone);
   app.delete('/phones/:phoneId', getUser, dataEntryAuth(), locations.deletePhone);
 

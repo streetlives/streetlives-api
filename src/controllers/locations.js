@@ -40,7 +40,7 @@ const CLOSURE_EVENT_TYPE = 'CLOSURE';
 //
 // The original a photo was cropped from, and the framing of that crop, only
 // exist so a specialist can adjust the crop later. They are served to data
-// entry by GET /locations/:locationId/photo/source and never published.
+// entry by GET /location-photos/:locationId/source and never published.
 const PRIVATE_PHOTO_FIELDS = [
   'location_id', 's3_bucket', 's3_key', 'sha256',
   'source_s3_key', 'source_content_type', 'source_width', 'source_height', 'crop', 'source_url',

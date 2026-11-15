@@ -194,9 +194,11 @@ takes the original it was cropped from and the cropper's framing of it:
 Both images count against `LOCATION_PHOTO_MAX_BYTES` together. A `PUT` without
 `source` clears any original kept for the previous photo. Neither is published:
 the original can show what the crop deliberately left out. Data entry reads
-them from `GET /locations/:locationId/photo/source`, which needs the same
+them from `GET /location-photos/:locationId/source`, which needs the same
 authorization as the `PUT` and answers `{ "source_url": …, "crop": … }`, or
-nulls for a photo saved without an original.
+nulls for a photo saved without an original. It is deliberately not under
+`/locations/`: on the public API, `GET /locations/{locationId+}` is served
+without an authorizer and would match it first.
 
 The `naturalLanguageQuery` param on `GET /locations` sends (redacted) user
 text to the OpenAI API. Populating the param is itself the consent signal:

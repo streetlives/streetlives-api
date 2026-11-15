@@ -204,7 +204,7 @@ describe('location photo', () => {
       crop: CROP,
       ...overrides,
     });
-    const getSource = () => request(app).get(`/locations/${location.id}/photo/source`);
+    const getSource = () => request(app).get(`/location-photos/${location.id}/source`);
 
     it('stores the original beside the photo and records its framing', async () => {
       const res = await putPhoto(withSource());
@@ -251,7 +251,7 @@ describe('location photo', () => {
 
     it('returns 404 for the source of an unknown location', async () => {
       const res = await request(app)
-        .get('/locations/11111111-1111-1111-1111-111111111111/photo/source');
+        .get('/location-photos/11111111-1111-1111-1111-111111111111/source');
 
       expect(res.statusCode).toBe(404);
     });
