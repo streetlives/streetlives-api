@@ -41,14 +41,14 @@ jobs:
 
     steps:
       - name: Checkout requested ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       # From this workflow's revision, not the one being deployed: the rollback
       # path targets refs that predate these actions entirely.
       - name: Checkout the pipeline helpers from this workflow's revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: .deploy-helpers
@@ -81,7 +81,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -148,7 +148,7 @@ jobs:
 
     steps:
       - name: Checkout the revision being deployed
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
 
@@ -159,7 +159,7 @@ jobs:
       # Only the connection machinery is borrowed - the migrations that get
       # applied are still the deployed ref's own.
       - name: Checkout the migration helper from this workflow's revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: .deploy-helpers
@@ -181,7 +181,7 @@ jobs:
           on-stale: fail
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -193,7 +193,7 @@ jobs:
         run: npm ci
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -227,7 +227,7 @@ jobs:
 
     steps:
       - name: Checkout the revision being deployed
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
 
@@ -236,14 +236,14 @@ jobs:
       # waited for the update, so a rollback run through it would smoke-test the
       # code it was replacing and delete an object it did not create.
       - name: Checkout the deployment helper from this workflow's revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: .deploy-helpers
           sparse-checkout: .github/actions
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -255,7 +255,7 @@ jobs:
         run: npm ci
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
