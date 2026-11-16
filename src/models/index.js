@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import Sequelize, { DataTypes, Op } from 'sequelize';
 import config from '../config';
+import { installMetadataEventDelivery } from '../services/change-feed-events';
 
 const basename = path.basename(__filename);
 const db = {};
@@ -68,5 +69,13 @@ Object.keys(db).forEach((modelName) => {
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
+
+installMetadataEventDelivery({
+  sequelize,
+  Metadata: db.Metadata,
+  queryTypes: Sequelize.QueryTypes,
+  // Resolve only committed IDs, using the same attribution as the replay feed.
+  readEdits: ids => require('../services/location-changes').getLocationEventEdits(ids),
+});
 
 module.exports = db;

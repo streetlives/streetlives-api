@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Retry failed metadata notifications for one explicit API environment.
+Parameters:
+  FunctionArn:
+    Type: String
+    Description: Exact Stage or production API Lambda ARN. Deploy separate stacks.
+    AllowedPattern: 'arn:aws:lambda:[a-z0-9-]+:[0-9]{12}:function:[A-Za-z0-9_-]+'
+  Enabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+Conditions:
+  DeliveryEnabled: !Equals [!Ref Enabled, 'true']
+Resources:
+  RetryRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Bounded retries of undelivered metadata events; no catalogue scan.
+      ScheduleExpression: rate(1 minute)
+      State: !If [DeliveryEnabled, ENABLED, DISABLED]
+      Targets:
+        - Id: MetadataEventRetry
+          Arn: !Ref FunctionArn
+          Input: '{"source":"streetlives.change-feed-retry","detail-type":"Retry metadata event delivery"}'
+  RetryPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FunctionArn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RetryRule.Arn
+      SourceAccount: !Ref AWS::AccountId

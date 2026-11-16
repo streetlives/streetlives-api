@@ -148,6 +148,7 @@ const RESOLVER_CTES = () => {
       FROM gone g
       JOIN metadata h ON h.resource_id = g.resource_id AND h.resource_table = g.resource_table
       WHERE h.field_name IN (${sqlList(LINK_FIELDS)})
+        AND g.resource_table <> 'locations'
       ORDER BY g.edit_id, h.field_name, h.created_at DESC, h.id DESC
     ) recorded
     WHERE recorded.value ~* ${UUID_SQL}
@@ -242,17 +243,17 @@ const LOCATION_CHANGES_SQL = () => `
   ORDER BY e.at, e.edit_id
 `;
 
-const LOCATION_EDITS_SQL = () => `
+const LOCATION_EDITS_SQL = (exactIds = false) => `
   WITH horizon AS (
     SELECT ${settledBeforeSql()} AS settled_before
   ),
   edits AS (
     SELECT m.id AS edit_id, m.resource_table, m.resource_id
     FROM metadata m
-    WHERE (m.created_at, m.id) > ($1::timestamptz, $2::uuid)
-      AND m.created_at < (SELECT settled_before FROM horizon)
+    WHERE ${exactIds ? 'm.id = ANY($1::uuid[])' : `(m.created_at, m.id) >
+      ($1::timestamptz, $2::uuid) AND m.created_at < (SELECT settled_before FROM horizon)`}
     ORDER BY m.created_at, m.id
-    LIMIT $3
+    LIMIT ${exactIds ? LOCATION_EDITS_MAX_LIMIT : '$3'}
   ),
   ${RESOLVER_CTES()},
   attributed AS (
@@ -336,5 +337,11 @@ export const getLocationEdits = async ({ since, cursor, limit } = {}) => {
   }, { idKey: 'id' });
   return { edits: rows, ...rest };
 };
+
+// No settling delay is needed for IDs handed off by their own committed transaction.
+// This does not advance or replace the timestamp replay cursor.
+export const getLocationEventEdits = ids => models.sequelize.query(LOCATION_EDITS_SQL(true), {
+  bind: [ids], type: models.Sequelize.QueryTypes.SELECT,
+});
 
 export default { getLocationChanges, getLocationEdits };
