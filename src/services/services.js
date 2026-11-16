@@ -317,15 +317,14 @@ export const updateService = (
   if (area) {
     updatePromises.push(updateServiceAreas(service, area, { t, user, metadata }));
   }
- 
-  if(whoDoesItServe) {
 
+  if (whoDoesItServe) {
     updatePromises.push(updateEligibilityParam(
       service,
       'age',
       {
         eligible_values: whoDoesItServe,
-        description: ''
+        description: '',
       },
       { t, user, metadata },
     ));
@@ -417,49 +416,63 @@ export const createService = async (
   return createdService;
 });
 
-export const deleteService = (serviceId, user) => sequelize.transaction(async (t) => {
-  const service = await models.Service.findByPk(serviceId, { include: [models.Location] });
-  if (!service) return;
+const startTransactionOrUseExisting = (options, callback) => {
+  if (options && options.transaction) {
+    return callback(options.transaction);
+  }
 
-  const destroyAssociation = model =>
-    destroyServiceRows(model, { service_id: serviceId }, { t, user });
-  await Promise.all([
-    destroyAssociation(models.DocumentsInfo),
-    destroyAssociation(models.Eligibility),
-    destroyAssociation(models.HolidaySchedule),
-    destroyAssociation(models.RegularSchedule),
-    destroyAssociation(models.RequiredDocument),
-    destroyAssociation(models.ServiceArea),
-    destroyAssociation(models.Phone),
-    destroyAssociation(models.ServiceTaxonomySpecificAttribute),
-    // These would otherwise go by cascade (languages, taxonomy) or be orphaned by SET NULL
-    // (event info, payments), either way without a metadata row.
-    destroyAssociation(models.ServiceLanguages),
-    destroyAssociation(models.ServiceTaxonomy),
-    destroyAssociation(models.EventRelatedInfo),
-    destroyAssociation(models.PaymentAccepted),
-  ]);
+  return sequelize.transaction(callback);
+};
 
-  // The service_at_locations rows go with the service by cascade, so record both ends of each
-  // link: that is what ties the deleted service to its locations in the change feed.
-  const recordLocationsOfDeletedService = () => Promise.all(service.Locations
-    .flatMap(location => [['location_id', location.id], ['service_id', service.id]]
-      .map(([fieldName, value]) => models.Metadata.create({
-        resource_table: models.ServiceAtLocation.tableName,
-        resource_id: location.ServiceAtLocation.id,
-        last_action_date: new Date(),
-        last_action_type: models.Metadata.actionTypes.delete,
-        field_name: fieldName,
-        previous_value: value,
-        updated_by: user,
-        source: `${service.id} service deletion`,
-      }, { transaction: t }))));
+export const deleteService = (serviceId, user, options = {}) => startTransactionOrUseExisting(
+  options,
+  async (t) => {
+    const service = await models.Service.findByPk(serviceId, {
+      include: [models.Location],
+      transaction: t,
+    });
+    if (!service) return;
 
-  await Promise.all([
-    destroyInstance(user, service, { transaction: t }),
-    recordLocationsOfDeletedService(),
-  ]);
-});
+    const destroyAssociation = model =>
+      destroyServiceRows(model, { service_id: serviceId }, { t, user });
+    await Promise.all([
+      destroyAssociation(models.DocumentsInfo),
+      destroyAssociation(models.Eligibility),
+      destroyAssociation(models.HolidaySchedule),
+      destroyAssociation(models.RegularSchedule),
+      destroyAssociation(models.RequiredDocument),
+      destroyAssociation(models.ServiceArea),
+      destroyAssociation(models.Phone),
+      destroyAssociation(models.ServiceTaxonomySpecificAttribute),
+      // These would otherwise go by cascade (languages, taxonomy) or be orphaned by SET NULL
+      // (event info, payments), either way without a metadata row.
+      destroyAssociation(models.ServiceLanguages),
+      destroyAssociation(models.ServiceTaxonomy),
+      destroyAssociation(models.EventRelatedInfo),
+      destroyAssociation(models.PaymentAccepted),
+    ]);
+
+    // The service_at_locations rows go with the service by cascade, so record both ends of each
+    // link: that is what ties the deleted service to its locations in the change feed.
+    const recordLocationsOfDeletedService = () => Promise.all(service.Locations
+      .flatMap(location => [['location_id', location.id], ['service_id', service.id]]
+        .map(([fieldName, value]) => models.Metadata.create({
+          resource_table: models.ServiceAtLocation.tableName,
+          resource_id: location.ServiceAtLocation.id,
+          last_action_date: new Date(),
+          last_action_type: models.Metadata.actionTypes.delete,
+          field_name: fieldName,
+          previous_value: value,
+          updated_by: user,
+          source: `${service.id} service deletion`,
+        }, { transaction: t }))));
+
+    await Promise.all([
+      destroyInstance(user, service, { transaction: t }),
+      recordLocationsOfDeletedService(),
+    ]);
+  },
+);
 
 export default {
   updateService,

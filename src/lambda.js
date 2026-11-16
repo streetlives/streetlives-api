@@ -1,5 +1,6 @@
 import awsServerlessExpress from 'aws-serverless-express';
 import app from './app';
+import { processDueLocationDeletions } from './services/location-deletions';
 
 const binaryMimeTypes = [
   'application/javascript',
@@ -22,4 +23,9 @@ const binaryMimeTypes = [
 ];
 const server = awsServerlessExpress.createServer(app, null, binaryMimeTypes);
 
-exports.handler = (event, context) => awsServerlessExpress.proxy(server, event, context);
+exports.handler = (event, context) => {
+  if (event && event.type === 'streetlives.location-deletions.process-due') {
+    return processDueLocationDeletions();
+  }
+  return awsServerlessExpress.proxy(server, event, context);
+};

@@ -117,6 +117,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     Location.hasMany(models.Comment, { foreignKey: 'location_id' });
     Location.hasMany(models.ErrorReport, { foreignKey: 'location_id' });
     Location.hasMany(models.LocationSlugRedirect, { foreignKey: 'location_id' });
+    Location.hasOne(models.LocationDeletionSchedule, { foreignKey: 'location_id' });
     Location.hasOne(models.Streetview, { foreignKey: 'location_id' });
     Location.hasOne(models.LocationPhoto, { foreignKey: 'location_id' });
 

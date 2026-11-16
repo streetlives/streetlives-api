@@ -82,6 +82,10 @@ export default {
     }).required(),
   },
 
+  getDeletionSchedules: {
+    query: Joi.object().keys({}).required(),
+  },
+
   create: {
     body: Joi.object().keys({
       name: Joi.string(),
@@ -141,6 +145,21 @@ export default {
       }).min(1).allow(null)
         .unknown(false),
       metadata: updateMetadataSchema,
+    }).required(),
+  },
+
+  scheduleDeletion: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
+    }).required(),
+    body: Joi.object().keys({
+      note: Joi.string().trim().min(1).required(),
+    }).required(),
+  },
+
+  restoreDeletion: {
+    params: Joi.object().keys({
+      locationId: Joi.string().guid().required(),
     }).required(),
   },
 
