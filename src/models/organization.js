@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes, Op) => {
     email: DataTypes.TEXT,
     url: DataTypes.TEXT,
     partners: DataTypes.BOOLEAN,
+    script_updated_at: DataTypes.DATE,
     name_vector: DataTypes.TSVECTOR,
   }, {
     underscored: true,

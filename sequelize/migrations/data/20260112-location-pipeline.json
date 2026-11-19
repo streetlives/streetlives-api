@@ -1,0 +1,2471 @@
+{
+  "locationUpdates": [
+    {
+      "location_id": "cc39d150-e48d-47b2-a316-614847e9c8ad",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.82747732877753,-73.9372797869932,3a,75y,21.5h,0.0t/data=!3m6!1e1!3m4!1sBb9BcUILZOiQUZVo816spg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b41ce36f-81ca-4710-aec7-da6df8222251",
+      "payload": {
+        "address": {
+          "street": "269 W 35th St, 7th, 10th, And 11th Floors",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10001",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "efa2eeba-bffe-4e51-afc4-8674ca5b2e1d",
+      "payload": {
+        "address": {
+          "street": "286 E 156th St",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10451",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c5f91b44-3cca-4967-a1b5-7ba8fd7257b2",
+      "payload": {
+        "address": {
+          "street": "2705 Campus Rd",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11210",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7e29ee8c-d108-4a98-93e5-57c1b691f09d",
+      "payload": {
+        "address": {
+          "street": "84 Fulton St",
+          "city": "Staten Island",
+          "state": "NY",
+          "postalCode": "10304",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d018addb-7646-4a09-baa2-b25d6e200e46",
+      "payload": {
+        "address": {
+          "street": "520 Kingston Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11225",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "78f0a935-65a2-497c-b453-90aa4393995e",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.54233951416911,-74.1630463939364,3a,75y,27.2h,0.0t/data=!3m6!1e1!3m4!1sQI9wAz-c4YTBJ7qLR5TfVg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f6f5e757-5ae8-4d44-bdae-0e485cef8f42",
+      "payload": {
+        "address": {
+          "street": "132 W 14th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10011",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "df08a661-6755-44c1-970b-347aa863e3f7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68149014771427,-73.94978606227806,3a,75y,77.6h,0.0t/data=!3m6!1e1!3m4!1sfPTqvFx_grZt0O11i3ap7g!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "94eeaff4-980c-47d8-beb7-e92f42c94f49",
+      "payload": {
+        "address": {
+          "street": "211 W 141st St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10030",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d0b49a8c-c83d-46ec-b327-6b6ffeb05f81",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67767188875111,-74.00982094054373,3a,75y,297.8h,0.0t/data=!3m6!1e1!3m4!1sXKej5Nk5fQIONnUbWfMxwg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f058c994-1f55-479e-89fe-83c014d6b19f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6836140989868,-73.78262246005217,3a,75y,77.7h,0.0t/data=!3m6!1e1!3m4!1soB6fmM_0P1JMf4R9dvFeng!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ac70737b-3d9d-4aff-9aba-710d6289da12",
+      "payload": {
+        "address": {
+          "street": "165-13 Jamaica Ave",
+          "city": "Jamaica",
+          "state": "NY",
+          "postalCode": "11405",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.70570397288682,-73.79429869769324,3a,75y,324.6h,0.0t/data=!3m6!1e1!3m4!1s5J7QWRrBLBg9G-DQzT6HNQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "59ff1726-6260-454a-890c-37feda37524d",
+      "payload": {
+        "address": {
+          "street": "163 W 125th St Rm 713",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.80949118877072,-73.9474712492171,3a,75y,205.7h,0.0t/data=!3m6!1e1!3m4!1sZW3KMwzZpFxEEZMjQ6xxFA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "31dc0ce1-6a9b-401c-97f3-f8fcdddbe37e",
+      "payload": {
+        "address": {
+          "street": "1413 Ave T",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11229",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "77cb17e2-fcc4-4c48-9fef-065889de92c1",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.66120672168475,-73.94777700452403,3a,75y,268.6h,0.0t/data=!3m6!1e1!3m4!1smxk26CXln17wgEMxuN5e_Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "163fef5a-49e0-48af-b87e-ac4ab674b41a",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68069172955219,-73.90658081104104,3a,75y,62.1h,0.0t/data=!3m6!1e1!3m4!1s58PZNwxfULBGujLMmHV6Zg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "41df1a49-0a2b-4f5c-a116-3a0e469654a6",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.66444880618874,-73.89620562244616,3a,75y,187.2h,0.0t/data=!3m6!1e1!3m4!1saLolPS_iz_uxamJpDCdA0Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "52c79659-583d-4ac1-a3fc-bb2cf3e39fc7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68976361780616,-73.84290212894673,3a,75y,170.6h,0.0t/data=!3m6!1e1!3m4!1sI6Vyz1dWHd6g63FW4AlJ5Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "069b9234-5500-4a47-9b27-1dffea1b6e14",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.65816622919849,-73.90136089969072,3a,75y,161.9h,0.0t/data=!3m6!1e1!3m4!1sEbRnoEepk4wCOaXXtCR4Eg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8f144d32-5e3d-4d1f-be99-e5b30554e77c",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8518920837503,-73.89298861885206,3a,75y,302.5h,0.0t/data=!3m6!1e1!3m4!1so6VGvrRFqiZPaz3Igtgyxw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f4e16917-807a-40fd-bf6e-9e2d9878febb",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.62680613971796,-74.13320611126832,3a,75y,155.5h,0.0t/data=!3m6!1e1!3m4!1sMeYI7ZuSFA0Xkd0RVXbHkw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ede9e25d-be49-469b-8950-e6a1fd1519bd",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6851712630924,-73.79303908145765,3a,75y,63.8h,0.0t/data=!3m6!1e1!3m4!1sgZ89D5CU6I1IT0HNaetogw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "552ae6a9-617c-40ae-a2ed-bc9f695d8a22",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71909453854055,-73.98701693192925,3a,75y,288.8h,0.0t/data=!3m6!1e1!3m4!1s7xsX-C1dgBg6CG5zlHEiZQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1aaf0e27-60fb-42f1-8aa6-963f95519b42",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67879199138404,-73.92009257825924,3a,75y,199.4h,0.0t/data=!3m6!1e1!3m4!1sGBLptmy7dnXr6Uaakcun-g!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "95888a0f-c6a4-4294-ad9c-90852c330a3a",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.64349486216111,-74.07731779886322,3a,75y,237.6h,0.0t/data=!3m6!1e1!3m4!1s1TqU5kH7U8P6y0bXeJqx0w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d180afac-500c-4c64-80d2-dcb7f3fd205a",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74970544455047,-73.86161005797905,3a,75y,57.1h,0.0t/data=!3m6!1e1!3m4!1sMUornLFwE4rAq9KBUwB-yQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bfc34b94-e898-410e-a36f-4802851b6b2d",
+      "payload": {
+        "address": {
+          "street": "25-29 Ave D",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10009",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "03922916-eb5e-44ce-83ac-d340ba81cca8",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67261343320939,-73.95189456387482,3a,75y,358.7h,0.0t/data=!3m6!1e1!3m4!1sBqUW-7gCxfRtp1UJ1hXiPw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2f0e7060-391b-4086-b987-23ff7c113fbb",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.82731930314888,-73.92101293245828,3a,75y,191.3h,0.0t/data=!3m6!1e1!3m4!1s9NiSwHi1wC6acep3lqxXtw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5384d77b-ef75-448c-a494-4b6b1774f9f0",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.89963294263041,-73.85793943080266,3a,75y,284.9h,0.0t/data=!3m6!1e1!3m4!1sMM8tf4NhjkvrqemI2XXrGw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "60a5bc8f-18c9-410e-accc-e6eef585b79b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80939785124021,-73.9472662162002,3a,75y,217.4h,0.0t/data=!3m6!1e1!3m4!1szQ2wnstt2g0ncXn1HW-AAg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "699fc06c-eff8-4fab-926b-4e995daa2be7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83128742920474,-73.90238989337495,3a,75y,306.3h,0.0t/data=!3m6!1e1!3m4!1seu9B5BlAZwxAD-TUgZOhow!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c34693bc-2371-4be0-b992-91b230c64158",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.86077324463523,-73.89781957690273,3a,75y,112.6h,0.0t/data=!3m6!1e1!3m4!1s31J7R6gyQv4yHUdtuws-uw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "96d8e0fe-48fc-40e6-88e2-c7881291215c",
+      "payload": {
+        "address": {
+          "street": "605 Fdr Dr",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10002",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ee60d902-bb2a-4345-9d0d-eb3aedb44f15",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.84712273558106,-73.89941153836368,3a,75y,98.6h,0.0t/data=!3m6!1e1!3m4!1sVkOyZNz4CC_TgbdBypH3xA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ab91a5b5-5994-4188-8a8d-269cfcd34044",
+      "payload": {
+        "address": {
+          "street": "1323 Louis Ni\ufffd\ufffd Blvd",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10459",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e37b048e-85b1-4a37-b9d6-5c0fef5d37ad",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75415552078519,-73.94228391885201,3a,75y,113.6h,0.0t/data=!3m6!1e1!3m4!1s9dk5lML3Womy65-9A1qhUA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5733f8d7-dd68-4a5a-bbe6-1a1fd7f9a761",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8743644892707,-73.85745469866677,3a,75y,257.5h,0.0t/data=!3m6!1e1!3m4!1sg7Kc62lw2fhRVoVb1UmJBg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "12479616-969b-4ca6-9ba6-6292e346e2bc",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.64089033881819,-74.13533847357041,3a,75y,344.4h,0.0t/data=!3m6!1e1!3m4!1sVjkwRqI5pqW0mo0vR5eTdQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "72b77c76-2c23-478b-8104-ba2655aed8e7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81229592541825,-73.90341950960818,3a,75y,170.4h,0.0t/data=!3m6!1e1!3m4!1sE1pOFVM7xBG4geZLTAO27Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6e924de6-cf63-408a-a6fe-0009dff3bfd5",
+      "payload": {
+        "address": {
+          "street": "162-64 Jamaica Ave, Lower Level",
+          "city": "Jamaica",
+          "state": "NY",
+          "postalCode": "11433",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "793a9ec2-6f16-4504-ba9c-e00b9e8b8682",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.70385765307664,-73.89610586006532,3a,75y,140.0h,0.0t/data=!3m6!1e1!3m4!1sLWAtSmm6YFz4vdypqHvTWg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8c470506-1228-40c1-a970-581887734acd",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80996199279272,-73.94664044260828,3a,75y,220.5h,0.0t/data=!3m6!1e1!3m4!1sVbq3BE4-bnT0_D4qOlWRdA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ea0fd370-c236-427d-9834-0fba99f5f971",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.65068969695434,-73.89823557845415,3a,75y,46.0h,0.0t/data=!3m6!1e1!3m4!1sgCcLw_hm-CInFm1HNbqLUw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f7494efd-a752-4c74-9773-0a58bda9ddaf",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75195257767308,-73.9908241102184,3a,75y,38.2h,0.0t/data=!3m6!1e1!3m4!1sCoGUAwrfRvRGuzXmSCydqw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "dd48591b-ae2d-4abc-a985-f5a7a0697994",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80311193821151,-73.9365066110363,3a,75y,210.3h,0.0t/data=!3m6!1e1!3m4!1sebBTVMqr4aVdnS5_eEDoug!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9e6292c8-a978-42ea-a8f0-181688e05a09",
+      "payload": {
+        "address": {
+          "street": "35-02 PO. Box 670086",
+          "city": "Flushing",
+          "state": "NY",
+          "postalCode": "11354",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "897ce6b9-3c2d-49f4-8043-3ac0dbc2d215",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74272265271398,-73.91313156338484,3a,75y,0.3h,0.0t/data=!3m6!1e1!3m4!1squP1GTT28NhtVtH22h_Jzg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ae95f7eb-3c21-4235-ba99-7c88f5c035ff",
+      "payload": {
+        "address": {
+          "street": "300 Cadman Plaza W 12th Fl",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7ee304a3-5b3d-4524-b12b-6e3cd9249113",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.61290788358081,-74.12531361443381,3a,75y,350.5h,0.0t/data=!3m6!1e1!3m4!1sQNbKGgshkrAe_v8qSKqwZA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1df3ff0e-6ff1-4791-b1b4-31fed33e8876",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69708544980364,-73.95567902840826,3a,75y,260.9h,0.0t/data=!3m6!1e1!3m4!1sWOyO8TDhZAgfslQFcIdWLw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a4e1ea35-ff1d-4378-8da3-b608cc382923",
+      "payload": {
+        "address": {
+          "street": "165 Eldridge St, 2nd Fl",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10002",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "52d7bc0d-f77e-4d07-9e5a-2245baea592e",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.70268596621866,-73.94532547734359,3a,75y,215.3h,0.0t/data=!3m6!1e1!3m4!1sh0MK_ZRx-9KUDa7vVx4i6w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2b9e4a87-4df7-42d3-8feb-c89a48208f50",
+      "payload": {
+        "address": {
+          "street": "820 St Ann'S Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10456",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.82119871120423,-73.90971173985184,3a,75y,185.3h,0.0t/data=!3m6!1e1!3m4!1sbdZJhvrC9btQmJ501wjcxw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "95c2741c-4da0-4fda-bbac-c041bbecf5b9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.64665079095986,-73.95523561597952,3a,75y,173.7h,0.0t/data=!3m6!1e1!3m4!1sLGsAIJ72nGjJO9QbPuITmQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b50bed26-da08-499d-b5ba-e40be45d6669",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69318814559499,-73.95587284165211,3a,75y,267.2h,0.0t/data=!3m6!1e1!3m4!1s5IDM0zcU5qtOWAAoHyr-2A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2015f6dd-49a6-487a-b3cb-9bfb8d30dc4f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7174667910164,-73.98970026651975,3a,75y,117.5h,0.0t/data=!3m6!1e1!3m4!1sVzNHu8oaG3YmztV3i_vvOA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d17409cb-7ca2-4f08-98c9-b43576a594d5",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71680200918457,-73.98723062085668,3a,75y,299.4h,0.0t/data=!3m6!1e1!3m4!1sDPjvA21hg-C_1n3u1hkh0A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a2d3da15-27ec-46ee-9ea7-6e853eb8debb",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.62522407307802,-74.14472056051225,3a,75y,35.1h,0.0t/data=!3m6!1e1!3m4!1scNx9nfp2EWGSurW0U11fxQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "006154e0-f380-4ae3-851e-22ffd4d0bbbd",
+      "payload": {
+        "address": {
+          "street": "121 Dekalb Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ed360813-9f1f-4964-b7e3-cb72a5813db5",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.84753178750363,-73.93164270743851,3a,75y,195.4h,0.0t/data=!3m6!1e1!3m4!1sSc7wIw9f34bIM6ANZe8gzw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f240d86e-a6f9-498b-9fe4-a5eb8021d115",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80751330424665,-73.94694709613783,3a,75y,33.5h,0.0t/data=!3m6!1e1!3m4!1sIp5RQVUYtMwwtTVeyJGmrw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fbd337f8-3c86-42d9-9ef8-cc506c456a30",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.62746569771833,-74.16724035440048,3a,75y,177.2h,0.0t/data=!3m6!1e1!3m4!1sBcURE0HWZhA2BIXbpVp64g!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bbf61da4-d46f-49b9-96cc-a2bb671402f3",
+      "payload": {
+        "address": {
+          "street": "1765 S Ave",
+          "city": "Staten Island",
+          "state": "NY",
+          "postalCode": "10314",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7e2fc0d8-d5f7-480f-9dcd-8d366115e8e7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.85957003674081,-73.86531767448821,3a,75y,195.7h,0.0t/data=!3m6!1e1!3m4!1s-_3_BYrTYi2B3OJCBtk6kg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8dafb345-8b13-4f8c-8825-764db1acb55e",
+      "payload": {
+        "address": {
+          "street": "135 W 50th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10020",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ccfa050f-be8a-48c7-a86f-cec37244e2ad",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8701447781551,-73.85693820009695,3a,75y,258.2h,0.0t/data=!3m6!1e1!3m4!1svtP5KMvgBCDh1HTTiymxaA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d73cdec8-00ad-4eda-9fee-a9411fb94ec9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6429372674275,-74.0768934911077,3a,75y,58.4h,0.0t/data=!3m6!1e1!3m4!1sZAHpAejU5-HLZePCxm7QGA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9995419a-59d3-48df-aeb5-a6451aff0c7e",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6906530858766,-73.98834622922496,3a,75y,39.2h,0.0t/data=!3m6!1e1!3m4!1s5TvFDKfVntyib9WTbIeJ2Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "4bcf6f68-25d8-45fa-8352-0d78b3756422",
+      "payload": {
+        "address": {
+          "street": "212 W 120th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1c0d9c7d-3905-4038-95e3-bb69b8f5fb2e",
+      "payload": {
+        "address": {
+          "street": "450 St. Mark\u2019s Pl",
+          "city": "Staten Island",
+          "state": "NY",
+          "postalCode": "10301",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.63863427937447,-74.07718460899447,3a,75y,264.1h,0.0t/data=!3m6!1e1!3m4!1sMAVK0e95UM1EMXeH_mhZlQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e1d7abf8-ec0b-41d2-a404-91ebcdea351c",
+      "payload": {
+        "address": {
+          "street": "557 Pennsylvania Ave Or 557 Granville Payne Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11207",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b8ee981f-bf48-4c1b-8589-8f72b57bd12d",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74753716090181,-73.99315893655157,3a,75y,134.8h,0.0t/data=!3m6!1e1!3m4!1scYx2saqPVTDp_R_WFo_bUg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fb28878e-3f97-4085-99a7-4723a7c2689b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81540075857822,-73.92007867423939,3a,75y,301.1h,0.0t/data=!3m6!1e1!3m4!1sAkUiMAc4CJBrlvITkFKj2A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2fa1dd48-fca8-4cee-a507-c4db262efcaf",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.86089432389171,-73.88999747033203,3a,75y,219.8h,0.0t/data=!3m6!1e1!3m4!1swuaamKhgWYwCdu2ZtPs7eQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5f6b64eb-9efe-41dc-ad92-07c1804eab73",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68598150761144,-73.91498363622185,3a,75y,145.2h,0.0t/data=!3m6!1e1!3m4!1sCVaomCKwI-xy30FDX6qaMQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "143c37e4-911a-48f2-9f73-df836f2d69e5",
+      "payload": {
+        "address": {
+          "street": "172-17 Linden Blvd",
+          "city": "Jamaica",
+          "state": "NY",
+          "postalCode": "11434",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f83a8b80-5063-412f-849e-5240ab7c6032",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.82071561426811,-73.94088945535397,3a,75y,212.0h,0.0t/data=!3m6!1e1!3m4!1sBihxNrGzrYqrLeyWwnZiaA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "377aa11d-b8b5-49c1-a495-be491803a93e",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75503181237754,-73.94459942182472,3a,75y,171.3h,0.0t/data=!3m6!1e1!3m4!1sOKRw4zNGnjKluxOl28S56Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b55c2919-d2ca-4862-bccd-6a178396744f",
+      "payload": {
+        "address": {
+          "street": "98-19 Astoria Blvd",
+          "city": "Elmhurst",
+          "state": "NY",
+          "postalCode": "11369",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "33582379-4d99-475e-aad5-40cbe3faf34b",
+      "payload": {
+        "address": {
+          "street": "95-18 Northern Blvd",
+          "city": "Jackson Heights",
+          "state": "NY",
+          "postalCode": "11372",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "92caa759-a1d2-4684-ba04-ac3ea6706f18",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8218284568576,-73.891641889951,3a,75y,88.2h,0.0t/data=!3m6!1e1!3m4!1so99ApDCKndAQS5cCuf0XLw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b6a214a7-f09e-430d-b92b-fe38ed0926ca",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75540486367296,-73.94155560958811,3a,75y,33.0h,0.0t/data=!3m6!1e1!3m4!1s1tA2PGS1CiLLfvQOQGj8ug!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e771a7cc-d7eb-43f2-9451-4fe49e00f51d",
+      "payload": {
+        "address": {
+          "street": "435 E 119th St, 7th Floor",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10035",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "909454a9-4d25-4f6c-b12c-203f6a66fce3",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8488375789336,-73.90452923191783,3a,75y,190.5h,0.0t/data=!3m6!1e1!3m4!1synvqK-SsA_noOrKhdPUmKg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3513e180-63d6-4c21-a769-5b48d54cba41",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.64150019128488,-74.07599476935663,3a,75y,278.2h,0.0t/data=!3m6!1e1!3m4!1s1ECI2Qfs0IOtYulbAKtHFA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f985e463-c3b7-48b1-854c-272ef9664422",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80601205181159,-73.915552279867,3a,75y,39.1h,0.0t/data=!3m6!1e1!3m4!1sbH08XbPOihwdf8rC3eFDfQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1fa57597-701c-4e48-b47f-c14590fd6b8b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.84089427984088,-73.86518021038154,3a,75y,168.0h,0.0t/data=!3m6!1e1!3m4!1szz06RxN-DAYy1CtNWgsRbQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "724eac26-16cb-4c7a-8f04-dea0e58584d9",
+      "payload": {
+        "address": {
+          "street": "804 E 138th St",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10454",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d3ed1194-9c4b-4ad1-8686-8eb54221bbbc",
+      "payload": {
+        "address": {
+          "street": "555 W 58th St, Ste 609B",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10019",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.77015162328215,-73.99098148188565,3a,75y,29.9h,0.0t/data=!3m6!1e1!3m4!1s6KcY3mtI5GCT8PnL6Kt68A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "eae69d86-804c-40d8-b77a-dc1836f10215",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.72901944180142,-73.97918022172999,3a,75y,194.6h,0.0t/data=!3m6!1e1!3m4!1sZ3H0H4bb41UQBVU4ItSU1A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7c1b3299-c09e-4170-abee-44896e29a524",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6263235710949,-74.13213113983925,3a,75y,193.6h,0.0t/data=!3m6!1e1!3m4!1s-T_HZBTMYIOPlCeb-kRHGQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "793f3da8-8e3a-4697-b84b-3fc100d2c852",
+      "payload": {
+        "address": {
+          "street": "231-34 Merrick Blvd",
+          "city": "Laurelton",
+          "state": "NY",
+          "postalCode": "11413",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "25d83df6-bf29-418f-b1ec-b4188412d683",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71234563485303,-73.99044130646153,3a,75y,262.3h,0.0t/data=!3m6!1e1!3m4!1skZH4EUhQMlN0IgSWRfSrCA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "23b62f1a-9745-4e22-9aba-196c303ae8ad",
+      "payload": {
+        "address": {
+          "street": "221 Heberton Ave",
+          "city": "Staten Island",
+          "state": "NY",
+          "postalCode": "10302",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "836d9f72-2544-4030-87e3-d3adceb797ed",
+      "payload": {
+        "address": {
+          "street": "1309-1311 Foster Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11230",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c52f6199-bad5-4a6e-abf1-62147349ddb4",
+      "payload": {
+        "address": {
+          "street": "33 W 60th St, 6th Floor",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10023",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8d3af588-6062-4113-b0cd-7bb6e5d942cb",
+      "payload": {
+        "address": {
+          "street": "252 W 116th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10026",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.80423831570509,-73.9549300518464,3a,75y,183.2h,0.0t/data=!3m6!1e1!3m4!1sSPp8e_K89DK4UO_TYhueRA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2c709f55-7ca7-495c-b748-6e4072e18616",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.78023738186236,-73.94549221410651,3a,75y,208.3h,0.0t/data=!3m6!1e1!3m4!1sNSlU1NNhgoh2jc9KhZ1ARA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6baeaddb-4030-4e8a-88c4-b639af1df4e0",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68835727375406,-73.9301419641349,3a,75y,250.8h,0.0t/data=!3m6!1e1!3m4!1sNremKQXF7BJluYecEzbP9g!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e3788ddd-6c02-4c55-b447-8ce45192a83a",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.70018665615693,-73.93622891274714,3a,75y,24.4h,0.0t/data=!3m6!1e1!3m4!1sORXtCM-f0U9wTEs1HmtS0w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "75b43a8a-15fc-4a75-9e64-9554264789cb",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8294678723229,-73.8528218662222,3a,75y,327.0h,0.0t/data=!3m6!1e1!3m4!1s48ZwW2EZUezBn3uF7l-0bg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c789e7d9-7570-42f6-b919-250971acc270",
+      "payload": {
+        "address": {
+          "street": "37-44 21 St",
+          "city": "Long Island City",
+          "state": "NY",
+          "postalCode": "11101",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f81f1048-5f56-4218-a141-40556fdfc1b8",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.59313033548339,-73.78435762894985,3a,75y,92.3h,0.0t/data=!3m6!1e1!3m4!1szoyrv76Wy82y9uMqvWWKIA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a1b17602-b473-4bbe-8e02-08c60f3acac8",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74646394686555,-74.15684164228742,3a,75y,3.3h,0.0t/data=!3m6!1e1!3m4!1sCNNalOEun1R6H8UfI528PQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1d00d44b-2af5-4c73-8c98-21b0c1d2f931",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.77267424251167,-74.03178291582273,3a,75y,35.8h,0.0t/data=!3m6!1e1!3m4!1sAzs6ov-tzQw-w-92sLeYXA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "eb8061de-7dfd-4788-90aa-62c4458e9dc3",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71972203937649,-74.04625100758138,3a,75y,197.9h,0.0t/data=!3m6!1e1!3m4!1syGW2JJpKh93TocJoLxnYsw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "872f19de-23a9-4dbc-bba6-01bc93aab1e0",
+      "payload": {
+        "address": {
+          "street": "421 8th Ave",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10001",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "0bd383ad-95f0-4eb4-b019-2bb799a6f2cd",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6234811075749,-73.99338355829437,3a,75y,115.5h,0.0t/data=!3m6!1e1!3m4!1sNCGjz2mPhghA8GYCht2DAQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6229adeb-0857-4617-a72f-3e1656246c47",
+      "payload": {
+        "address": {
+          "street": "301 W 37th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10018",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5074cb6a-cdc2-406d-86fa-a19fbc923609",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.8156164360566,-73.91847683479374,3a,75y,331.9h,0.0t/data=!3m6!1e1!3m4!1sINuVwmXOLETH7GNm5q9kng!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1bc6a125-e8f4-4fe6-a395-4478c3b62a77",
+      "payload": {
+        "address": {
+          "street": "30 W 16th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10011",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.73806170393036,-73.99438292010424,3a,75y,220.6h,0.0t/data=!3m6!1e1!3m4!1sUDZf5LWCLqaClOKXipcJ_g!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8e91ac41-6a7c-4dfa-af1e-ff03b1082b15",
+      "payload": {
+        "address": {
+          "street": "138th St and Malcolm X Blvd",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10037",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "87cf2f91-0a9e-4b8d-9812-c574761a97f9",
+      "payload": {
+        "address": {
+          "street": "1510 Waters Pl",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10461",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.84567244928169,-73.84116325419224,3a,75y,50.6h,0.0t/data=!3m6!1e1!3m4!1sRsqgk1Tz4Kv4vAWpdyFyjw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ce6c19c8-d2dd-4fca-b481-5b7e0b91de06",
+      "payload": {
+        "address": {
+          "street": "3301 Foster Ave (lower Level Next to Leasing Office)",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11210",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c6f1b357-5642-474d-bc79-ebcd35c0c191",
+      "payload": {
+        "address": {
+          "street": "19 Union Square W",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10003",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.73603974213781,-73.99112441649605,3a,75y,307.4h,0.0t/data=!3m6!1e1!3m4!1sWht55lbs9F_AKhjuBxwEag!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "654105bf-81f7-4e88-962f-c2b69fab3f16",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83295627091231,-73.89041070731254,3a,75y,291.1h,0.0t/data=!3m6!1e1!3m4!1snDuLaCyb3BH2c4sJVD6hrg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "35d289a1-a002-4328-9cb4-7276cf240289",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83020784250004,-73.92064299723964,3a,75y,118.2h,0.0t/data=!3m6!1e1!3m4!1sgCyQAHUqHZc2tNiRU0kPWQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "19ebfc7a-63e7-43e9-aecf-0da12a7070f7",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.57655291712826,-73.98539645729562,3a,75y,150.7h,0.0t/data=!3m6!1e1!3m4!1sACCt7tKrU85_bH4p424RZQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fcaa0052-cc70-4e46-b555-717c3104bfa0",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75957014756496,-73.93709564223367,3a,75y,128.5h,0.0t/data=!3m6!1e1!3m4!1shXindPIFjYUh3BokL7XpTg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "92d08356-16cc-4e86-9bab-d93c632bc4fd",
+      "payload": {
+        "address": {
+          "street": "105 Ct St, 4th Floor",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3f3a6015-d99f-4125-b40d-ebd78129984b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80561116440752,-73.93825827172545,3a,75y,45.4h,0.0t/data=!3m6!1e1!3m4!1sjJEMxA0AypsdlonaQtZCmQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "efd50d5f-c6af-47a8-ac47-0793014a0a0f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83452715239342,-73.92885621857437,3a,75y,8.6h,0.0t/data=!3m6!1e1!3m4!1sl0UpTXAR8driKuwfgaPrmw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d72ca7f0-a8bc-4249-a400-9aa076f6a074",
+      "payload": {
+        "address": {
+          "street": "1030 Grand Concourse, N Professional Wing",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10451",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.83028685010253,-73.9205990427173,3a,75y,115.2h,0.0t/data=!3m6!1e1!3m4!1sZm5sJ1N3bBbyptyjxosVwQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "b47dab4d-bafc-4578-a643-715d3939d9fe",
+      "payload": {
+        "address": {
+          "street": "414 E 95th St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11212",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1febf5f4-b761-450b-bb53-7f98a32f544a",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67254063734389,-73.96852283796457,3a,75y,104.1h,0.0t/data=!3m6!1e1!3m4!1sz7LQ5UzlFhHe6DY5NgBPGQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e33d1d3a-929a-41ee-ac79-14b92b080d88",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80801706736633,-73.9481533456814,3a,75y,229.5h,0.0t/data=!3m6!1e1!3m4!1sMeF1Wrq_E7bR2TB9hvdRlw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7267cae9-fa66-49f5-90e4-0cbe2480941e",
+      "payload": {
+        "address": {
+          "street": "35 E 125th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5efb0bb8-df0c-466e-a210-a565c9bc44d9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81579616442065,-73.93688243592965,3a,75y,207.8h,0.0t/data=!3m6!1e1!3m4!1s3azNENfjvYIXwQkDXI-KEQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fe5efe51-6674-4008-b3a5-7aa924ed5870",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69412325349325,-73.99060836286819,3a,75y,250.8h,0.0t/data=!3m6!1e1!3m4!1sD2horHA1hX-0rDIvuihZCw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9bca1d6f-87de-477f-bade-ac5a4f56c53c",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.86628672699026,-73.89069152134925,3a,75y,291.1h,0.0t/data=!3m6!1e1!3m4!1svXV5gn_pQbQoqIpYU0Mp_A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a6a042e1-4954-455f-9576-b8b344034bf4",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69726144582076,-73.93572679448165,3a,75y,42.4h,0.0t/data=!3m6!1e1!3m4!1sOY95ysIaU6qzCCEYBTQRJA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "0a9d4657-b95a-4f40-8206-00cb216547c1",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.84618598109687,-73.91005343784207,3a,75y,313.0h,0.0t/data=!3m6!1e1!3m4!1sK3UBO0IuQHNFsSDVA8A9zQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "93a8bac2-d3a3-43f3-acd6-674f9da98886",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83153414864808,-73.92221853604391,3a,75y,21.8h,0.0t/data=!3m6!1e1!3m4!1sFSvGJW6XawaBYME8YCYIyw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fcb5fdd7-f54d-4f79-b815-1d61c2d535f6",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80164334877791,-73.93691912142314,3a,75y,32.9h,0.0t/data=!3m6!1e1!3m4!1sirbVWsqz1zKtGKnf6JTT9Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "da2ab990-e4db-451c-ac04-fb9436924e98",
+      "payload": {
+        "address": {
+          "street": "454 W 155th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10032",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "dda25a8f-f4d6-4844-bfc8-91a843f13d70",
+      "payload": {
+        "address": {
+          "street": "595 Trinity Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10455",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fc7226fc-e9db-4b9b-94b8-46daacb9d7c4",
+      "payload": {
+        "address": {
+          "street": "122 52nd St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11219",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f74ea3f7-4322-432a-af07-cb89b275ca3a",
+      "payload": {
+        "address": {
+          "street": "3-2 Astoria Blvd",
+          "city": "Astoria",
+          "state": "NY",
+          "postalCode": "11422",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "24e8e4c7-54a5-4c18-adb9-e2c7d6f020d5",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69936667820863,-73.89794544505247,3a,75y,305.9h,0.0t/data=!3m6!1e1!3m4!1sN6NIyuMMRhfmIjzNiPf4cA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "cbe4c1fb-e3e8-44a8-85d2-01b08ab89b55",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.76492711570171,-73.91416004638413,3a,75y,110.8h,0.0t/data=!3m6!1e1!3m4!1sD3RexkmEUmWnO6kQkYq7vA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2822099f-d574-4494-a8b0-957120828f33",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6657618405111,-73.87874015013173,3a,75y,244.5h,0.0t/data=!3m6!1e1!3m4!1sIYCy6Byg9AiKnppn0VM3nw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3436c38f-f0dd-433f-ae2a-bb22f06dbf14",
+      "payload": {
+        "address": {
+          "street": "1818 Ave P",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11229",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.61058282594221,-73.95475991510607,3a,75y,258.5h,0.0t/data=!3m6!1e1!3m4!1sRJT2UtwXi96ntjYFayXxlA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a588e834-bbac-46c4-baa4-d8fa1096a5a2",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7422761430115,-73.95306427949855,3a,75y,133.8h,0.0t/data=!3m6!1e1!3m4!1snGh_J-BbPJWO2TNKOZLm7Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "feea0a18-f587-40ea-a7b8-79c8aac69446",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68307710924033,-73.91079397579763,3a,75y,198.4h,0.0t/data=!3m6!1e1!3m4!1sCQNxO-UqgLNWSnOoQ28UcQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "199a2bd5-9983-4c57-afb7-e61221bb11fa",
+      "payload": {
+        "address": {
+          "street": "120-55 Queens Blvd",
+          "city": "Kew Gardens",
+          "state": "NY",
+          "postalCode": "11415",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2e78b89b-8ab9-4e7a-baf4-f957fe92c7a1",
+      "payload": {
+        "address": {
+          "street": "127 W 127th St, 221 Ste",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "da433c88-88ea-4c41-97ec-18e02213eaff",
+      "payload": {
+        "address": {
+          "street": "125 Walker St, 2nd Floor",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10013",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "33451e08-ec8b-4c4f-9746-a68f3d6b6dc7",
+      "payload": {
+        "address": {
+          "street": "34-11 71st St",
+          "city": "Jackson Heights",
+          "state": "NY",
+          "postalCode": "11377",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ca0fa614-7338-47d9-95d0-2a08534c5c66",
+      "payload": {
+        "address": {
+          "street": "275 Myrtle Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11205",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "89df0afd-f75a-483d-a308-394e554103dd",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81691077269498,-73.88998015491192,3a,75y,89.7h,0.0t/data=!3m6!1e1!3m4!1sSQkkNJDUdbw-tXim-JRWUQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9df2dfa1-6cd8-47e5-b597-01aa517826f9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80754396440586,-73.94490365690864,3a,75y,44.1h,0.0t/data=!3m6!1e1!3m4!1szDlP__vli28dZMH4DEbyiw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2c02ba83-77e4-4244-a09d-9c1c54906480",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.6407745841366,-74.07578655785302,3a,75y,242.3h,0.0t/data=!3m6!1e1!3m4!1syxVIhlG-Doo68DRoR72jYA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e9e92406-9cfe-4363-a2d4-ad30495d6de8",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.57953666371986,-73.95982969245622,3a,75y,253.2h,0.0t/data=!3m6!1e1!3m4!1sutk0hsbACZzVBA_7od2LWA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ccfc9914-f0bc-4aac-9e2e-78b663fc7429",
+      "payload": {
+        "address": {
+          "street": "43 George St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11206",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3c3404c2-f014-42f1-b83a-b43597157a52",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.84575922289297,-73.9209235883235,3a,75y,288.2h,0.0t/data=!3m6!1e1!3m4!1ssVR1SuU9kyaPoDmNVlh0OA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ec1e5fd9-ec02-482c-b734-017f986e2604",
+      "payload": {
+        "address": {
+          "street": "376 Throop Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11221",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7af602c1-d4e6-48a7-bc87-c6f0a1e5a667",
+      "payload": {
+        "address": {
+          "street": "4517 Ave D",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11203",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "aae16050-24f4-448c-b5e2-f3eb8181f9cc",
+      "payload": {
+        "address": {
+          "street": "PO. Box 3220 Church St Station",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10005",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "0714d03f-98cb-400d-ab3c-5d54c6c01a40",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7531311144597,-73.97483689792963,3a,75y,301.9h,0.0t/data=!3m6!1e1!3m4!1s5rLvEhDqTUV29qB2mIbg8A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "98020879-af11-4089-ae5b-68e8656a58d5",
+      "payload": {
+        "address": {
+          "street": "123 W 27th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10002",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bf9e6447-3aa5-4034-8285-9c3f8f6558cf",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.62498681000505,-74.0796737920048,3a,75y,315.7h,0.0t/data=!3m6!1e1!3m4!1sM0_8lYsvXb2atSiyo1ZnMw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9b872356-711b-43b8-a11c-20698b1025ba",
+      "payload": {
+        "address": {
+          "street": "376 St Ann's Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10455",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fb336a1c-56b0-459c-8d78-39335fecf7d9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7447277070187,-73.99313042167677,3a,75y,13.3h,0.0t/data=!3m6!1e1!3m4!1sjKTqxX6YMyiVFa10Df_Ldg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "898c0d4a-96d9-4e40-92e0-a380795050c4",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71735228315999,-74.00684406232047,3a,75y,231.9h,0.0t/data=!3m6!1e1!3m4!1sO6NSxt-S8rlFTWccdy1KGQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e37eee4e-22a4-4972-b024-55ce08acf64c",
+      "payload": {
+        "address": {
+          "street": "26-32 Linden Blvd",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11208",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c8dbf9dd-4246-49a4-ae70-86878d29bb74",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68321596476428,-73.95066286593983,3a,75y,146.3h,0.0t/data=!3m6!1e1!3m4!1s2yvtwj0ZnNa211StRhMb0Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d4390d18-df40-40a4-a32a-f29295b43771",
+      "payload": {
+        "address": {
+          "street": "89-11 Lefferts Blvd",
+          "city": "Richmond Hill",
+          "state": "NY",
+          "postalCode": "11418",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6c27f44b-410e-4b87-9da3-326c19bbd200",
+      "payload": {
+        "address": {
+          "street": "2007 Mapes Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10457",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.84482426069766,-73.887081819073,3a,75y,286.5h,0.0t/data=!3m6!1e1!3m4!1sEgvbmEPM4vE83W2euJ1u7w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "185b6481-d729-4717-aaa5-cf935b1abaec",
+      "payload": {
+        "address": {
+          "street": "104 Cooper St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10034",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3bbbdaae-f3e6-4686-ab99-a113d799d824",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.65120357112226,-73.94144044319256,3a,75y,347.0h,0.0t/data=!3m6!1e1!3m4!1sCWMpUtlmGkQXrBJHKxwkKQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8e815d12-3a5d-430a-8575-bba6d173a226",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69364004609343,-73.98201790620067,3a,75y,357.5h,0.0t/data=!3m6!1e1!3m4!1sQpx5xf27RhIUvNXleth66Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c3bfe14c-59c5-4800-954f-e250cfa41811",
+      "payload": {
+        "address": {
+          "street": "1010 6th Ave, Ste 300",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10018",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8b29b797-dde3-4b19-90a0-d4730b3c1dbb",
+      "payload": {
+        "address": {
+          "street": "80-02 Kew Gardens Rd, Ste 400",
+          "city": "Kew Gardens",
+          "state": "NY",
+          "postalCode": "11415",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fa79b1bd-04c6-47b0-ba89-2f991d750a24",
+      "payload": {
+        "address": {
+          "street": "530 W 133rd St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f2412831-5ecb-4143-a875-4b121b8f0d5c",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68270405584131,-73.97053867479904,3a,75y,23.7h,0.0t/data=!3m6!1e1!3m4!1sVfbnMC_xMom55kmbhkiMAA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "35f175c2-a5e5-41b4-9d09-b20595ea61cc",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74923925856171,-73.88923729502974,3a,75y,187.9h,0.0t/data=!3m6!1e1!3m4!1sV9yujj-dJZZgJ11RZSSHXQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bb4ce3a6-89ad-4e72-996c-d8a794e282a1",
+      "payload": {
+        "address": {
+          "street": "108-25 62nd Dr",
+          "city": "Forest Hills",
+          "state": "NY",
+          "postalCode": "11375",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "0c82a663-eb8d-4df6-bb00-7ef0bdd86d70",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81830882773708,-73.89083883641104,3a,75y,125.1h,0.0t/data=!3m6!1e1!3m4!1sYvLfiw3o-1sbRiglNuvj7A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d3dfafc5-4fd9-447e-ab22-8e1648001181",
+      "payload": {
+        "address": {
+          "street": "100 Centre St, 10th Floor",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10007",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e8f993fc-17c9-4ed5-bd61-2fed193fa742",
+      "payload": {
+        "address": {
+          "street": "71-19 162nd St, Unit Cf-D",
+          "city": "Flushing",
+          "state": "NY",
+          "postalCode": "11365",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f615c19b-0235-44ea-996e-dd4b3d4573c2",
+      "payload": {
+        "address": {
+          "street": "24 Ave D",
+          "city": "Monroe Township",
+          "state": "NJ",
+          "postalCode": "10009",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.72047227712963,-73.97765608342941,3a,75y,28.9h,0.0t/data=!3m6!1e1!3m4!1sZGqLrG139kYIN64aS6MhcA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "20e4fbbd-c5ec-469d-bf3b-26c5d9fc708e",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.66986692652672,-73.90958040709651,3a,75y,356.7h,0.0t/data=!3m6!1e1!3m4!1sqmQRtnF38Vv00f-MIuYbNg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e3d3e9a9-cd4c-4656-b21a-d204d68bbc31",
+      "payload": {
+        "address": {
+          "street": "37-43 45th Ave",
+          "city": "Flushing",
+          "state": "NY",
+          "postalCode": "11355",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a6d61819-76b6-4738-8bfd-e882b2a6a01a",
+      "payload": {
+        "address": {
+          "street": "54 Macdonough St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11216",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.68097928851851,-73.9440448552864,3a,75y,174.0h,0.0t/data=!3m6!1e1!3m4!1sLbh5Ih3oxNs19bhn1Gk08Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "89156c9f-c37b-4c85-8a48-ee2d4c5fff4e",
+      "payload": {
+        "address": {
+          "street": "12 Metrotech Center 29th Fl",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f06e329b-3034-461e-ab02-71f2d05271e4",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.76923421120861,-73.91330550432798,3a,75y,204.7h,0.0t/data=!3m6!1e1!3m4!1smRKsALeHKZUaaxpwVdZqaA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "27befada-ca63-44f4-9393-c4e780a37a7f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74565284922237,-73.9819267070954,3a,75y,31.9h,0.0t/data=!3m6!1e1!3m4!1sMT2WG7ps5Th9NxD0-AlDnQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "da2b5e29-e9ed-4522-8a8d-8ae586ea8e12",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68009459232675,-73.9949788582789,3a,75y,128.0h,0.0t/data=!3m6!1e1!3m4!1swJSqQeOtclOIrUeMdA_gEg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2cca7a42-9590-4259-ae48-0f4778e79001",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.82270152559523,-73.94431644330287,3a,75y,129.4h,0.0t/data=!3m6!1e1!3m4!1sA87iGIVUZTPIKGApVeRZhQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "cb45bcb0-9602-47e7-bef4-e48254a4f95e",
+      "payload": {
+        "address": {
+          "street": "360 N Ave",
+          "city": "New Rochelle",
+          "state": "NY",
+          "postalCode": "10801",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3b4c3003-bec1-455f-afb9-e307d335674f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74671150741447,-73.893618422934,3a,75y,282.3h,0.0t/data=!3m6!1e1!3m4!1sTQ7xUsUAjjIs24WcG72nuw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c8aefa4c-c511-4b4a-b6c2-2995757882f0",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75747983739392,-73.83111100700312,3a,75y,329.7h,0.0t/data=!3m6!1e1!3m4!1sTyOAdmL9cZ7XVHRBolD8eA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "dbd4ab89-a2f4-4263-a035-7f0b2afa0b96",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.83353617776441,-73.89006520680533,3a,75y,347.8h,0.0t/data=!3m6!1e1!3m4!1sB03HKaQOsIdL3mhHQaN95w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "85f1f80e-0cc3-418a-8f8b-6d0cbd43d1c8",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.64096616973266,-74.00387789749496,3a,75y,305.2h,0.0t/data=!3m6!1e1!3m4!1smhaHOAGBBpaVfJe3xciwIA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "efa2c81d-11d2-42a5-82fb-1b176bd80e41",
+      "payload": {
+        "address": {
+          "street": "1865 Morris Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10453",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.84862932596455,-73.90838854035239,3a,75y,271.9h,0.0t/data=!3m6!1e1!3m4!1s106mOi2ewL7Gdp_DPlAnqQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2b315ff5-ada3-4afc-bd32-de1fbfa1e0cc",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.63615546259237,-73.96203826135852,3a,75y,162.2h,0.0t/data=!3m6!1e1!3m4!1swqZWQaLgJ34COxE0xAHBxA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a86f9762-67d9-4fdc-8dba-6c2d9a1e76b5",
+      "payload": {
+        "address": {
+          "street": "6 Metrotech Center",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "7eb85bc0-aa9c-4365-b340-5efd967606ff",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80180786152631,-73.94354499959546,3a,75y,287.0h,0.0t/data=!3m6!1e1!3m4!1sTvfpNff4F0IwIk2xADBRIA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "19abc98f-1864-47b8-8e18-cc345426f6bd",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67526307852854,-73.87187985851686,3a,75y,38.9h,0.0t/data=!3m6!1e1!3m4!1sZt9UtrAmBIZKVs_pzFC0KA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "67f62bc9-7304-4f2c-b034-5bb161470ccf",
+      "payload": {
+        "address": {
+          "street": "132 32nd St, Ste 123 (lower Level)",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11232",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "fec41bea-3d5a-4048-aeb2-dea6bb699efe",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.74491395917675,-73.95021101119426,3a,75y,23.3h,0.0t/data=!3m6!1e1!3m4!1sdshskUvT4jFuWhevmAuWoQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f52d6067-9bdb-4b72-be3a-b7358b799424",
+      "payload": {
+        "address": {
+          "street": "55 Hanson Pl 2nd Floor",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11217",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "793d9757-4d41-4725-90d8-e43eca9634b2",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81921820737011,-73.92817593786279,3a,75y,116.9h,0.0t/data=!3m6!1e1!3m4!1ssuBb2o-25-8cFAMbrNvg_w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c306521f-26e1-4318-b669-2d1a3870e76b",
+      "payload": {
+        "address": {
+          "street": "260 E 161st St, C-Level",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10451",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "10c43be8-41b8-49b2-a4ae-61a07fdad79a",
+      "payload": {
+        "address": {
+          "street": "255 Ave W",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11223",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.59235607823381,-73.97350293359116,3a,75y,333.0h,0.0t/data=!3m6!1e1!3m4!1sX1foiQik2Zqo74B5E3Y5gg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bd7a9ee5-d639-4212-b853-714b067fb445",
+      "payload": {
+        "address": {
+          "street": "470 Castleton Ave",
+          "city": "Staten Island",
+          "state": "NY",
+          "postalCode": "10301",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "128ab342-28e6-43c6-a590-cccbb92e3a16",
+      "payload": {
+        "address": {
+          "street": "25 Elm Pl, 5th Floor",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "cecb5edb-7da6-4523-b158-c44aa3f0a03f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.76936464485536,-73.95560144924411,3a,75y,32.4h,0.0t/data=!3m6!1e1!3m4!1s8JgljODc4pkiBtrOu-ejrg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "394e2430-e328-49b6-8d4e-03479afa2fb6",
+      "payload": {
+        "address": {
+          "street": "191 Joralemon St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "cdfc2cc5-39fb-4bb7-80f1-140799399073",
+      "payload": {
+        "address": {
+          "street": "426 Decatur St",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11233",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2abdbe81-4d47-419f-a339-ca5dc8ea4b82",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.68694925154484,-73.97603005954163,3a,75y,213.1h,0.0t/data=!3m6!1e1!3m4!1smxjoIGMaY5cUkaQZoVs0pw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3b14d00b-eaea-4be6-9c49-95053ec6dad0",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.86601819903226,-73.92480795709,3a,75y,58.8h,0.0t/data=!3m6!1e1!3m4!1sFl6wGzm_xuASxdRQex3RSg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "2cdd0612-adff-43a4-9125-a7cd3b5de51b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.80132572939573,-73.93811377309943,3a,75y,204.5h,0.0t/data=!3m6!1e1!3m4!1s5W9-I_s6d5HMkd_l3sOMjg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "31eed5bb-6a9d-4be4-87f6-ca0f746fc36f",
+      "payload": {
+        "address": {
+          "street": "42 Broadway, Ste 1136",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "11740",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f530aa8e-3c8c-4954-bc63-c009d38deedf",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.65754194374388,-73.76928611118707,3a,75y,347.3h,0.0t/data=!3m6!1e1!3m4!1sHssehC9ciseoVAO-VOHWUw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "5d635727-29de-44df-b67d-ab75c8c6d7fb",
+      "payload": {
+        "address": {
+          "street": "2739-45 Third Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10451",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f16faa5c-c42e-4e15-b8ae-30acb490ecde",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.66700536312806,-73.98811828372901,3a,75y,122.7h,0.0t/data=!3m6!1e1!3m4!1sre4MNCnL5dtEsLCvDfLJcw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "91a347f6-ba11-416a-ba87-3d202dc616cc",
+      "payload": {
+        "address": {
+          "street": "150 Ct St, #3",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11201",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "45f1444c-d5b8-421a-94de-af4a53f29d35",
+      "payload": {
+        "address": {
+          "street": "133-29 41st Ave",
+          "city": "Queens",
+          "state": "NY",
+          "postalCode": "11355",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1c3a6dc6-eb27-4692-8759-08ee53b417b2",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69185477959677,-73.76391022390018,3a,75y,10.0h,0.0t/data=!3m6!1e1!3m4!1shohDoCpaZK3kBpggk7OXaA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "f93033ed-aae3-4353-b2e6-71d2fd4431d5",
+      "payload": {
+        "address": {
+          "street": "61 W 87th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10024",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e3c1c9dd-5da2-4f42-be63-cd03338de320",
+      "payload": {
+        "address": {
+          "street": "591 Summit Ave, Ste 300",
+          "city": "Jersey City",
+          "state": "NJ",
+          "postalCode": "07306",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.73492017060205,-74.05946288684828,3a,75y,186.4h,0.0t/data=!3m6!1e1!3m4!1sV6qCFWs0229hfT62EfY2Iw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a00030b5-9225-4517-97ab-918104e24627",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7938035316835,-73.95004087029879,3a,75y,197.7h,0.0t/data=!3m6!1e1!3m4!1sdk6-_ONJciqhWbTSWQLGxA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "dd4c53bf-76cf-4005-bf4a-73c22449d850",
+      "payload": {
+        "address": {
+          "street": "127 W 127th St, Ste 221",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10027",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c31cf015-ead3-4942-98aa-05569b0c1364",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.67557293257716,-73.95886997143522,3a,75y,185.2h,0.0t/data=!3m6!1e1!3m4!1sdSdqCaoxLbmm0sofWPfz3Q!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ceececc1-d4fc-4f39-9668-e36bff5b1fcc",
+      "payload": {
+        "address": {
+          "street": "120-34 Queens Blvd., Ste 410",
+          "city": "Kew Gardens",
+          "state": "NY",
+          "postalCode": "11415",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "58c44e54-3a78-4f10-8c13-9771a313b21a",
+      "payload": {
+        "address": {
+          "street": "616 W 114th St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10025",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "4a9395be-687a-4328-a65b-66fda390e4cb",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.65586785607662,-73.9152129238736,3a,75y,84.2h,0.0t/data=!3m6!1e1!3m4!1sLD6SyMDyFu0Vn64-ZBrKqw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "11af51c1-7489-4b22-858f-75db42510842",
+      "payload": {
+        "address": {
+          "street": "815 Broadway",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "10003",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "27261749-2033-4c6f-8415-368e1b4bae6f",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.79444111016533,-73.94353029002392,3a,75y,24.6h,0.0t/data=!3m6!1e1!3m4!1sbezsbmhXvnMMjxo97xOfNQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "3046cdb2-042a-416e-ba31-b229cc94fc54",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69245984091199,-73.95572925305284,3a,75y,259.9h,0.0t/data=!3m6!1e1!3m4!1sqCdD0F6ff7wtaRZIsAdU4w!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "709cd6dc-6922-4f38-87e0-b81be4799a5c",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.78553974539783,-73.94583035115654,3a,75y,130.3h,0.0t/data=!3m6!1e1!3m4!1sGIJhY8n_TRnkFe2TWOzluA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "20c951e9-e7fb-47a1-a01c-9c1333e3cab1",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.70223358437699,-73.81484278925495,3a,75y,255.2h,0.0t/data=!3m6!1e1!3m4!1suNencaauQXv3g3bDII2Ovg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "34ac3d9d-b79e-4f41-8d93-ef81192a52c4",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.60350740490255,-73.75151549943286,3a,75y,201.3h,0.0t/data=!3m6!1e1!3m4!1soxCzyRBLeitTvAYtqAyzRw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "e2764c22-a814-4d16-b004-387efaaca6fe",
+      "payload": {
+        "address": {
+          "street": "66-03 Beach Channel Dr",
+          "city": "Far Rockaway",
+          "state": "NY",
+          "postalCode": "11692",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8a3136e8-75fc-49fd-abd0-7a76566de7d5",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.60229519429134,-73.75320901117142,3a,75y,187.0h,0.0t/data=!3m6!1e1!3m4!1sxwx0BGfyStI_tPRkw35NWw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "82fc28d6-54f3-494e-83f0-1e40ee7a7754",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.63090925504554,-73.94492024990507,3a,75y,351.1h,0.0t/data=!3m6!1e1!3m4!1spxNqszK6Vffkl2K6PdG8LA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6ddf2561-8058-4b26-aa5e-13f09909a1b2",
+      "payload": {
+        "address": {
+          "street": "89-56 162nd St",
+          "city": "Jamaica",
+          "state": "NY",
+          "postalCode": "11432",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "d9fb94fd-a0bd-452e-82cf-01de86b5644f",
+      "payload": {
+        "address": {
+          "street": "928 Broadway, Ste 403",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10010",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "48cf916d-214d-4aa1-8d40-bbbe84e18384",
+      "payload": {
+        "address": {
+          "street": "317 Bowery St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10003",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1a9a87b9-9564-4dcf-88cb-0513beff0b6b",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81174367323356,-73.92510334283126,3a,75y,24.4h,0.0t/data=!3m6!1e1!3m4!1sjgop-EIt8_Xpb-R8QRE7jQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "ad624d3e-d2f0-48fc-be03-19098c89310c",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.72811897203537,-73.98652176095334,3a,75y,23.9h,0.0t/data=!3m6!1e1!3m4!1se4RgCEynTaFEqRllkPoYSw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c0f35a80-5950-4618-a733-5704f7d99872",
+      "payload": {
+        "address": {
+          "street": "5030 Broadway, Ste 201",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10034",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.86867331853695,-73.91710839399386,3a,75y,25.5h,0.0t/data=!3m6!1e1!3m4!1sEe9-VJTJI2A69p8_JY9YBw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "bdd2da43-b2fd-47fd-bc79-802298afa6f1",
+      "payload": {
+        "address": {
+          "street": "279 E 3rd St",
+          "city": "New York",
+          "state": "NY",
+          "postalCode": "10009",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.72146687340151,-73.98008872652193,3a,75y,20.0h,0.0t/data=!3m6!1e1!3m4!1sM2oIfS69W3zUeE0Es24XMQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "c83b4470-6192-480b-b027-586402afadc5",
+      "payload": {
+        "address": {
+          "street": "1905 Morris Ave",
+          "city": "Bronx",
+          "state": "NY",
+          "postalCode": "10453",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "51909381-e65e-47b8-837e-3db156e07777",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.62228798313622,-73.92720224606636,3a,75y,84.9h,0.0t/data=!3m6!1e1!3m4!1sqNdPd9wsgts8Xnz_eGrjxw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "1c0084b5-b5cc-4950-a924-db866b674ea7",
+      "payload": {
+        "address": {
+          "street": "179-00 Linden Blvd",
+          "city": "Jamaica",
+          "state": "NY",
+          "postalCode": "11425",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "9c0cf54b-1e65-4ded-8cfa-5541a7fa0cbf",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.75069637519709,-73.87536180503004,3a,75y,156.0h,0.0t/data=!3m6!1e1!3m4!1szr_xB5ANDVYmGfzqYPNYfA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a14f9d60-a576-4e05-9e11-f86584164bc4",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.69034829567528,-73.98698294613163,3a,75y,121.4h,0.0t/data=!3m6!1e1!3m4!1sZf4iQvdFuRtH_2MbHU0C6A!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "a83ad0cc-5f6c-421b-9110-b6d524aee2f9",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.7448866343901,-73.98011096604843,3a,75y,24.5h,0.0t/data=!3m6!1e1!3m4!1sdp1_UBYI7RDRunFIyLoAwQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6455680b-11b2-4df1-bfa1-d1d752a4ce24",
+      "payload": {
+        "address": {
+          "street": "56-45 Main St",
+          "city": "Flushing",
+          "state": "NY",
+          "postalCode": "11355",
+          "country": "US"
+        }
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "86c94915-5ee0-47c7-bd10-2db3534e2891",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.79903344187864,-73.93850582964245,3a,75y,214.7h,0.0t/data=!3m6!1e1!3m4!1smrNM70mhZnfQztWTSPbDXg!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "17bd886f-22b1-40a6-841d-f1d79fc44b51",
+      "payload": {
+        "address": {
+          "street": "921 E New York Ave",
+          "city": "Brooklyn",
+          "state": "NY",
+          "postalCode": "11203",
+          "country": "US"
+        },
+        "streetview_url": "https://www.google.com/maps/@40.66290484982478,-73.93243303504396,3a,75y,338.8h,0.0t/data=!3m6!1e1!3m4!1s7-QVGxe67cWg7pWFEl92VQ!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "8545b5ba-6ab6-43eb-abb9-b5a9caa7aefa",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.71416179078087,-73.99594431723092,3a,75y,170.1h,0.0t/data=!3m6!1e1!3m4!1shaDQ_A7-2a4SW0TKj6KiMw!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    },
+    {
+      "location_id": "6f262eb1-ff7b-4711-bb9e-e6ddee3ffe93",
+      "payload": {
+        "streetview_url": "https://www.google.com/maps/@40.81374600928289,-73.94401211760346,3a,75y,11.6h,0.0t/data=!3m6!1e1!3m4!1slDOwAnGNECMt85QsebkSgA!2e0!7i16384!8i8192"
+      },
+      "patch_status": "patched"
+    }
+  ]
+}
