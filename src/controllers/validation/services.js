@@ -25,6 +25,7 @@ const withinMonth = Joi.valid('MONTHLY', 'YEARLY').required();
 const updateMetadataSchema = Joi.object().keys({
   source: Joi.string(),
   lastUpdated: Joi.date().iso(),
+  copyedit: Joi.boolean(),
 });
 
 export default {
