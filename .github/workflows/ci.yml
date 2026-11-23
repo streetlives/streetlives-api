@@ -47,11 +47,11 @@ jobs:
       OPENAI_API_KEY: test-key-placeholder
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Empty on push/pull_request, where checkout's default is correct.
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
