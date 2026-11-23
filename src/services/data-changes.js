@@ -1,4 +1,5 @@
 import models from '../models';
+import { invalidateLocationsAfterCommit } from './cache';
 
 const { sequelize } = models;
 const { actionTypes } = models.Metadata;
@@ -6,12 +7,20 @@ const { actionTypes } = models.Metadata;
 const stringifyFieldValue = fieldValue =>
   (typeof fieldValue === 'object' ? JSON.stringify(fieldValue) : fieldValue);
 
+// Every write funnels through here, which makes it the one place that has to drop the cached
+// location responses (src/services/cache.js). When a caller passes its own transaction the hook
+// goes on that transaction, so it fires when the caller's whole unit of work commits.
 const startTransactionOrUseExisting = (callback, options) => {
+  const run = (t) => {
+    invalidateLocationsAfterCommit(t);
+    return callback(t);
+  };
+
   if (options && options.transaction) {
-    return callback(options.transaction);
+    return run(options.transaction);
   }
 
-  return sequelize.transaction(callback);
+  return sequelize.transaction(run);
 };
 
 const createMetadataForFields = async ({

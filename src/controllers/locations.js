@@ -17,6 +17,7 @@ import { NotFoundError, ValidationError, ServiceUnavailableError } from '../util
 import { detectImage } from '../utils/image';
 import { isBase64 } from '../utils/base64';
 import * as photoStorage from '../services/photo-storage';
+import { getCachedLocationResponse, setCachedLocationResponse } from '../services/cache';
 import { redactPii } from '../utils/redact-pii';
 import { getClientIp } from '../utils/request';
 import { parseNaturalLanguageQuery } from './openai';
@@ -544,6 +545,18 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
+      // Cache-aside (src/services/cache.js). The lookup reads the cache generation before
+      // Postgres is queried, which is what keeps a concurrent write from leaving this response
+      // cached as current. Only 200s are stored: a 404 sends yourpeer on to
+      // /location-slug-redirects, and caching misses would let anyone fill the cache with
+      // made-up slugs.
+      const { key: cacheKey, value: cached } =
+        await getCachedLocationResponse('by-slug', req.params.slug);
+      if (cached) {
+        res.set('X-Cache', 'HIT').type('json').send(cached);
+        return;
+      }
+
       const locations = await models.Location.findAll({
         where: {
           slug: req.params.slug,
@@ -572,7 +585,15 @@ export default {
       );
 
       const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, true);
-      res.send(getInfoResponse);
+      if (!config.cache.enabled) {
+        res.send(getInfoResponse);
+        return;
+      }
+
+      // Serialized once, so a later hit sends exactly the bytes this miss sends.
+      const body = JSON.stringify(getInfoResponse);
+      await setCachedLocationResponse(cacheKey, body);
+      res.set('X-Cache', cacheKey ? 'MISS' : 'BYPASS').type('json').send(body);
     } catch (err) {
       next(err);
     }

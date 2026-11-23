@@ -227,6 +227,12 @@ user in that group silently narrows what they can edit.
 
 **Comment highlights**: `src/controllers/comment-highlights.js` uses `src/controllers/openai.js` to call the OpenAI API (model `gpt-5`) with a structured output schema. Highlights are stored in the `location_comment_highlights` table. Historic comments stored as JSON objects with `whatWentWell`/`whatCouldBeImproved` keys are normalized before being sent to the LLM.
 
+**Response cache** (`src/services/cache.js`): `GET /locations-by-slug/:slug` is cached in Valkey
+(ElastiCache Serverless, `infra/response-cache.yaml`) when `CACHE_ENABLED=true`, with an `X-Cache:
+HIT|MISS|BYPASS` header. Every cache failure falls through to Postgres. Invalidation is a single
+generation counter that `data-changes.js` bumps after every committed write, which is one more reason
+writes must go through it: a write that bypasses it stays invisible for up to `CACHE_TTL_SECONDS`.
+
 **Validation**: Request validation uses Joi schemas defined per-controller in `src/controllers/validation/`.
 
 **Testing**: All tests are integration tests that hit a real Postgres database named `test`. `test/setup.js` drops and recreates all tables before the suite runs (`sequelize.sync({ force: true })`), then applies specific migrations needed for slug and age-filter features. There are no mocks of the database.
@@ -257,3 +263,8 @@ user in that group silently narrows what they can edit.
 | `LOCATION_PHOTO_STORAGE_DRIVER` | inferred | `s3` when a bucket is set, or `memory` for the test suite |
 | `CHANGE_FEED_ALLOWED_CLIENT_IDS` | — | Cognito app client ids allowed to read `/location-changes` and `/location-edits`. Unset ⇒ nobody (403) |
 | `CHANGE_FEED_SETTLE_SECONDS` | 120 | Newest seconds the change feed holds back so a cursor can't pass an uncommitted row |
+| `CACHE_ENABLED` | `false` | Turns on the Valkey response cache; needs `CACHE_URL` too |
+| `CACHE_URL` | — | `rediss://<endpoint>:6379` for ElastiCache (TLS); from `infra/response-cache.yaml`'s output |
+| `CACHE_TTL_SECONDS` | 3600 | How long a cached response lives, and so the longest a write outside `data-changes.js` stays invisible |
+| `CACHE_KEY_PREFIX` | — | Namespaces keys if environments ever share one cache |
+| `CACHE_CONNECT_TIMEOUT_MS` / `CACHE_COMMAND_TIMEOUT_MS` | 1000 / 250 | Bounds on what a slow cache can add to a request |
