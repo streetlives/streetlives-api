@@ -71,7 +71,9 @@ export default {
     get enabled() {
       return parseBoolean(process.env.CACHE_ENABLED, false) && Boolean(process.env.CACHE_URL);
     },
-    get ttlSeconds() { return parseNumber(process.env.CACHE_TTL_SECONDS, 3600); },
+    // 0 (the default) keeps entries until a write invalidates them; a positive value caps their
+    // lifetime as a safety net.
+    get ttlSeconds() { return parseNumber(process.env.CACHE_TTL_SECONDS, 0); },
     // Lets one cache serve several environments without their keys colliding.
     get keyPrefix() { return process.env.CACHE_KEY_PREFIX || ''; },
     get connectTimeoutMs() { return parseNumber(process.env.CACHE_CONNECT_TIMEOUT_MS, 1000); },

@@ -1,33 +1,51 @@
-// Valkey response cache for public location reads (issue streetlives/yourpeer.nyc#741).
+// Valkey response cache for GET /locations-by-slug/:slug (issue streetlives/yourpeer.nyc#741).
 //
-// Two rules shape everything here:
+// Three rules shape everything here:
 //
 // 1. The cache is an optimisation, never a dependency. Every failure - cache off, not connected
 //    yet, timed out, unreachable - falls through to Postgres, and nothing in this module throws.
 //    A read waits at most CACHE_COMMAND_TIMEOUT_MS per command, and skips the cache outright
 //    while the client isn't connected, so an outage costs no latency.
 //
-// 2. Invalidation is by generation, not by key. Every cached entry's key carries the current
-//    value of one counter, and every committed write through src/services/data-changes.js bumps
-//    it. That makes all cached responses unreachable at once, without having to work out which
-//    locations a write to a phone, a schedule or a taxonomy attribute affects. Writes come only
-//    from the street team, so throwing everything away on each one is cheap. Superseded entries
-//    expire on their own after CACHE_TTL_SECONDS, which is also how long anything that changes
-//    the database *without* going through data-changes.js (a manual psql fix, a data migration)
-//    can stay stale.
+// 2. Entries don't expire (unless CACHE_TTL_SECONDS is set). A cached location stays until a
+//    write touches it: src/services/location-cache-invalidation.js works out which locations
+//    each committed write affected and calls invalidateLocationSlugs for their slugs. The one
+//    time-based exception is a holiday schedule, which drops out of the response the day after
+//    its valid_to, so the caller passes that moment as the entry's expiry.
 //
-// Ordering: callers read the generation *before* querying Postgres, and the bump runs *after*
-// the write commits. So an entry is stored under a generation that was current when its data was
-// read, and any write that committed after that read has bumped the generation past it.
+// 3. A response read from Postgres before a write commits must never be stored after that
+//    write's invalidation - with no TTL it would then be served until the next edit. Each slug
+//    has a version counter next to its entry. A reader notes the version before querying
+//    Postgres, and stores only if the version is still the same (checked and set in one Lua
+//    script, so atomically). Invalidation bumps the version and then deletes the entry, so a
+//    racing store either lands before the delete or is refused.
+//
+// Keys are `locations:{<slug>}:body` and `locations:{<slug>}:version`. The braces are a hash
+// tag: ElastiCache Serverless is a cluster, and a script may only touch keys in one slot.
 import Redis from 'ioredis';
 import config from '../config';
 
-const GENERATION_KEY = 'locations:generation';
-// Anything longer is not a real slug or id; don't let arbitrary input become cache keys.
-const MAX_ID_LENGTH = 256;
+// Anything longer is not a real slug; don't let arbitrary input become cache keys.
+const MAX_SLUG_LENGTH = 256;
+const KEY_PATTERN = 'locations:*';
+
+const bodyKey = slug => `locations:{${slug}}:body`;
+const versionKey = slug => `locations:{${slug}}:version`;
+
+// KEYS[1] body, KEYS[2] version. ARGV[1] the version the caller read, ARGV[2] the body,
+// ARGV[3] an absolute expiry in ms or '' for none. Returns 1 if stored.
+const STORE_IF_CURRENT = `
+local current = redis.call('GET', KEYS[2]) or '0'
+if current ~= ARGV[1] then return 0 end
+if ARGV[3] ~= '' then
+  redis.call('SET', KEYS[1], ARGV[2], 'PXAT', ARGV[3])
+else
+  redis.call('SET', KEYS[1], ARGV[2])
+end
+return 1
+`;
 
 let client = null;
-const hookedTransactions = new WeakSet();
 
 const logError = (message, err) => {
   // eslint-disable-next-line no-console
@@ -50,6 +68,7 @@ const getClient = () => {
       enableOfflineQueue: false,
       retryStrategy: times => Math.min(times * 200, 5000),
     });
+    client.defineCommand('storeLocationIfCurrent', { numberOfKeys: 2, lua: STORE_IF_CURRENT });
     // Without a listener ioredis reports every failed reconnect as an unhandled error event.
     client.on('error', err => logError('connection error', err));
   }
@@ -77,90 +96,134 @@ const waitUntilReady = (redis, timeoutMs) => {
   });
 };
 
-// Connects (if caching is on) and resolves once the client can serve commands. Reads never wait
-// for this - a request arriving while the connection is still being set up just skips the cache -
-// but tests and the invalidation path do.
-export const connect = async () => {
-  const redis = getClient();
-  return Boolean(redis) && waitUntilReady(redis, config.cache.connectTimeoutMs);
-};
-
-const getGeneration = async (redis) => {
-  const current = await redis.get(GENERATION_KEY);
-  if (current !== null) {
-    return current;
-  }
-  // Missing on a new cache, or lost to eviction or a flush. Seed it from the clock rather than
-  // 0: a counter that restarted from a small number could land back on a generation whose
-  // entries are still cached, and serve them. Writes since the last seed number far fewer than
-  // the milliseconds elapsed, so the clock is always ahead of any value used before.
-  await redis.set(GENERATION_KEY, Date.now(), 'NX');
-  return redis.get(GENERATION_KEY);
-};
-
-// Looks up a cached response. `kind` names the endpoint and `id` the resource within it.
-// Returns { key, value }: `value` is the cached string or null; `key` is where to store the
-// response on a miss, or null when the cache can't be used for this request (off, not
-// connected, failing, or an id too long to be real).
-export const getCachedLocationResponse = async (kind, id) => {
-  const redis = getClient();
-  if (!redis || redis.status !== 'ready' || String(id).length > MAX_ID_LENGTH) {
-    return { key: null, value: null };
-  }
-  try {
-    const generation = await getGeneration(redis);
-    const key = `locations:${generation}:${kind}:${id}`;
-    return { key, value: await redis.get(key) };
-  } catch (err) {
-    logError(`read of ${kind} failed`, err);
-    return { key: null, value: null };
-  }
-};
-
-// Stores a response under a key from getCachedLocationResponse. Awaited by callers, because
-// Lambda freezes the process once the response is sent and an unawaited write could be lost.
-export const setCachedLocationResponse = async (key, value) => {
-  const redis = getClient();
-  if (!redis || !key) {
-    return;
-  }
-  try {
-    await redis.set(key, value, 'EX', config.cache.ttlSeconds);
-  } catch (err) {
-    logError('write failed', err);
-  }
-};
-
-// Makes every cached location response unreachable. Waits for the connection (unlike reads):
-// skipping this would leave stale data cached for up to CACHE_TTL_SECONDS.
-export const invalidateLocations = async () => {
+// Resolves to a client that can serve commands, or null. Reads never wait for this - a request
+// arriving while the connection is still being set up just skips the cache - but writes to the
+// cache that matter (invalidation, warming) do.
+const readyClient = async () => {
   const redis = getClient();
   if (!redis) {
-    return;
+    return null;
+  }
+  return (await waitUntilReady(redis, config.cache.connectTimeoutMs)) ? redis : null;
+};
+
+export const connect = async () => Boolean(await readyClient());
+
+// The earlier of "now + CACHE_TTL_SECONDS" (when set) and the caller's own expiry, as ms or ''.
+const effectiveExpiry = (expiresAt) => {
+  const { ttlSeconds } = config.cache;
+  const candidates = [
+    ttlSeconds > 0 ? Date.now() + (ttlSeconds * 1000) : null,
+    expiresAt ? expiresAt.getTime() : null,
+  ].filter(value => value !== null);
+  return candidates.length ? Math.min(...candidates) : '';
+};
+
+// Looks up the cached response for a slug. Returns { token, value }: `value` is the cached
+// string or null; `token` is what to pass to setCachedLocationResponse on a miss, or null when
+// the cache can't be used for this request (off, not connected, failing, or a slug too long to
+// be real). Must be called before Postgres is queried - see rule 3.
+export const getCachedLocationResponse = async (slug) => {
+  const redis = getClient();
+  if (!redis || redis.status !== 'ready' || String(slug).length > MAX_SLUG_LENGTH) {
+    return { token: null, value: null };
   }
   try {
-    if (!(await waitUntilReady(redis, config.cache.connectTimeoutMs))) {
-      throw new Error(`not connected (${redis.status})`);
-    }
-    await redis.incr(GENERATION_KEY);
+    const [value, version] = await redis.mget(bodyKey(slug), versionKey(slug));
+    return { token: { slug, version: version || '0' }, value };
   } catch (err) {
-    logError(
-      'invalidation failed; cached locations may be stale for up to CACHE_TTL_SECONDS',
-      err,
-    );
+    logError('read failed', err);
+    return { token: null, value: null };
   }
 };
 
-// Schedules invalidateLocations for when `transaction` commits. Sequelize awaits afterCommit
-// hooks inside commit(), so the bump lands before the write's response is sent - and a throwing
-// hook would turn a committed write into a 500, which is why invalidateLocations never throws.
-// Registered once per transaction however many helpers share it.
-export const invalidateLocationsAfterCommit = (transaction) => {
-  if (!config.cache.enabled || hookedTransactions.has(transaction)) {
+// Stores a response under a token from getCachedLocationResponse, unless the slug was
+// invalidated since. `expiresAt` (a Date, optional) is when the response stops being right on
+// its own. Awaited by callers: Lambda freezes the process once the response is sent, and an
+// unawaited write could be lost. Resolves to whether it was stored.
+export const setCachedLocationResponse = async (token, value, expiresAt = null) => {
+  const redis = getClient();
+  if (!redis || !token) {
+    return false;
+  }
+  const expiry = effectiveExpiry(expiresAt);
+  if (expiry !== '' && expiry <= Date.now()) {
+    return false;
+  }
+  try {
+    const stored = await redis.storeLocationIfCurrent(
+      bodyKey(token.slug),
+      versionKey(token.slug),
+      token.version,
+      value,
+      String(expiry),
+    );
+    return stored === 1;
+  } catch (err) {
+    logError('write failed', err);
+    return false;
+  }
+};
+
+// Drops the cached responses for these slugs. Waits for the connection (unlike reads): with no
+// TTL, a skipped invalidation would leave the old response cached until the next edit.
+// Never throws, because it runs in a transaction's afterCommit hook - see
+// location-cache-invalidation.js.
+export const invalidateLocationSlugs = async (slugs) => {
+  const unique = [...new Set(slugs)].filter(slug => slug && slug.length <= MAX_SLUG_LENGTH);
+  if (!unique.length || !config.cache.enabled) {
     return;
   }
-  hookedTransactions.add(transaction);
-  transaction.afterCommit(invalidateLocations);
+  try {
+    const redis = await readyClient();
+    if (!redis) {
+      throw new Error(`not connected (${client ? client.status : 'no client'})`);
+    }
+    // One command per key, in order: version first, then the entry (rule 3). Separate commands
+    // rather than a multi-key DEL, which a cluster refuses when the keys are in different slots.
+    const pipeline = redis.pipeline();
+    unique.forEach((slug) => {
+      pipeline.incr(versionKey(slug));
+      pipeline.del(bodyKey(slug));
+    });
+    const results = await pipeline.exec();
+    const failed = results.find(([err]) => err);
+    if (failed) {
+      throw failed[0];
+    }
+  } catch (err) {
+    logError(`invalidation of ${unique.join(', ')} failed; they stay cached until edited again `
+      + 'or the cache is flushed', err);
+  }
+};
+
+// Removes every cached location response (and version counter). For when something changed that
+// no per-location invalidation can see: a deploy that changes the response, a migration that
+// edits reference data, a write to a table location-cache-invalidation.js doesn't map. Resolves
+// to the number of keys removed; throws if the cache is unreachable, because a caller that asked
+// for a flush needs to know it didn't happen.
+export const flushLocations = async () => {
+  const redis = await readyClient();
+  if (!redis) {
+    throw new Error('cache: not connected');
+  }
+  // SCAN's MATCH and the keys it returns carry the prefix, which ioredis would add again on DEL.
+  const prefix = config.cache.keyPrefix;
+  let removed = 0;
+  let cursor = '0';
+  do {
+    // eslint-disable-next-line no-await-in-loop
+    const [next, keys] = await redis.scan(cursor, 'MATCH', `${prefix}${KEY_PATTERN}`, 'COUNT', 500);
+    cursor = next;
+    if (keys.length) {
+      const pipeline = redis.pipeline();
+      keys.forEach(key => pipeline.unlink(key.slice(prefix.length)));
+      // eslint-disable-next-line no-await-in-loop
+      await pipeline.exec();
+      removed += keys.length;
+    }
+  } while (cursor !== '0');
+  return removed;
 };
 
 // Test-only: drops the client so the next call builds one from the current environment.
@@ -168,6 +231,9 @@ export const resetForTesting = async () => {
   if (client) {
     const old = client;
     client = null;
+    // A connection attempt in flight can still report its failure after disconnect().
+    old.removeAllListeners('error');
+    old.on('error', () => {});
     old.disconnect();
   }
 };
