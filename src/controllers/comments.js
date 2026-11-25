@@ -45,8 +45,11 @@ export default {
       const { locationId } = req.query;
       const ipAddress = getClientIp(req);
 
+      // GET /comments is public: API Gateway serves it without an authorizer, so nothing
+      // here can tell staff from anonymous callers. contact_info is the commenter's
+      // email and must never be part of this response.
       const publicAttributes = [
-        'id', 'content', 'created_at', 'hidden', 'contact_info', 'report_count', 'exclude',
+        'id', 'content', 'created_at', 'hidden', 'report_count', 'exclude',
         [cast(fn('COUNT', col('likes.id')), 'integer'), 'likes_count'],
         [
           literal(`
