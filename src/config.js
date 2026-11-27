@@ -62,6 +62,23 @@ export default {
     },
     get driver() { return process.env.LOCATION_PHOTO_STORAGE_DRIVER; },
   },
+  // Valkey response cache (issue streetlives/yourpeer.nyc#741, src/services/cache.js). Off unless
+  // CACHE_ENABLED=true *and* CACHE_URL is set, so local development, the test suite and any
+  // environment nobody has provisioned a cache for behave exactly as before. Getters, like the
+  // groups above, so tests can flip them without re-importing the module graph.
+  cache: {
+    get url() { return process.env.CACHE_URL; },
+    get enabled() {
+      return parseBoolean(process.env.CACHE_ENABLED, false) && Boolean(process.env.CACHE_URL);
+    },
+    // 0 (the default) keeps entries until a write invalidates them; a positive value caps their
+    // lifetime as a safety net.
+    get ttlSeconds() { return parseNumber(process.env.CACHE_TTL_SECONDS, 0); },
+    // Lets one cache serve several environments without their keys colliding.
+    get keyPrefix() { return process.env.CACHE_KEY_PREFIX || ''; },
+    get connectTimeoutMs() { return parseNumber(process.env.CACHE_CONNECT_TIMEOUT_MS, 1000); },
+    get commandTimeoutMs() { return parseNumber(process.env.CACHE_COMMAND_TIMEOUT_MS, 250); },
+  },
   // GET /location-changes and /location-edits (see the README's "Change feed" section).
   changeFeed: {
     get allowedClientIds() {

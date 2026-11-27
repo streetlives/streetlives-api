@@ -72,3 +72,17 @@ export default {
   formatTime,
   formatIsoWithTimezone,
 };
+
+// The moment the YYYY-MM-DD `date` begins in the given IANA timezone. Tries each whole-hour UTC
+// offset, which covers New York (the only zone this is used with) across both DST states.
+export const startOfDateInTimeZone = (date, timeZone) => {
+  const utcMidnight = Date.parse(`${date}T00:00:00Z`);
+  for (let offsetHours = -14; offsetHours <= 14; offsetHours += 1) {
+    const candidate = utcMidnight - (offsetHours * 60 * 60 * 1000);
+    if (formatDateOnly(new Date(candidate), timeZone) === date
+      && formatDateOnly(new Date(candidate - 1), timeZone) !== date) {
+      return new Date(candidate);
+    }
+  }
+  return null;
+};

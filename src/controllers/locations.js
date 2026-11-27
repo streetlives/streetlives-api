@@ -12,11 +12,12 @@ import { eligibilityParams, documentTypes } from '../services/services';
 import geometry from '../utils/geometry';
 import { parseBoolean } from '../utils/strings';
 import { convertKeyValueArrayToObject } from '../utils/api-params';
-import { formatIsoWithTimezone } from '../utils/times';
+import { formatIsoWithTimezone, addDaysToDateOnly, startOfDateInTimeZone } from '../utils/times';
 import { NotFoundError, ValidationError, ServiceUnavailableError } from '../utils/errors';
 import { detectImage } from '../utils/image';
 import { isBase64 } from '../utils/base64';
 import * as photoStorage from '../services/photo-storage';
+import { getCachedLocationResponse, setCachedLocationResponse } from '../services/cache';
 import { redactPii } from '../utils/redact-pii';
 import { getClientIp } from '../utils/request';
 import { parseNaturalLanguageQuery } from './openai';
@@ -244,6 +245,53 @@ async function handleGetInfoResponse(location, locationWithServices, excludeMeta
     closed,
   };
 }
+
+// When a /locations-by-slug response stops being right without any write: a holiday schedule
+// is left out of it from the day after its valid_to (HolidaySchedule.notExpiredInclude, New York
+// time), so the response expires at the start of that day. Null when nothing in it expires.
+const responseExpiry = (response) => {
+  const validTos = (response.Services || [])
+    .flatMap(service => service.HolidaySchedules || [])
+    .map(schedule => schedule.valid_to)
+    .filter(Boolean)
+    .sort();
+  if (!validTos.length) {
+    return null;
+  }
+  return startOfDateInTimeZone(addDaysToDateOnly(validTos[0], 1), 'America/New_York');
+};
+
+// Builds the GET /locations-by-slug/:slug response from Postgres, serialized once so a cache hit
+// sends exactly the bytes a miss does. Resolves to { body, expiresAt } (see responseExpiry), or
+// null when no location has this slug. Also used to warm the cache (src/services/cache-warm.js).
+export const buildLocationResponseBySlug = async (slug) => {
+  const locations = await models.Location.findAll({
+    where: { slug },
+    include: locationAssociations.include,
+    attributes: getNeighborhoodAttributeSubquery.attributes,
+  });
+
+  if (!locations.length) {
+    return null;
+  }
+
+  const location = locations[0];
+
+  const locationWithServices = await models.Location.findByPk(
+    location.id,
+    {
+      include: [{
+        model: models.Service,
+        through: { attributes: [] },
+        include: serviceAssociations.include,
+      }],
+      attributes: ['id'],
+    },
+  );
+
+  const response = await handleGetInfoResponse(location, locationWithServices, true);
+  return { body: JSON.stringify(response), expiresAt: responseExpiry(response) };
+};
 
 export default {
   find: async (req, res, next) => {
@@ -544,35 +592,30 @@ export default {
     try {
       await Joi.validate(req, locationSchemas.getInfoBySlug, { allowUnknown: true });
 
-      const locations = await models.Location.findAll({
-        where: {
-          slug: req.params.slug,
-        },
-        include: locationAssociations.include,
-        attributes: getNeighborhoodAttributeSubquery.attributes,
-      });
+      // Cache-aside (src/services/cache.js). The lookup happens before Postgres is queried,
+      // which is what keeps a write committing meanwhile from leaving this response cached.
+      // Only 200s are stored: a 404 sends yourpeer on to /location-slug-redirects, and caching
+      // misses would let anyone fill the cache with made-up slugs.
+      const { slug } = req.params;
+      const { token, value: cached } = await getCachedLocationResponse(slug);
+      if (cached) {
+        res.set('X-Cache', 'HIT').type('json').send(cached);
+        return;
+      }
 
-      if (!locations.length) {
+      const built = await buildLocationResponseBySlug(slug);
+      if (!built) {
         res.status(404).send({ status: 404 });
         return;
       }
 
-      const location = locations[0];
+      if (!config.cache.enabled) {
+        res.type('json').send(built.body);
+        return;
+      }
 
-      const locationWithServices = await models.Location.findByPk(
-        location.id,
-        {
-          include: [{
-            model: models.Service,
-            through: { attributes: [] },
-            include: serviceAssociations.include,
-          }],
-          attributes: ['id'],
-        },
-      );
-
-      const getInfoResponse = await handleGetInfoResponse(location, locationWithServices, true);
-      res.send(getInfoResponse);
+      await setCachedLocationResponse(token, built.body, built.expiresAt);
+      res.set('X-Cache', token ? 'MISS' : 'BYPASS').type('json').send(built.body);
     } catch (err) {
       next(err);
     }

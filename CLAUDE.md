@@ -227,6 +227,23 @@ user in that group silently narrows what they can edit.
 
 **Comment highlights**: `src/controllers/comment-highlights.js` uses `src/controllers/openai.js` to call the OpenAI API (model `gpt-5`) with a structured output schema. Highlights are stored in the `location_comment_highlights` table. Historic comments stored as JSON objects with `whatWentWell`/`whatCouldBeImproved` keys are normalized before being sent to the LLM.
 
+**Response cache** (`src/services/cache.js`): `GET /locations-by-slug/:slug` is cached in Valkey
+(ElastiCache Serverless, `infra/response-cache.yaml`) when `CACHE_ENABLED=true`, with an `X-Cache:
+HIT|MISS|BYPASS` header. Every cache failure falls through to Postgres. Entries have **no TTL**: a
+committed write drops exactly the locations it touched (current and old slugs), which
+`src/services/location-cache-invalidation.js` works out from the rows `data-changes.js` writes. So a
+write that bypasses `data-changes.js` stays invisible **until the next edit to that location or a
+flush**, and a write to a model that file doesn't map flushes everything. A per-slug version counter
+checked in a Lua script keeps a read that raced a write from being stored. The one time-based expiry
+is a holiday schedule, which the response drops the day after its `valid_to`.
+
+Fill or rebuild the cache with `npm run cache:warm [-- --flush]` locally. On Stage/prod (the cache is
+only reachable inside the VPC) invoke the Lambda directly with `{"cacheTask": "warm"}` (add
+`"flush": true` to rebuild, and pass the returned `next` back as `"startAfter"` until it is null).
+**Flush after a deploy that changes the response shape, and after a migration that edits reference
+data** (taxonomies, languages, eligibility parameters, neighborhoods): neither goes through a write
+the cache can see.
+
 **Validation**: Request validation uses Joi schemas defined per-controller in `src/controllers/validation/`.
 
 **Testing**: All tests are integration tests that hit a real Postgres database named `test`. `test/setup.js` drops and recreates all tables before the suite runs (`sequelize.sync({ force: true })`), then applies specific migrations needed for slug and age-filter features. There are no mocks of the database.
@@ -257,3 +274,8 @@ user in that group silently narrows what they can edit.
 | `LOCATION_PHOTO_STORAGE_DRIVER` | inferred | `s3` when a bucket is set, or `memory` for the test suite |
 | `CHANGE_FEED_ALLOWED_CLIENT_IDS` | — | Cognito app client ids allowed to read `/location-changes` and `/location-edits`. Unset ⇒ nobody (403) |
 | `CHANGE_FEED_SETTLE_SECONDS` | 120 | Newest seconds the change feed holds back so a cursor can't pass an uncommitted row |
+| `CACHE_ENABLED` | `false` | Turns on the Valkey response cache; needs `CACHE_URL` too |
+| `CACHE_URL` | — | `rediss://<endpoint>:6379` for ElastiCache (TLS); from `infra/response-cache.yaml`'s output |
+| `CACHE_TTL_SECONDS` | 0 | 0 keeps entries until a write invalidates them; a positive value caps their lifetime as a safety net |
+| `CACHE_KEY_PREFIX` | — | Namespaces keys if environments ever share one cache |
+| `CACHE_CONNECT_TIMEOUT_MS` / `CACHE_COMMAND_TIMEOUT_MS` | 1000 / 250 | Bounds on what a slow cache can add to a request |

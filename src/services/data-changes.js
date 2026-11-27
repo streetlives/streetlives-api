@@ -1,4 +1,5 @@
 import models from '../models';
+import { trackWrite, trackDelete } from './location-cache-invalidation';
 
 const { sequelize } = models;
 const { actionTypes } = models.Metadata;
@@ -6,6 +7,10 @@ const { actionTypes } = models.Metadata;
 const stringifyFieldValue = fieldValue =>
   (typeof fieldValue === 'object' ? JSON.stringify(fieldValue) : fieldValue);
 
+// Every write funnels through the helpers below, which is what lets them tell the response cache
+// which locations changed (trackWrite / trackDelete, src/services/location-cache-invalidation.js).
+// When a caller passes its own transaction the cache is updated when that whole unit of work
+// commits.
 const startTransactionOrUseExisting = (callback, options) => {
   if (options && options.transaction) {
     return callback(options.transaction);
@@ -13,6 +18,8 @@ const startTransactionOrUseExisting = (callback, options) => {
 
   return sequelize.transaction(callback);
 };
+
+const plain = instance => (instance && instance.get ? instance.get({ plain: true }) : instance);
 
 const createMetadataForFields = async ({
   user,
@@ -61,6 +68,8 @@ export const createInstance = async (user, modelCreateFunction, values, options 
       t,
     });
 
+    trackWrite(t, newInstance.constructor, plain(newInstance));
+
     return newInstance;
   }, options);
 
@@ -85,6 +94,8 @@ export const updateInstance = async (user, instance, values, options = {}) =>
       t,
     });
 
+    trackWrite(t, newInstance.constructor, previousValues, plain(newInstance));
+
     return newInstance;
   }, options);
 
@@ -98,6 +109,7 @@ export const destroyInstance = (user, instance, options = {}) =>
     // delete once the row, and with it the link, is gone.
     const linkField = LINK_FIELDS.find(fieldName => instance[fieldName]);
 
+    await trackDelete(t, instance.constructor, [plain(instance)]);
     await instance.destroy({ transaction: t });
 
     await instance.createMetadatum({
@@ -124,6 +136,8 @@ export const destroyAllInstances = (user, model, where, options = {}) =>
     if (!instances.length) {
       return;
     }
+
+    await trackDelete(t, model, instances.map(plain));
 
     // By id rather than `where`, so a row added after the lookup is neither deleted nor missed.
     await model.destroy({ where: { id: instances.map(({ id }) => id) }, transaction: t });

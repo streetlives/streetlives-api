@@ -35,6 +35,17 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # For test/integration/location-cache.test.js, which skips its live-cache cases without it.
+      # Only that file turns the cache on; CACHE_ENABLED stays unset for the rest of the suite.
+      valkey:
+        image: valkey/valkey:8.1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       NODE_ENV: test
@@ -45,6 +56,7 @@ jobs:
       DATABASE_PASSWORD: password
       DATABASE_LOGGING: 'false'
       OPENAI_API_KEY: test-key-placeholder
+      CACHE_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@v4

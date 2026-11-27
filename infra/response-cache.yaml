@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Valkey response cache for the Streetlives API (src/services/cache.js). Deploy one stack per
+  environment, then set CACHE_URL and CACHE_ENABLED on that environment's Lambda.
+
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [stage, prod]
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-06e0067d
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The API Lambda's subnets (us-east-1a and us-east-1f).
+    Default: subnet-0e094cc9aa2ed8666,subnet-0a1e7c59fbbe3fd4f
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The security group the API Lambda functions run in.
+    Default: sg-4893323f
+
+Resources:
+  CacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Streetlives API response cache (${Environment}) - API Lambda only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        # 6379 is the primary endpoint, 6380 the reader endpoint.
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6380
+          SourceSecurityGroupId: !Ref LambdaSecurityGroupId
+          Description: Streetlives API Lambda
+      Tags:
+        - Key: Name
+          Value: !Sub streetlives-api-cache-${Environment}
+
+  Cache:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      ServerlessCacheName: !Sub streetlives-api-${Environment}
+      Description: !Sub Streetlives API response cache (${Environment})
+      Engine: valkey
+      MajorEngineVersion: '8'
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref CacheSecurityGroup
+      # Caps that bound the bill. Cached location responses are a few KB each, so 1 GB holds the
+      # whole directory many times over; raise the ECPU cap if partner traffic needs it.
+      CacheUsageLimits:
+        DataStorage:
+          Maximum: 1
+          Unit: GB
+        ECPUPerSecond:
+          Maximum: 5000
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  CacheUrl:
+    Description: Value for the Lambda's CACHE_URL. rediss means TLS, which the cache requires.
+    Value: !Sub rediss://${Cache.Endpoint.Address}:${Cache.Endpoint.Port}
