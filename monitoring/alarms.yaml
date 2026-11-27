@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudWatch alarms for the Streetlives API (streetlives/yourpeer.nyc#673).
+  Deployed by hand, separately from the Lambda code deploys; see monitoring/README.md.
+
+Parameters:
+  AlarmTopicArn:
+    Type: String
+    Default: arn:aws:sns:us-east-1:710263499164:alarms
+    Description: SNS topic that receives ALARM and OK notifications.
+
+Rules:
+  # The APIs, their metrics and the alarm topic all live in us-east-1. Alarms created
+  # anywhere else would watch metrics that never arrive and stay quiet forever.
+  UsEast1Only:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-east-1]
+        AssertDescription: Deploy this stack to us-east-1, where the Streetlives APIs run.
+
+Resources:
+  # API Gateway 5XX alarms for the prod stages. They replace the old
+  # StreetlivesServerlessApi_*_5XXError alarms, which watched the API these replaced and
+  # have had no data since it was retired on 2026-09-14. Staging stages are not alarmed.
+  #
+  # Threshold: >=5 5XX responses in 2 of the last 3 five-minute periods. Replayed against
+  # the 30 days of prod 5XX data before this was written (about 1.2M requests, ~2k 5XX across
+  # both APIs), it would have fired 8 times: each a real 5-15 minute error burst. It would
+  # have ignored the ~140 five-minute periods with only stray errors.
+
+  PublicApiProd5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: StreetlivesPublicApi-prod-5XX
+      AlarmDescription: StreetlivesPublicApi (prod stage, api.yourpeer.nyc) is returning 5XX responses.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: StreetlivesPublicApi
+        - Name: Stage
+          Value: prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+      OKActions: [!Ref AlarmTopicArn]
+
+  InternalApiProd5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: StreetlivesInternalApi-prod-5XX
+      AlarmDescription: StreetlivesInternalApi (prod stage) is returning 5XX responses.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: StreetlivesInternalApi
+        - Name: Stage
+          Value: prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+      OKActions: [!Ref AlarmTopicArn]
+
